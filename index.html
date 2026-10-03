@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gothic Botanical Letter — Implementation Proof</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Cinzel:wght@400;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --bg-color: #050507;
+        --text-color: #f5f5f7;
+        --accent-crimson: #991427;
+        --panel-bg: rgba(12, 12, 16, 0.88);
+        --border-color: rgba(80, 50, 60, 0.4);
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body, html {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background-color: var(--bg-color);
+        font-family: 'Cormorant Garamond', 'Times New Roman', serif;
+        color: var(--text-color);
+        user-select: none;
+      }
+
+      #app-container {
+        position: relative;
+        width: 100%;
+        height: 100%;
+      }
+
+      canvas#letter-canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        cursor: text;
+      }
+
+      /* Hidden textarea for native keyboard capturing & IME */
+      #hidden-input {
+        position: absolute;
+        top: -9999px;
+        left: -9999px;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      /* Subtle Header */
+      #header {
+        position: absolute;
+        top: 20px;
+        left: 32px;
+        pointer-events: none;
+        z-index: 10;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      #header h1 {
+        font-family: 'Cinzel', serif;
+        font-size: 1.15rem;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: rgba(245, 245, 247, 0.85);
+        font-weight: 400;
+      }
+
+      #header p {
+        font-size: 0.95rem;
+        color: rgba(180, 180, 190, 0.55);
+        letter-spacing: 0.05em;
+        font-style: italic;
+      }
+
+      /* Diagnostic & Verification Drawer */
+      #proof-panel {
+        position: absolute;
+        top: 20px;
+        right: 24px;
+        width: 380px;
+        max-height: calc(100vh - 40px);
+        background: var(--panel-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        backdrop-filter: blur(14px);
+        box-shadow: 0 12px 36px rgba(0, 0, 0, 0.7);
+        z-index: 20;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s;
+      }
+
+      #proof-panel.collapsed {
+        transform: translateX(calc(100% - 44px));
+      }
+
+      #panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        background: rgba(25, 10, 15, 0.5);
+        border-bottom: 1px solid var(--border-color);
+        cursor: pointer;
+      }
+
+      #panel-header h2 {
+        font-family: 'Cinzel', serif;
+        font-size: 0.9rem;
+        letter-spacing: 0.12em;
+        color: #e5b0b8;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      #panel-toggle-btn {
+        background: transparent;
+        border: none;
+        color: #d99aa5;
+        font-size: 1.1rem;
+        cursor: pointer;
+        padding: 0 4px;
+      }
+
+      #panel-body {
+        padding: 16px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.75rem;
+      }
+
+      /* Telemetry display */
+      .telemetry-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        background: rgba(0, 0, 0, 0.4);
+        padding: 10px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+      }
+
+      .telemetry-item {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .telemetry-label {
+        font-size: 0.65rem;
+        color: rgba(200, 180, 190, 0.6);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      .telemetry-value {
+        font-size: 0.85rem;
+        color: #f0f0f5;
+        font-weight: 500;
+      }
+
+      .telemetry-value.badge-floor {
+        color: #ff6b8b;
+        font-weight: 700;
+      }
+
+      /* Acceptance Checks Actions */
+      .actions-section {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .actions-title {
+        font-family: 'Cinzel', serif;
+        font-size: 0.8rem;
+        color: #c98894;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        margin-bottom: 2px;
+      }
+
+      .check-button {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 12px;
+        background: rgba(40, 20, 25, 0.4);
+        border: 1px solid rgba(150, 50, 70, 0.35);
+        color: #e5d8dc;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.72rem;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        text-align: left;
+      }
+
+      .check-button:hover {
+        background: rgba(120, 20, 40, 0.5);
+        border-color: #d9364f;
+        color: #fff;
+        transform: translateY(-1px);
+      }
+
+      .check-button.running {
+        background: rgba(160, 30, 50, 0.6);
+        border-color: #ff4d6d;
+        color: #fff;
+      }
+
+      .check-button .badge {
+        font-size: 0.65rem;
+        padding: 2px 6px;
+        border-radius: 3px;
+        background: rgba(255, 255, 255, 0.1);
+        color: #aaa;
+      }
+
+      .check-button.passed .badge {
+        background: rgba(40, 180, 80, 0.25);
+        color: #44ff88;
+        border: 1px solid rgba(68, 255, 136, 0.4);
+      }
+
+      /* Inspector Options */
+      .options-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 6px 0;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+      }
+
+      .options-row label {
+        color: rgba(230, 220, 225, 0.8);
+        cursor: pointer;
+      }
+
+      .options-row input[type="checkbox"] {
+        cursor: pointer;
+        accent-color: #b81d33;
+      }
+
+      /* Reset Button */
+      #reset-btn {
+        padding: 8px;
+        background: rgba(20, 20, 25, 0.8);
+        border: 1px solid rgba(120, 120, 140, 0.3);
+        color: #bbb;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.72rem;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      #reset-btn:hover {
+        background: rgba(60, 20, 25, 0.8);
+        color: #ff8899;
+        border-color: #882233;
+      }
+
+      /* Verification Log Area */
+      #verification-log {
+        background: rgba(0, 0, 0, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 4px;
+        padding: 8px;
+        max-height: 120px;
+        overflow-y: auto;
+        font-size: 0.68rem;
+        line-height: 1.4;
+        color: #9cb0a0;
+      }
+
+      .log-entry {
+        margin-bottom: 4px;
+      }
+      .log-entry.pass {
+        color: #55ee88;
+      }
+      .log-entry.info {
+        color: #88b0d0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app-container">
+      <div id="header">
+        <h1>Gothic Botanical Letter</h1>
+        <p>Type upon the dark parchment. Stems, thorns, and crimson roses shall entwine around thy words.</p>
+      </div>
+
+      <canvas id="letter-canvas"></canvas>
+      <textarea id="hidden-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+
+      <!-- Proof & Diagnostic Panel -->
+      <aside id="proof-panel">
+        <div id="panel-header">
+          <h2><span>🥀</span> Implementation Proof Suite</h2>
+          <button id="panel-toggle-btn" title="Toggle Panel">◧</button>
+        </div>
+
+        <div id="panel-body">
+          <!-- Real-Time Telemetry -->
+          <div class="telemetry-grid">
+            <div class="telemetry-item">
+              <span class="telemetry-label">Camera Zoom</span>
+              <span class="telemetry-value" id="hud-zoom">1.00x</span>
+            </div>
+            <div class="telemetry-item">
+              <span class="telemetry-label">Auto-Pan Y</span>
+              <span class="telemetry-value" id="hud-pany">0.0 px</span>
+            </div>
+            <div class="telemetry-item">
+              <span class="telemetry-label">Active Line / Total</span>
+              <span class="telemetry-value" id="hud-lines">Line 1 / 1</span>
+            </div>
+            <div class="telemetry-item">
+              <span class="telemetry-label">Living Flora Count</span>
+              <span class="telemetry-value" id="hud-flora">0 words</span>
+            </div>
+          </div>
+
+          <!-- Observable Acceptance Checks -->
+          <div class="actions-section">
+            <div class="actions-title">Observable Acceptance Checks</div>
+
+            <button class="check-button" id="btn-check-midword">
+              <span>1. Mid-Word Keystroke Advance</span>
+              <span class="badge" id="badge-check-midword">Test</span>
+            </button>
+
+            <button class="check-button" id="btn-check-weaving">
+              <span>2. Stroke-Level Weaving (z±1)</span>
+              <span class="badge" id="badge-check-weaving">Test</span>
+            </button>
+
+            <button class="check-button" id="btn-check-partial">
+              <span>3. Partial-Word Edit Stability</span>
+              <span class="badge" id="badge-check-partial">Test</span>
+            </button>
+
+            <button class="check-button" id="btn-check-deletion">
+              <span>4. Deletion & Ambient Decoupling</span>
+              <span class="badge" id="badge-check-deletion">Test</span>
+            </button>
+
+            <button class="check-button" id="btn-check-reflow">
+              <span>5. Word Reflow Tracking</span>
+              <span class="badge" id="badge-check-reflow">Test</span>
+            </button>
+
+            <button class="check-button" id="btn-check-floor">
+              <span>6. Readability Floor (0.45x) & Pan</span>
+              <span class="badge" id="badge-check-floor">Test</span>
+            </button>
+          </div>
+
+          <!-- Diagnostic Options -->
+          <div class="options-row">
+            <label for="chk-debug">Visual Anchor & Z-Wireframe</label>
+            <input type="checkbox" id="chk-debug" />
+          </div>
+
+          <button id="reset-btn">Clear Canvas & Reset</button>
+
+          <!-- Telemetry & Verification Log -->
+          <div id="verification-log">
+            <div class="log-entry info">System ready. Click canvas to write, or click any check above to observe evidence.</div>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
