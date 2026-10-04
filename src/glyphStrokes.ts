@@ -153,6 +153,7 @@ export function generateCharSplineNodes(
 ): { nodes: SplineNode[]; thorns: Thorn[]; rose?: RoseBloom } {
   const S = fontSize;
   const W = charWidth;
+  const scale = fontSize / 32;
   const rng = mulberry32(combineSeed(seed, charIndex, char));
   const nodes: SplineNode[] = [];
   const thorns: Thorn[] = [];
@@ -165,17 +166,130 @@ export function generateCharSplineNodes(
   // Alternating phase seed for ambient sway
   const basePhase = (charIndex * 0.7 + seed % 10) * Math.PI;
 
-  if (lower === 't') {
-    // Letter 't': vine wraps vertically around the stem, then loops across crossbar!
-    const stemX = charRelX + 0.35 * W;
-    const barY = -0.48 * S;
-    const topY = -0.72 * S;
+  const isUpper = char >= 'A' && char <= 'Z';
+  const isPunctuation = /[.,;:!?'"()—\-]/.test(char);
+
+  if (isPunctuation) {
+    // Subtle low baseline grounding tendril: no giant thorn shoots
+    nodes.push({
+      id: `${charIndex}-n0`,
+      charIndex,
+      relX: charRelX + Math.max(1, Math.round(scale)),
+      relY: -0.04 * S,
+      z: -1,
+      isAnchor: true,
+      anchorType: 'punct-back',
+      swayPhase: basePhase,
+      swayAmp: BOTANICAL_CONFIG.idleSwayAmplitude * 0.4,
+    });
+    nodes.push({
+      id: `${charIndex}-n1`,
+      charIndex,
+      relX: charRelX + 0.5 * W,
+      relY: -0.1 * S,
+      z: 1,
+      isAnchor: true,
+      anchorType: 'punct-front',
+      swayPhase: basePhase + 0.6,
+      swayAmp: BOTANICAL_CONFIG.idleSwayAmplitude * 0.5,
+    });
+    nodes.push({
+      id: `${charIndex}-n2`,
+      charIndex,
+      relX: charRelX + W,
+      relY: -0.04 * S,
+      z: -1,
+      isAnchor: false,
+      swayPhase: basePhase + 1.2,
+      swayAmp: BOTANICAL_CONFIG.idleSwayAmplitude * 0.4,
+    });
+  } else if (lower === 's') {
+    // Sinuous S-curve: vine wraps through the spine waist and loops over both crests
+    const midX = charRelX + 0.5 * W;
+    const waistY = -0.24 * S;
+    const topY = isUpper ? -0.75 * S : -0.45 * S;
+
+    nodes.push({
+      id: `${charIndex}-n0`,
+      charIndex,
+      relX: charRelX + 0.2 * W,
+      relY: -0.06 * S,
+      z: -1, // BEHIND bottom tail
+      isAnchor: true,
+      anchorType: 's-bottom-back',
+      swayPhase: basePhase,
+      swayAmp: BOTANICAL_CONFIG.idleSwayAmplitude,
+    });
+    nodes.push({
+      id: `${charIndex}-n1`,
+      charIndex,
+      relX: charRelX + 0.7 * W,
+      relY: -0.14 * S,
+      z: 1, // IN FRONT of lower bowl
+      isAnchor: true,
+      anchorType: 's-lower-front',
+      swayPhase: basePhase + 0.5,
+      swayAmp: BOTANICAL_CONFIG.idleSwayAmplitude * 1.1,
+    });
+    nodes.push({
+      id: `${charIndex}-n2`,
+      charIndex,
+      relX: midX,
+      relY: waistY,
+      z: -1, // BEHIND central diagonal waist
+      isAnchor: true,
+      anchorType: 's-waist-back',
+      swayPhase: basePhase + 1.0,
+      swayAmp: BOTANICAL_CONFIG.idleSwayAmplitude,
+    });
+    nodes.push({
+      id: `${charIndex}-n3`,
+      charIndex,
+      relX: charRelX + 0.25 * W,
+      relY: topY + 0.08 * S,
+      z: 1, // IN FRONT of upper loop
+      isAnchor: true,
+      anchorType: 's-upper-front',
+      swayPhase: basePhase + 1.5,
+      swayAmp: BOTANICAL_CONFIG.idleSwayAmplitude * 1.2,
+    });
+    nodes.push({
+      id: `${charIndex}-n4`,
+      charIndex,
+      relX: charRelX + 0.75 * W,
+      relY: topY,
+      z: -1, // BEHIND top crest
+      isAnchor: true,
+      anchorType: 's-top-back',
+      swayPhase: basePhase + 2.0,
+      swayAmp: BOTANICAL_CONFIG.idleSwayAmplitude,
+    });
+
+    thorns.push({
+      id: `th-${charIndex}-0`,
+      charIndex,
+      relX: charRelX + 0.72 * W,
+      relY: -0.15 * S,
+      length: 8.5 * scale,
+      angle: -Math.PI * 0.25,
+      side: 1,
+      maturity: 1.0,
+    });
+
+    if (rng() > 0.45) {
+      rose = createRoseBloom(`${charIndex}-bloom`, charIndex, charRelX + 0.75 * W, topY - 4 * scale, 1, rng, fontSize);
+    }
+  } else if (lower === 't') {
+    // Letter 't' / 'T': vine wraps vertically around the stem, then loops across crossbar!
+    const stemX = charRelX + (isUpper ? 0.5 : 0.35) * W;
+    const barY = isUpper ? -0.74 * S : -0.48 * S;
+    const topY = isUpper ? -0.76 * S : -0.72 * S;
 
     // Node 1: Loop approaching bottom behind stem
     nodes.push({
       id: `${charIndex}-n0`,
       charIndex,
-      relX: stemX - 5 + (rng() - 0.5) * 2,
+      relX: stemX - 5 * scale + (rng() - 0.5) * 2 * scale,
       relY: -0.05 * S,
       z: -1, // Behind stem
       isAnchor: true,
@@ -189,7 +303,7 @@ export function generateCharSplineNodes(
       id: `${charIndex}-n1`,
       charIndex,
       relX: stemX,
-      relY: -0.28 * S,
+      relY: isUpper ? -0.4 * S : -0.28 * S,
       z: 1, // In front of stem
       isAnchor: true,
       anchorType: 'vertical-front',
@@ -201,8 +315,8 @@ export function generateCharSplineNodes(
     nodes.push({
       id: `${charIndex}-n2`,
       charIndex,
-      relX: stemX + 5,
-      relY: barY + 3,
+      relX: stemX + 5 * scale,
+      relY: barY + 3 * scale,
       z: -1, // Behind crossbar
       isAnchor: true,
       anchorType: 'crossbar-back',
@@ -214,8 +328,8 @@ export function generateCharSplineNodes(
     nodes.push({
       id: `${charIndex}-n3`,
       charIndex,
-      relX: charRelX + 0.65 * W,
-      relY: barY - 3,
+      relX: charRelX + 0.75 * W,
+      relY: barY - 3 * scale,
       z: 1, // In front of crossbar
       isAnchor: true,
       anchorType: 'crossbar-front',
@@ -227,24 +341,28 @@ export function generateCharSplineNodes(
     thorns.push({
       id: `th-${charIndex}-0`,
       charIndex,
-      relX: stemX - 3,
-      relY: -0.2 * S,
-      length: 5.5,
+      relX: stemX - 3 * scale,
+      relY: isUpper ? -0.35 * S : -0.2 * S,
+      length: 8.5 * scale,
       angle: Math.PI * 1.15, // pointing outward left
       side: -1,
       maturity: 1.0,
     });
-  } else if (lower === 'h' || lower === 'b' || lower === 'd' || lower === 'l' || lower === 'k') {
-    // Tall ascender letter: vine spirals climbing up and over the ascender spine!
-    const stemRel = lower === 'd' ? 0.75 : 0.25;
+
+    if ((isUpper && rng() > 0.35) || (!isUpper && rng() > 0.5)) {
+      rose = createRoseBloom(`${charIndex}-bloom`, charIndex, stemX, topY - 4 * scale, 1, rng, fontSize);
+    }
+  } else if (lower === 'h' || lower === 'b' || lower === 'd' || lower === 'l' || lower === 'k' || isUpper) {
+    // Tall ascender / Capital letter: vine spirals climbing up and over the ascender spine!
+    const stemRel = lower === 'd' ? 0.75 : (lower === 'k' || isUpper ? 0.3 : 0.25);
     const stemX = charRelX + stemRel * W;
-    const topY = -0.88 * S;
+    const topY = isUpper ? -0.78 * S : -0.88 * S;
 
     // Node 1: Loop behind lower ascender
     nodes.push({
       id: `${charIndex}-n0`,
       charIndex,
-      relX: stemX - 6,
+      relX: stemX - 6 * scale,
       relY: -0.15 * S,
       z: -1, // BEHIND
       isAnchor: true,
@@ -270,7 +388,7 @@ export function generateCharSplineNodes(
     nodes.push({
       id: `${charIndex}-n2`,
       charIndex,
-      relX: stemX + 5,
+      relX: stemX + 5 * scale,
       relY: topY + 0.12 * S,
       z: -1, // BEHIND
       isAnchor: true,
@@ -283,8 +401,8 @@ export function generateCharSplineNodes(
     nodes.push({
       id: `${charIndex}-n3`,
       charIndex,
-      relX: stemX - 2,
-      relY: topY - 3,
+      relX: stemX - 2 * scale,
+      relY: topY - 3 * scale,
       z: 1, // IN FRONT
       isAnchor: true,
       anchorType: 'ascender-crest',
@@ -296,7 +414,7 @@ export function generateCharSplineNodes(
     nodes.push({
       id: `${charIndex}-n4`,
       charIndex,
-      relX: charRelX + W + 1,
+      relX: charRelX + W + Math.max(1, Math.round(scale)),
       relY: -0.25 * S,
       z: -1,
       isAnchor: false,
@@ -308,9 +426,9 @@ export function generateCharSplineNodes(
     thorns.push({
       id: `th-${charIndex}-0`,
       charIndex,
-      relX: stemX - 4,
+      relX: stemX - 4 * scale,
       relY: -0.32 * S,
-      length: 6.0,
+      length: 9.5 * scale,
       angle: Math.PI * 0.85,
       side: -1,
       maturity: 1.0,
@@ -318,18 +436,17 @@ export function generateCharSplineNodes(
     thorns.push({
       id: `th-${charIndex}-1`,
       charIndex,
-      relX: stemX + 4,
+      relX: stemX + 4 * scale,
       relY: -0.65 * S,
-      length: 5.5,
+      length: 8.5 * scale,
       angle: -Math.PI * 0.2,
       side: 1,
       maturity: 1.0,
     });
 
     // Ascender letters are prime locations for blooms!
-    // Deterministically place a rose bloom at ascender peak
-    if (rng() > 0.3) {
-      rose = createRoseBloom(`${charIndex}-bloom`, charIndex, stemX - 2, topY - 5, 1, rng);
+    if (rng() > 0.25) {
+      rose = createRoseBloom(`${charIndex}-bloom`, charIndex, stemX - 2 * scale, topY - 5 * scale, 1, rng, fontSize);
     }
   } else if (lower === 'o' || lower === 'c' || lower === 'e' || lower === 'a') {
     // Bowl / Loop letters: vine threads through the bowl!
@@ -342,8 +459,8 @@ export function generateCharSplineNodes(
     nodes.push({
       id: `${charIndex}-n0`,
       charIndex,
-      relX: centerX - radiusX - 2,
-      relY: centerY + 2,
+      relX: centerX - radiusX - 2 * scale,
+      relY: centerY + 2 * scale,
       z: -1, // BEHIND left stroke
       isAnchor: true,
       anchorType: 'bowl-back',
@@ -368,7 +485,7 @@ export function generateCharSplineNodes(
     nodes.push({
       id: `${charIndex}-n2`,
       charIndex,
-      relX: centerX + radiusX + 3,
+      relX: centerX + radiusX + 3 * scale,
       relY: centerY - radiusY * 0.3,
       z: -1, // BEHIND right stroke
       isAnchor: true,
@@ -382,12 +499,17 @@ export function generateCharSplineNodes(
       id: `th-${charIndex}-0`,
       charIndex,
       relX: centerX - radiusX,
-      relY: centerY - 4,
-      length: 5.0,
+      relY: centerY - 4 * scale,
+      length: 8.0 * scale,
       angle: -Math.PI * 0.75,
       side: -1,
       maturity: 1.0,
     });
+
+    // Rose bloom opportunity at crest of bowl
+    if (rng() > 0.45) {
+      rose = createRoseBloom(`${charIndex}-bloom`, charIndex, centerX, centerY - radiusY - 4 * scale, 1, rng, fontSize);
+    }
   } else {
     // General letters: undulating organic wave weaving over baseline & x-height
     const midX = charRelX + 0.5 * W;
@@ -395,7 +517,7 @@ export function generateCharSplineNodes(
     nodes.push({
       id: `${charIndex}-n0`,
       charIndex,
-      relX: charRelX + 2,
+      relX: charRelX + 2 * scale,
       relY: -0.08 * S,
       z: -1, // BEHIND
       isAnchor: true,
@@ -430,17 +552,23 @@ export function generateCharSplineNodes(
     thorns.push({
       id: `th-${charIndex}-0`,
       charIndex,
-      relX: midX + 2,
+      relX: midX + 2 * scale,
       relY: -0.34 * S,
-      length: 4.8,
+      length: 7.5 * scale,
       angle: -Math.PI * 0.45,
       side: 1,
       maturity: 1.0,
     });
+
+    // Rose bloom opportunity on crest of general letters
+    if (rng() > 0.5) {
+      rose = createRoseBloom(`${charIndex}-bloom`, charIndex, midX, -0.42 * S - 4 * scale, 1, rng, fontSize);
+    }
   }
 
   return { nodes, thorns, rose };
 }
+
 
 /**
  * Procedural crimson gothic rose generator
@@ -451,15 +579,17 @@ export function createRoseBloom(
   relX: number,
   relY: number,
   z: number,
-  rng: () => number
+  rng: () => number,
+  fontSize: number = 32
 ): RoseBloom {
-  const baseRadius = 8.5 + rng() * 3.5;
+  const scale = fontSize / 32;
+  const baseRadius = (13.5 + rng() * 5.5) * scale;
   const rotation = rng() * Math.PI * 2;
 
   const petalLayers: PetalLayer[] = [
     // Outer calyx / deep velvet petals
     {
-      count: 5,
+      count: 6,
       radius: baseRadius,
       rotation: rotation,
       color: BOTANICAL_CONFIG.colorRoseDeep,
@@ -467,14 +597,14 @@ export function createRoseBloom(
     // Middle petal whorl
     {
       count: 5,
-      radius: baseRadius * 0.72,
+      radius: baseRadius * 0.75,
       rotation: rotation + Math.PI / 5,
       color: BOTANICAL_CONFIG.colorRoseMid,
     },
     // Inner core whorl
     {
       count: 4,
-      radius: baseRadius * 0.45,
+      radius: baseRadius * 0.48,
       rotation: rotation + Math.PI / 3,
       color: BOTANICAL_CONFIG.colorRoseHighlight,
     },

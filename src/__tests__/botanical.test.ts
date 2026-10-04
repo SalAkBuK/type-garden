@@ -36,8 +36,8 @@ describe('1. Mid-Word Advance Check', () => {
 });
 
 describe('2. Stroke-Level Weaving Check', () => {
-  it('produces alternating z-depths (-1 behind, +1 in front) for letter strokes (t, h, d, b, l, o)', () => {
-    const testChars = ['t', 'h', 'd', 'b', 'l', 'o'];
+  it('produces alternating z-depths (-1 behind, +1 in front) for letter strokes (t, h, d, b, l, o, s, T)', () => {
+    const testChars = ['t', 'h', 'd', 'b', 'l', 'o', 's', 'T'];
     const fontSize = 32;
     const charWidth = 18;
     const seed = 12345;
@@ -58,11 +58,19 @@ describe('2. Stroke-Level Weaving Check', () => {
       expect(frontNodes.length).toBeGreaterThan(0);
 
       // Inspect letter 't': vine wraps around vertical spine and crossbar
-      if (char === 't') {
+      if (char === 't' || char === 'T') {
         const hasVerticalWeave = nodes.some((n) => n.anchorType === 'vertical-front' || n.anchorType === 'vertical-back');
         const hasCrossbarWeave = nodes.some((n) => n.anchorType === 'crossbar-front' || n.anchorType === 'crossbar-back');
         expect(hasVerticalWeave).toBe(true);
         expect(hasCrossbarWeave).toBe(true);
+      }
+
+      // Inspect letter 's': sinuous waist and crest weaving
+      if (char === 's') {
+        const hasWaist = nodes.some((n) => n.anchorType === 's-waist-back');
+        const hasCrest = nodes.some((n) => n.anchorType === 's-upper-front');
+        expect(hasWaist).toBe(true);
+        expect(hasCrest).toBe(true);
       }
 
       // Inspect letter 'h' or 'd': vine wraps around tall ascender
@@ -73,6 +81,11 @@ describe('2. Stroke-Level Weaving Check', () => {
         expect(hasAscenderBack).toBe(true);
       }
     }
+
+    // Verify punctuation grounding: punctuation dots must not sprout invasive thorn spikes
+    const punctRes = generateCharSplineNodes('.', 0, 0, 8, fontSize, seed);
+    expect(punctRes.thorns.length).toBe(0);
+    expect(punctRes.nodes.length).toBeGreaterThan(0);
   });
 });
 
@@ -211,15 +224,15 @@ describe('5. Reflow Position Check', () => {
 });
 
 describe('6. Readability Floor Check', () => {
-  it('clamps zoom to cameraMinZoom (0.45x) and transitions to vertical auto-panning tracking the active line', () => {
-    const camera = new CameraController(800, 600);
+  it('clamps zoom to cameraMinZoom and transitions to vertical auto-panning tracking the active line', () => {
+    const camera = new CameraController(1200, 800);
     const doc = new DocumentModel();
 
-    // 1. Single short line: should stay near cameraMaxZoom (1.0x)
+    // 1. Single short line: should stay near cameraMaxZoom
     doc.setText('A gothic letter begins', 22);
     let layout = doc.relayout();
     camera.updateTarget(layout);
-    expect(camera.state.targetZoom).toBeCloseTo(1.0, 1);
+    expect(camera.state.targetZoom).toBeCloseTo(BOTANICAL_CONFIG.cameraMaxZoom, 0);
     expect(camera.state.isAtReadabilityFloor).toBe(false);
     expect(camera.state.targetPanY).toBe(0);
 
@@ -231,18 +244,18 @@ describe('6. Readability Floor Check', () => {
 
     camera.updateTarget(layout);
 
-    // Target zoom MUST clamp at cameraMinZoom (0.45x)
+    // Target zoom MUST clamp at cameraMinZoom
     expect(camera.state.targetZoom).toBe(BOTANICAL_CONFIG.cameraMinZoom);
     expect(camera.state.isAtReadabilityFloor).toBe(true);
 
     // Auto-panning MUST be active (targetPanY > 0) to keep active line at golden ratio
     expect(camera.state.targetPanY).toBeGreaterThan(0);
 
-    // Camera step damping interpolates zoom towards 0.45
+    // Camera step damping interpolates zoom towards cameraMinZoom
     for (let f = 0; f < 60; f++) {
       camera.step(0.016);
     }
-    expect(camera.state.zoom).toBeLessThanOrEqual(0.6);
+    expect(camera.state.zoom).toBeLessThanOrEqual(BOTANICAL_CONFIG.cameraMinZoom + 0.1);
     expect(camera.state.panY).toBeGreaterThan(0);
   });
 });

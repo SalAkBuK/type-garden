@@ -60,6 +60,7 @@ export interface RoseBloom {
 export interface BotanicalInstance {
   id: string;
   seed: number;
+  phaseOffset: number; // Persistent ambient sway phase offset decoupled from word stream indices
   wordText: string;
   charNodes: SplineNode[][]; // index 0..text.length-1
   flatNodes: SplineNode[];
@@ -72,6 +73,22 @@ export interface BotanicalInstance {
   isDead: boolean;
   createdAt: number;
   lastMutatedAt: number;
+  lastCharWidths?: number[];
+}
+
+export interface TrailingRetraction {
+  id: string;
+  wordX: number;
+  wordY: number;
+  charIndexStart: number;
+  nodes: SplineNode[];
+  thorns: Thorn[];
+  roses: RoseBloom[];
+  retractionProgress: number; // 0 to 1
+  startTime: number;
+  duration: number; // ms
+  isDead: boolean;
+  phaseOffset: number;
 }
 
 export interface CharMetric {
@@ -102,9 +119,12 @@ export interface DocumentLayout {
     y: number; // baseline
     height: number;
     width: number;
+    startCharIndex: number;
+    endCharIndex: number;
   }[];
   words: WordToken[];
   totalHeight: number;
+
   activeWordId?: string;
   cursorPos: {
     lineIndex: number;
@@ -118,6 +138,7 @@ export interface CameraState {
   zoom: number;
   targetZoom: number;
   panX: number;
+  targetPanX: number;
   panY: number;
   targetPanY: number;
   isAtReadabilityFloor: boolean;
@@ -125,3 +146,4 @@ export interface CameraState {
   viewportWidth: number;
   viewportHeight: number;
 }
+

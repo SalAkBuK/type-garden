@@ -34,6 +34,8 @@ const btnCheckFloor = document.getElementById('btn-check-floor') as HTMLButtonEl
 const docModel = new DocumentModel();
 let camera = new CameraController(window.innerWidth, window.innerHeight);
 const renderer = new BotanicalRenderer(ctx);
+(window as any).docModel = docModel;
+(window as any).camera = camera;
 
 let lastTime = performance.now();
 let lastTypingTime = performance.now();
@@ -60,6 +62,16 @@ function resizeCanvas() {
 
   ctx.resetTransform();
   ctx.scale(dpr, dpr);
+  ctx.font = `${BOTANICAL_CONFIG.baseFontSize}px ${BOTANICAL_CONFIG.fontFamily}`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  if ('letterSpacing' in ctx) {
+    try {
+      (ctx as any).letterSpacing = '0px';
+    } catch {
+      // ignore
+    }
+  }
 
   camera.setViewport(width, height);
 }
@@ -73,6 +85,18 @@ textarea.value = INITIAL_TEXT;
 textarea.setSelectionRange(INITIAL_TEXT.length, INITIAL_TEXT.length);
 docModel.setText(INITIAL_TEXT, INITIAL_TEXT.length, ctx);
 
+// Re-layout and synchronize when web fonts finish loading
+if (typeof document !== 'undefined' && 'fonts' in document) {
+  const syncFontsAndLayout = () => {
+    ctx.font = `${BOTANICAL_CONFIG.baseFontSize}px ${BOTANICAL_CONFIG.fontFamily}`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    docModel.setText(textarea.value, textarea.selectionStart ?? textarea.value.length, ctx);
+  };
+  document.fonts.ready.then(syncFontsAndLayout);
+  document.fonts.addEventListener('loadingdone', syncFontsAndLayout);
+}
+
 // Make sure initial roses bloom after short pause
 setTimeout(() => {
   for (const word of docModel.getWords()) {
@@ -80,11 +104,20 @@ setTimeout(() => {
   }
 }, 500);
 
-// Focus hidden input on canvas click
-canvas.addEventListener('click', () => {
-  if (!isAutomating) {
-    textarea.focus();
-  }
+// Focus and position cursor on canvas click
+canvas.addEventListener('click', (e: MouseEvent) => {
+  if (isAutomating) return;
+  const rect = canvas.getBoundingClientRect();
+  const clickScreenX = e.clientX - rect.left;
+  const clickScreenY = e.clientY - rect.top;
+
+  const docX = clickScreenX / camera.state.zoom + camera.state.panX;
+  const docY = clickScreenY / camera.state.zoom + camera.state.panY;
+
+  const targetCharIndex = docModel.getCharIndexAtPosition(docX, docY);
+  textarea.focus();
+  textarea.setSelectionRange(targetCharIndex, targetCharIndex);
+  docModel.setText(textarea.value, targetCharIndex, ctx);
 });
 
 // Synchronize keyboard typing
@@ -94,10 +127,9 @@ textarea.addEventListener('input', () => {
   docModel.setText(textarea.value, textarea.selectionStart ?? textarea.value.length, ctx);
 });
 
-textarea.addEventListener('keydown', (e) => {
+textarea.addEventListener('keydown', () => {
   if (isAutomating) return;
   lastTypingTime = performance.now();
-  // Allow cursor movement
   setTimeout(() => {
     docModel.setText(textarea.value, textarea.selectionStart ?? textarea.value.length, ctx);
   }, 0);
@@ -128,8 +160,8 @@ function animationLoop(now: number) {
     }
   }
 
-  // Update animated botanical lifecycles (retractions, growths)
-  docModel.lifecycleManager.update(dt * 1000, now);
+  // Update animated botanical lifecycles (retractions, growths, blooms)
+  docModel.lifecycleManager.update(dt, now, docModel.getWords());
 
   // Update layout and camera
   const layout = docModel.relayout(ctx);
@@ -141,13 +173,14 @@ function animationLoop(now: number) {
     layout,
     camera.state,
     docModel.lifecycleManager.getRetractingTokens(),
+    docModel.lifecycleManager.getTrailingRetractions(),
     now / 1000,
     chkDebug.checked
   );
 
   // Update Telemetry HUD
   const isFloor = camera.state.isAtReadabilityFloor;
-  hudZoom.textContent = `${camera.state.zoom.toFixed(2)}x ${isFloor ? '[FLOOR 0.45x]' : ''}`;
+  hudZoom.textContent = `${camera.state.zoom.toFixed(2)}x ${isFloor ? `[FLOOR ${BOTANICAL_CONFIG.cameraMinZoom.toFixed(2)}x]` : ''}`;
   hudZoom.className = `telemetry-value ${isFloor ? 'badge-floor' : ''}`;
   hudPanY.textContent = `${camera.state.panY.toFixed(1)} px`;
   hudLines.textContent = `Line ${layout.cursorPos.lineIndex + 1} / ${layout.lines.length}`;
@@ -168,15 +201,6 @@ requestAnimationFrame(animationLoop);
 // Helper for automated proof sequences
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function typeTextSequentially(str: string, delayMs: number = 300) {
-  for (let i = 0; i < str.length; i++) {
-    textarea.value += str[i];
-    textarea.selectionStart = textarea.selectionEnd = textarea.value.length;
-    docModel.setText(textarea.value, textarea.value.length, ctx);
-    await sleep(delayMs);
-  }
 }
 
 async function backspaceSequentially(count: number, delayMs: number = 250) {
@@ -211,7 +235,7 @@ btnCheckMidword.addEventListener('click', async () => {
     docModel.setText(textarea.value, textarea.value.length, ctx);
     const word = docModel.getWords()[0];
     const nodeCount = word.botanicalInstance.flatNodes.length;
-    appendLog(`Typed '${testWord[i]}' (len ${i + 1}) -> tendril advanced to ${nodeCount} spline nodes.`);
+    appendLog(`Typed '${testWord[i]}' (len ${i + 1}) -> tendril tip advancing, total nodes: ${nodeCount}`);
     await sleep(350);
   }
 
@@ -241,7 +265,6 @@ btnCheckWeaving.addEventListener('click', async () => {
   appendLog(`Letter 't' in 'the': ${behindNodes.length} nodes behind (z=-1), ${frontNodes.length} nodes in front (z=+1).`);
   appendLog(`Letter 'h' in 'the': Vine loops behind spine and crests ascender in front.`);
 
-  // Temporarily enable debug wireframe so user visibly inspects over/under weaving
   chkDebug.checked = true;
   await sleep(1500);
   chkDebug.checked = false;
@@ -264,7 +287,6 @@ btnCheckPartial.addEventListener('click', async () => {
   docModel.setText('blooming', 8, ctx);
   await sleep(800);
 
-  // Let roses swell
   bloomWordRoses(docModel.getWords()[0].botanicalInstance);
   await sleep(600);
 
@@ -385,7 +407,7 @@ btnCheckFloor.addEventListener('click', async () => {
     'As lines multiply and the page fills with crimson petals,',
     'the zoom scales down smoothly towards the readability floor.',
     'Now we reach the threshold where further shrinking would obscure.',
-    'The zoom clamps firmly at 0.45x scale factor.',
+    `The zoom clamps firmly at ${BOTANICAL_CONFIG.cameraMinZoom.toFixed(2)}x scale factor.`,
     'Rather than making text microscopic and unreadable,',
     'the camera transitions to smooth vertical auto-panning.',
     'The active writing line is kept centered at the golden ratio,',
@@ -399,7 +421,6 @@ btnCheckFloor.addEventListener('click', async () => {
   textarea.value = longGothicText;
   docModel.setText(longGothicText, longGothicText.length, ctx);
 
-  // Wait for camera spring interpolation
   for (let s = 0; s < 40; s++) {
     await sleep(50);
   }
@@ -409,7 +430,7 @@ btnCheckFloor.addEventListener('click', async () => {
   appendLog(`Readability Floor Clamped: ${camera.state.isAtReadabilityFloor}.`);
 
   if (camera.state.isAtReadabilityFloor && camera.state.panY > 0) {
-    appendLog('Check 6 PASSED: Clamped at 0.45x readability floor with active line auto-panning.', 'pass');
+    appendLog(`Check 6 PASSED: Clamped at ${BOTANICAL_CONFIG.cameraMinZoom.toFixed(2)}x readability floor with active line auto-panning.`, 'pass');
     document.getElementById('badge-check-floor')!.textContent = 'PASSED';
     btnCheckFloor.classList.add('passed');
   } else {

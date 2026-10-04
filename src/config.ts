@@ -53,13 +53,13 @@ export const BOTANICAL_CONFIG: BotanicalConfig = {
   colorRoseHighlight: '#d9364f',
 
   // Typography
-  fontFamily: 'Cormorant Garamond, "Times New Roman", serif',
-  baseFontSize: 32, // px at 1.0x scale
+  fontFamily: '"Cormorant Garamond", "Times New Roman", serif',
+  baseFontSize: 68, // px at 1.0x scale (magnified, bold gothic display scale: 136px at 2.0x close-up)
   letterSpacing: '0.04em',
   lineHeightMultiplier: 1.8,
 
   // Botanical Growth Dynamics
-  stemThickness: 2.2, // px
+  stemThickness: 6.0, // px (robust, tangible gothic briar vines)
   growthSpeedPerChar: 0.12, // seconds per glyph stroke
   thornFrequency: 0.35, // thorns per unit length
   maxRosesPerWord: 2,
@@ -67,14 +67,14 @@ export const BOTANICAL_CONFIG: BotanicalConfig = {
 
   // Ambient Respiration
   idleRespirationPeriod: 5.0, // seconds per full cycle
-  idleSwayAmplitude: 1.5, // px drift
+  idleSwayAmplitude: 3.2, // px drift
   ambientPhaseJitter: 0.4, // subtle offset across words
 
   // Camera & Framing
-  cameraMaxZoom: 1.0, // initial close-up
-  cameraMinZoom: 0.45, // readability floor
+  cameraMaxZoom: 2.0, // initial close-up
+  cameraMinZoom: 0.85, // readability floor
   cameraDampingFactor: 0.08, // spring interpolation speed
   panLookaheadLines: 1.5, // lines ahead kept in view during auto-pan
-  viewportMarginRatio: 0.15, // boundary margin before reframing triggers
-  lineWidth: 650, // maximum width before wrapping
+  viewportMarginRatio: 0.08, // boundary margin before reframing triggers
+  lineWidth: 650, // maximum width before wrapping (fits 1300px at 2.0x without clipping)
 };

@@ -6,10 +6,13 @@ export class CameraController {
   public state: CameraState;
 
   constructor(viewportWidth: number, viewportHeight: number) {
+    const visibleWidthInDoc = viewportWidth / BOTANICAL_CONFIG.cameraMaxZoom;
+    const initialLeftMargin = Math.max(40, (visibleWidthInDoc - BOTANICAL_CONFIG.lineWidth) / 2);
     this.state = {
       zoom: BOTANICAL_CONFIG.cameraMaxZoom,
       targetZoom: BOTANICAL_CONFIG.cameraMaxZoom,
-      panX: 0,
+      panX: -initialLeftMargin,
+      targetPanX: -initialLeftMargin,
       panY: 0,
       targetPanY: 0,
       isAtReadabilityFloor: false,
@@ -33,7 +36,7 @@ export class CameraController {
     for (const line of layout.lines) {
       if (line.width > maxLineWidth) maxLineWidth = line.width;
     }
-    // ensure at least 300px for stability
+    // ensure at least 320px for stability
     const contentWidth = Math.max(320, maxLineWidth);
     const contentHeight = Math.max(BOTANICAL_CONFIG.baseFontSize * 2, layout.totalHeight);
 
@@ -46,7 +49,7 @@ export class CameraController {
     const scaleY = viewportHeight / paddedHeight;
     const idealZoom = Math.min(scaleX, scaleY);
 
-    // Readability floor check: clamp zoom between cameraMinZoom (0.45x) and cameraMaxZoom (1.0x)
+    // Readability floor check: clamp zoom between cameraMinZoom and cameraMaxZoom
     const minZoom = BOTANICAL_CONFIG.cameraMinZoom;
     const maxZoom = BOTANICAL_CONFIG.cameraMaxZoom;
 
@@ -63,7 +66,7 @@ export class CameraController {
     this.state.activeLineIndex = layout.cursorPos.lineIndex;
 
     // Center active writing line at approximately the vertical golden ratio (62% down viewport)
-    // when text content at current target zoom exceeds viewport
+    // when text content at current target zoom exceeds viewport or hits readability floor
     const totalRenderedHeight = contentHeight * this.state.targetZoom;
 
     if (totalRenderedHeight > viewportHeight * 0.75 || this.state.isAtReadabilityFloor) {
@@ -75,15 +78,26 @@ export class CameraController {
       this.state.targetPanY = 0;
     }
 
-    // Horizontal centering
-    const leftMargin = Math.max(40, (viewportWidth / this.state.targetZoom - BOTANICAL_CONFIG.lineWidth) / 2);
-    this.state.panX = -leftMargin;
+    // Horizontal framing: symmetrically center when content fits, or track active cursor when zoomed
+    const visibleWidthInDoc = viewportWidth / this.state.targetZoom;
+    if (visibleWidthInDoc >= BOTANICAL_CONFIG.lineWidth + 40) {
+      const leftMargin = (visibleWidthInDoc - BOTANICAL_CONFIG.lineWidth) / 2;
+      this.state.targetPanX = -leftMargin;
+    } else {
+      const cursorX = layout.cursorPos.x;
+      const marginX = Math.min(60, visibleWidthInDoc * 0.12);
+      const minPanX = -marginX;
+      const maxPanX = Math.max(minPanX, BOTANICAL_CONFIG.lineWidth - visibleWidthInDoc + marginX);
+      const desiredPanX = cursorX - visibleWidthInDoc * 0.5;
+      this.state.targetPanX = Math.max(minPanX, Math.min(maxPanX, desiredPanX));
+    }
   }
 
   step(dt: number = 0.016): void {
     const factor = BOTANICAL_CONFIG.cameraDampingFactor;
     // Critically damped spring / exponential lerp
     this.state.zoom += (this.state.targetZoom - this.state.zoom) * factor;
+    this.state.panX += (this.state.targetPanX - this.state.panX) * factor;
     this.state.panY += (this.state.targetPanY - this.state.panY) * factor;
   }
 }
