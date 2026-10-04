@@ -864,9 +864,14 @@
           ctx: g,
           fill: (p, col) => {
             g.beginPath(); this.path(g, p, true);
-            // col is a CSS colour, or a linear gradient {x0, y0, x1, y1, stops: [[offset, colour], ...]}
+            // col is a CSS colour, or a gradient: linear {x0, y0, x1, y1, stops: [[offset, colour], ...]}
+            // or radial {x0, y0, r0, x1, y1, r1, stops}
             if (typeof col === 'string') g.fillStyle = col;
-            else { const gr = g.createLinearGradient(col.x0, col.y0, col.x1, col.y1); for (const s of col.stops) gr.addColorStop(s[0], s[1]); g.fillStyle = gr; }
+            else {
+              const gr = col.r1 != null ? g.createRadialGradient(col.x0, col.y0, col.r0, col.x1, col.y1, col.r1) : g.createLinearGradient(col.x0, col.y0, col.x1, col.y1);
+              for (const s of col.stops) gr.addColorStop(s[0], s[1]);
+              g.fillStyle = gr;
+            }
             g.fill();
           },
           stroke: (p, col, w) => { g.beginPath(); this.path(g, p, false); g.strokeStyle = col; g.lineWidth = w; g.lineCap = 'round'; g.lineJoin = 'round'; g.stroke(); },
@@ -1118,7 +1123,7 @@
         for (let i = 0; i < dels; i++) this.wither(now);
         for (const ch of cur.slice(p)) {
           if (ch === S) continue;
-          if (ch.charCodeAt(0) === 10) { this.letters = []; this.layout(); } else this.add(ch, now);
+          if (ch.charCodeAt(0) === 10) { this.releaseLetters(this.letters); this.letters = []; this.layout(); } else this.add(ch, now);
         }
         if (this.composing) this.iv = cur; else { el.value = S; this.iv = S; }
       }
@@ -1150,7 +1155,7 @@
           if (pv && pv.ch !== ' ') { pv.cut = null; pv.endEls = null; pv.tb = now; }
           this.layout(); return;
         }
-        if (e.key === 'Enter') { e.preventDefault(); this.mark(); this.letters = []; this.layout(); return; }
+        if (e.key === 'Enter') { e.preventDefault(); this.mark(); this.releaseLetters(this.letters); this.letters = []; this.layout(); return; }
         if (e.key.length !== 1) return;
         e.preventDefault(); this.mark();
         this.add(e.key, now);
@@ -1350,7 +1355,8 @@
         this.Sd += (this.St - this.Sd) * k;
         this.cx += (this.ctx_ - this.cx) * k; this.cy += (this.cty - this.cy) * k;
         for (const l of this.letters) if (!l.dead && l.tx != null) { l.x += (l.tx - l.x) * k; l.y += (l.ty - l.y) * k; }
-        this.letters = this.letters.filter(l => !(l.dead && now - l.dead > 300));
+        const gone = this.letters.filter(l => l.dead && now - l.dead > 300);
+        if (gone.length) { this.releaseLetters(gone); this.letters = this.letters.filter(l => !gone.includes(l)); }
         this.paint(now, true);
       }
 
@@ -1373,7 +1379,7 @@
           letters: this.letters,
           S: this.Sd,
           C: { red: '#C41A30', blue: '#1C4528', line: '#F07082', text: '#FFFFFF', vein: '#000000' },
-          boil: this.props.boil ?? true,
+          boil: false,
           recoil: this.props.recoil ?? 20,
           speed: 1,
           wither: 260,
@@ -1670,13 +1676,14 @@
         // Vine mode: the bud emerges as the vine arrives, swells, the sepals peel back, then the petals slowly loosen
         const vine = this._vine;
         const grow = vine ? this.spr(a / 700, 6, 9) * (0.8 + 0.2 * smooth(200, 1100, a)) : this.spr(a / 900, 7, 12);
-        if (grow <= 0.02) return;
+        if (grow <= 0.02 && !this._growOne) return;
         // Stage: a bud stays closed, a half-open rose stops at the goblet, a hero rose keeps going into a full bloom
         const stage = e.stage || 'half';
         const openT = vine ? this.eio((a - 1100) / 2600) : this.eo((a - 180) / 1800);
         const open = stage === 'bud' ? Math.min(openT, 0.16) : openT;
         const full = stage === 'full' ? (vine ? this.eio((a - 3300) / 2600) : this.eo((a - 1500) / 1800)) : 0;
-        const Rg = R * grow * (1.2 - 0.25 * full); // a slim half-open bloom needs a little more size than a flat one
+        // (a sprite is rendered at full size and scaled by `grow` when stamped)
+        const Rg = R * (this._growOne ? 1 : grow) * (1.2 - 0.25 * full); // a slim half-open bloom needs a little more size than a flat one
         const breathe = 0.04 * Math.sin((this._now || 0) / 1000 * 0.9 + e.ph1);
 
         // Camera: the bloom axis (z) leans toward the viewer by `tilt` (0 = face-on, PI/2 = side-on).
@@ -1684,11 +1691,15 @@
         // V maps flower space to view space [x, y (down), depth (toward viewer)].
         // (a full bloom turns its face up toward the viewer to show the spiral)
         const tH = this.h(e.id * 3.31 + 1.7), tiltHalf = 1.0 + 0.3 * tH + 0.15 * (1 - open);
-        const tilt = tiltHalf + (0.8 + 0.3 * tH - tiltHalf) * full;
+        const tilt = tiltHalf + (0.5 + 0.2 * tH - tiltHalf) * full;
         const ct = Math.cos(tilt), stl = Math.sin(tilt);
         const V = (x, y, z) => [x, y * ct - z * stl, y * stl + z * ct];
         const S2 = v => T(v[0], v[1], v[2] / R * 0.35);
-        const LX = -0.48, LY = -0.68, LZ = 0.55; // key light from upper left, in front
+        // Key light from the upper left, in front. The rose appears on screen turned by `lr` (a hanging rose is upside down),
+        // so the light and any screen-space shadow offsets are expressed in the rose's own frame.
+        const lr = this._lightRot != null ? this._lightRot : rot, clr = Math.cos(lr), slr = Math.sin(lr);
+        const toRose = (x, y) => [x * clr + y * slr, -x * slr + y * clr];
+        const [LX, LY] = toRose(-0.48, -0.68), LZ = 0.55;
 
         // Colour ramps [shadow, body, lit] sampled from a crimson long-stem rose (rich face, slightly paler reverse)
         const FACE = [[66, 0, 8], [172, 8, 24], [226, 38, 50]];
@@ -1708,25 +1719,26 @@
 
         // Now and then an open rose lets a petal go
         if (vine && !this._noSprite && this.petalFall && stage !== 'bud' && open > 0.95 && a > 4200 && this.petalFall.length < 12 &&
-            Math.random() < (this._dt || 0) * (stage === 'full' ? 0.14 : 0.06)) {
+            Math.random() < (this._dt || 0) * (stage === 'full' ? 0.08 : 0.035)) {
           const c0 = S2(V(0, 0, Rg * 0.7)), k = Math.max(0.5, (this._S || 200) / 200);
           this.petalFall.push({
             x: c0[0] + (Math.random() - 0.5) * Rg * 0.4, y: c0[1], s: Rg * (0.4 + Math.random() * 0.15), k, t: 0,
-            vx: (Math.random() - 0.5) * 12 * k, vy: 0, term: (22 + Math.random() * 14) * k,
-            sw: 1.1 + Math.random() * 0.8, ph: Math.random() * 6.28, amp: (12 + Math.random() * 14) * k,
+            vx: (Math.random() - 0.5) * 12 * k, vy: 0, term: (16 + Math.random() * 10) * k,
+            sw: 0.9 + Math.random() * 0.7, ph: Math.random() * 6.28, amp: (14 + Math.random() * 16) * k,
             rot: Math.random() * 6.28, spin: (Math.random() - 0.5) * 1.6, flip: Math.random() * 6.28, fs: 1.4 + Math.random() * 1.4,
             life: 9 + Math.random() * 4
           });
         }
-        // A rose that has finished opening barely changes: on canvas, draw it from a cached bitmap (SVG export stays vector)
-        if (B.ctx && !this._noSprite && a > 6500) { this.roseSprite(B, cx, cy, R, rot, e, a); return; }
+        // On canvas every rose is stamped from its own bitmap (SVG export stays vector): see roseSprite
+        if (B.ctx && !this._noSprite) { this.roseSprite(B, cx, cy, R, rot, e, a, grow, a <= 6500); return; }
 
         // Soft shadow the bloom casts onto the letter behind it (light from the upper left)
         if ((e.cLayer != null ? e.cLayer : e.layer) === 1) {
           const c0 = S2(V(0, 0, Rg * (0.5 - 0.2 * full))), rad = Rg * (0.5 + 0.2 * full) * Math.min(1, 0.4 + open);
+          const so = this._lightRot != null ? toRose(0.2, 0.28) : [0.2, 0.28]; // drawn into a sprite: offset in the rose's frame
           for (const [sc, alpha] of [[1.0, 0.1 - 0.03 * full], [0.7, 0.14 - 0.05 * full]]) {
             const sh = [];
-            for (let s = 0; s < 18; s++) { const th = s / 18 * Math.PI * 2; sh.push([c0[0] + Rg * 0.2 + Math.cos(th) * rad * sc, c0[1] + Rg * 0.28 + Math.sin(th) * rad * 0.9 * sc]); }
+            for (let s = 0; s < 18; s++) { const th = s / 18 * Math.PI * 2; sh.push([c0[0] + Rg * so[0] + Math.cos(th) * rad * sc, c0[1] + Rg * so[1] + Math.sin(th) * rad * 0.9 * sc]); }
             B.fill(sh, `rgba(0,0,0,${alpha})`);
           }
         }
@@ -1810,30 +1822,31 @@
           // Shade across the petal (it wraps around the bloom like a cylinder): left edge, midrib, right edge
           const w6 = hwMax * hwShape(0.5), col = ph => { const sh = shade(al[6], ph); return ramp(sh.inner ? FACE : BACK, sh.l); };
           petals.push({
-            key: pt(6, 0)[2], pt, region, lTip: shade(al[10], phi).l, dim: 1 - 0.25 * k, k,
+            key: pt(6, 0)[2], pt, region, lTip: shade(al[10], phi).l, dim: 1 - 0.25 * k * (1 - 0.6 * full), k,
             cL: col(phi - w6), cM: col(phi), cR: col(phi + w6)
           });
         }
 
         // Painter's order: far petals first, near petals last
         petals.sort((p1, p2) => p1.key - p2.key);
-        const shX = Rg * 0.035, shY = Rg * 0.05;
+        const [shX, shY] = toRose(Rg * 0.035 * (1 - 0.35 * full), Rg * 0.05 * (1 - 0.35 * full));
+        const shadowCol = `rgba(4,0,1,${(0.35 - 0.13 * full).toFixed(3)})`;
         for (const p of petals) {
-          const full = p.region(0, M);
-          if (detail) B.fill(full.map(v => S2([v[0] + shX, v[1] + shY, v[2]])), 'rgba(4,0,1,0.35)');
-          const fullS = full.map(S2);
+          const outline = p.region(0, M);
+          if (detail) B.fill(outline.map(v => S2([v[0] + shX, v[1] + shY, v[2]])), shadowCol);
+          const fullS = outline.map(S2);
           const gL = S2(p.pt(6, -1)), gR = S2(p.pt(6, 1));
           B.fill(fullS, { x0: gL[0], y0: gL[1], x1: gR[0], y1: gR[1], stops: [[0, rgb(p.cL, p.dim)], [0.5, rgb(p.cM, p.dim)], [1, rgb(p.cR, p.dim)]] });
           // Shadow pooling toward the petal base, fading out by mid-petal
           const g0 = S2(p.pt(0, 0)), g1 = S2(p.pt(5, 0));
           B.fill(p.region(0, 5).map(S2), { x0: g0[0], y0: g0[1], x1: g1[0], y1: g1[1], stops: [[0, 'rgba(30,0,4,0.75)'], [1, 'rgba(30,0,4,0)']] });
-          if (R >= 6) B.stroke([...fullS, fullS[0]], 'rgba(30,0,5,0.4)', lw * 0.4);
+          if (R >= 6) B.stroke([...fullS, fullS[0]], `rgba(30,0,5,${(0.4 - 0.28 * full).toFixed(3)})`, lw * 0.4);
           // Light catching the rolled-back margin
           if (R >= 10) {
             const rim = [];
             for (let j = 6; j <= M; j++) rim.push(S2(p.pt(j, -1)));
             for (let j = M - 1; j >= 6; j--) rim.push(S2(p.pt(j, 1)));
-            B.stroke(rim, `rgba(240,80,92,${(0.05 + 0.4 * p.lTip * (1 - 0.75 * p.k)).toFixed(3)})`, lw * 0.5);
+            B.stroke(rim, `rgba(240,80,92,${(0.05 + 0.4 * p.lTip * (1 - 0.75 * p.k * (1 - full)) + 0.12 * full).toFixed(3)})`, lw * (0.5 + 0.2 * full));
           }
         }
 
@@ -1893,6 +1906,9 @@
       genWrap(l) {
         l.wrapEls = [];
         if (l.ch === ' ') return;
+        // Rhythm across the word: about a quarter of the letters stay bare, the rest get either a loose loop or a
+        // medium coil, and some of the coiled ones get a second vine braided the other way
+        if (this.h(l.id * 4.77 + 0.31) < 0.25) return;
         const tr = this.climbTrack(this.glyph(l.ch));
         if (!tr || tr[0].y - tr[tr.length - 1].y < 0.25) return;
         const r = this.rng(l.id * 7919 + 17), E = l.wrapEls; let k0 = 70; const nid = () => l.id * 100 + (k0++);
@@ -1901,30 +1917,39 @@
           for (let j = Math.max(0, i - 4); j <= Math.min(N - 1, i + 4); j++) { c += tr[j].c; hw += tr[j].hw; n++; }
           return { y: p.y, c: c / n, hw: hw / n };
         });
+        const loose = r() < 0.5, pitch = loose ? 0.32 + r() * 0.1 : 0.22 + r() * 0.06;
+        const ampK = 0.9 + r() * 0.3, side = r() < 0.5 ? 1 : -1, ph0 = r() * 6.28;
         // Helix around the stroke: x swings across the stroke as the vine climbs; the front half of each turn is drawn over the letter
-        const pitch = 0.2 + r() * 0.08, side = r() < 0.5 ? 1 : -1, P = [], wrap = { c: [], ph: [] };
-        let ph = r() * 6.28;
-        for (let i = 0; i < N; i++) {
-          const p = sm[i], u = i / (N - 1);
-          if (i > 0) ph += side * (sm[i - 1].y - p.y) * Math.PI * 2 / pitch;
-          const A = Math.min(0.17, p.hw + 0.03) * Math.max(0, Math.min(1, u / 0.06, (1 - u) / 0.15));
-          wrap.c.push(p.c); wrap.ph.push(ph);
-          P.push([p.c + A * Math.sin(ph), p.y]);
-        }
-        const nW = P.length, last = P[nW - 1];
-        P.push(...this.vine(last, -Math.PI / 2 + side * (0.4 + r() * 0.5), 0.22 + r() * 0.2, 0.3, 1 + r(), r() * 6.28, side * 0.6, 14).slice(1));
-        const n = P.length, lay = i => i >= nW - 1 ? 1 : (Math.cos(wrap.ph[i]) > 0 ? 1 : 0), segs = [];
-        let s0 = 0;
-        for (let i = 1; i < n; i++) {
-          if (lay(i) !== lay(s0)) { segs.push({ u0: s0 / (n - 1), u1: i / (n - 1), layer: lay(s0) }); s0 = i; }
-        }
-        segs.push({ u0: s0 / (n - 1), u1: 1, layer: lay(s0) });
-        let len = 0;
-        for (let i = 1; i < n; i++) len += Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]);
-        const thorns = [];
-        for (let i = 0; i < 3; i++) thorns.push({ u: 0.2 + r() * 0.7, s: r() < 0.5 ? -1 : 1 });
-        const stem = { t: 'stem', id: nid(), pts: P, segs, d0: 60, dur: Math.max(500, Math.min(2.4, len) * 520), w: 0.85, thorns, wrap, nW, par: null };
-        E.push(stem);
+        const helix = (hand, ph, k) => {
+          const P = [], wrap = { c: [], ph: [] };
+          for (let i = 0; i < N; i++) {
+            const p = sm[i], u = i / (N - 1);
+            if (i > 0) ph += hand * (sm[i - 1].y - p.y) * Math.PI * 2 / pitch;
+            const A = Math.min(0.17, p.hw + 0.03) * k * Math.max(0, Math.min(1, u / 0.06, (1 - u) / 0.15));
+            wrap.c.push(p.c); wrap.ph.push(ph);
+            P.push([p.c + A * Math.sin(ph), p.y]);
+          }
+          return { P, wrap, nW: P.length };
+        };
+        // A wrap stem: the helix, then a free end that leaves the letter at the top
+        const wrapStem = (hand, ph, k, d0, w, exitLen) => {
+          const { P, wrap, nW } = helix(hand, ph, k), last = P[nW - 1];
+          P.push(...this.vine(last, -Math.PI / 2 + hand * (0.4 + r() * 0.5), exitLen, 0.3, 1 + r(), r() * 6.28, hand * 0.6, 14).slice(1));
+          const n = P.length, lay = i => i >= nW - 1 ? 1 : (Math.cos(wrap.ph[i]) > 0 ? 1 : 0), segs = [];
+          let s0 = 0;
+          for (let i = 1; i < n; i++) {
+            if (lay(i) !== lay(s0)) { segs.push({ u0: s0 / (n - 1), u1: i / (n - 1), layer: lay(s0) }); s0 = i; }
+          }
+          segs.push({ u0: s0 / (n - 1), u1: 1, layer: lay(s0) });
+          let len = 0;
+          for (let i = 1; i < n; i++) len += Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]);
+          const thorns = [];
+          for (let i = 0; i < 3; i++) thorns.push({ u: 0.2 + r() * 0.7, s: r() < 0.5 ? -1 : 1 });
+          const st = { t: 'stem', id: nid(), pts: P, segs, d0, dur: Math.max(500, Math.min(2.4, len) * 520), w, thorns, wrap, nW, par: null };
+          E.push(st);
+          return st;
+        };
+        const stem = wrapStem(side, ph0, ampK, 60, 0.85, 0.22 + r() * 0.2), P = stem.pts, nW = stem.nW, n = P.length, wrap = stem.wrap;
         if (r() < 0.55) {
           let bi = -1;
           for (let i = Math.floor(nW * 0.35); i < Math.floor(nW * 0.75); i++) {
@@ -1941,16 +1966,107 @@
         const tp = P[n - 1], ta = Math.atan2(tp[1] - P[n - 2][1], tp[0] - P[n - 2][0]);
         if (r() < 0.6) E.push({ t: 'rose', id: nid(), x: tp[0], y: tp[1], R: 0.12 + r() * 0.08, rot: (r() - 0.5) * 0.6, ph1: r() * 6.28, ph2: r() * 6.28, turns: 2, layer: 1, d0: 0, stem, su: 1 });
         else E.push({ t: 'leaf', id: nid(), x: tp[0], y: tp[1], a: ta, L: 0.15 + r() * 0.08, bend: side * 0.5, layer: 1, d0: 0, stem, su: 1 });
+        // Braid: a slimmer second vine coiling the other way, crossing the first; it ends in a leaf
+        if (!loose && r() < 0.45) {
+          const b = wrapStem(-side, ph0 + Math.PI, ampK * 0.85, 260, 0.65, 0.12 + r() * 0.12), bp = b.pts, bn = bp.length;
+          const bt = bp[bn - 1], ba = Math.atan2(bt[1] - bp[bn - 2][1], bt[0] - bp[bn - 2][0]);
+          E.push({ t: 'leaf', id: nid(), x: bt[0], y: bt[1], a: ba, L: 0.12 + r() * 0.06, bend: -side * 0.5, layer: 1, d0: 0, stem: b, su: 1 });
+        }
       }
 
       // Vine mode keeps the letter wraps legible: drop side branches and about half of the bare wandering vines
       // (vines that end in a rose, and the wraps themselves, always stay)
       thinned(e, arr) {
+        if (e.keep) return false;
         const s = e.t === 'stem' ? e : e.stem;
-        if (!s || s.wrap) return false;
+        if (!s || s.wrap || s.keep) return false;
         if (e.t === 'leaf' && e.su < 1 && this.h(e.id * 2.31 + 0.7) < 0.35) return true;
-        if (s._thin === undefined) s._thin = !!s.par || (!arr.some(x => x.stem === s && x.t === 'rose') && this.h(s.id * 1.618) < 0.5);
+        if (e.t === 'rose' && this.roseDropped(e)) return true;
+        if (s._thin === undefined) {
+          if (!arr.includes(s)) return false; // a stem is judged only against its own list
+          s._thin = !!s.par || (!arr.some(x => x.stem === s && x.t === 'rose' && !this.roseDropped(x)) && this.h(s.id * 1.618) < 0.5);
+        }
         return s._thin;
+      }
+      // About a third of the scattered single roses are left out so the hero clusters stand out
+      roseDropped(e) { return e.stage !== 'full' && this.h(e.id * 5.13 + 0.3) < 0.3; }
+
+      // Customized only: each hero rose is flanked by two buds and a half-open rose on short stalks
+      // branching from its stem, with a pair of leaves, so it reads as a lush cluster
+      genCluster(l) {
+        l.clusterEls = [];
+        for (const hero of (l.els || []).filter(e => e.t === 'rose' && e.stage === 'full' && e.stem)) {
+          const r = this.rng(hero.id * 613 + 7), hs = hero.stem, P = hs.pts, n = P.length, E = l.clusterEls;
+          let k0 = 0; const nid = () => l.id * 100 + 80.5 + (k0++) * 0.25;
+          const d = Math.atan2(P[n - 1][1] - P[Math.max(0, n - 5)][1], P[n - 1][0] - P[Math.max(0, n - 5)][0]);
+          const lay = { layer: hero.layer, cLayer: hero.cLayer };
+          [[0.84, -1, 0.42, 'bud'], [0.76, 1, 0.38, 'bud'], [0.68, -1, 0.55, 'half']].forEach(([u, side, rs, stage], k) => {
+            const [base] = this.at(P, u), dir = d + side * (0.85 + r() * 0.4);
+            const pts = this.vine(base, dir, hero.R * (2.6 + r() * 0.6), 0.25, 1 + r(), r() * 6.28, -side * 0.35, 12);
+            const stalk = { t: 'stem', id: nid(), pts, segs: [{ u0: 0, u1: 1, layer: hero.cLayer != null ? hero.cLayer : hero.layer }], d0: 0, dur: 380, w: 0.6, thorns: [], par: hs, pu: u, keep: true };
+            const tip = pts[pts.length - 1];
+            E.push(stalk, {
+              t: 'rose', id: nid(), x: tip[0], y: tip[1], R: hero.R * rs, rot: (r() - 0.5) * 0.4, ph1: r() * 6.28, ph2: r() * 6.28, turns: 2,
+              ...lay, d0: 0, stem: stalk, su: 1, lag: 250 + k * 300, stage
+            });
+          });
+          for (const [u, side] of [[0.62, 1], [0.55, -1]]) {
+            const [q, a] = this.at(P, u);
+            E.push({ t: 'leaf', id: nid(), x: q[0], y: q[1], a: a + side * (0.9 + r() * 0.4), L: 0.17 + r() * 0.06, bend: side * 0.4, ...lay, d0: 0, stem: hs, su: u, keep: true });
+          }
+        }
+      }
+
+      // A letter's vines and leaves stop changing once everything has grown, cinched and unfurled (custom-clock ms)
+      plantSettled(l, age) {
+        if (l.wrapEls === undefined || l.clusterEls === undefined) return false;
+        const nEnd = l.endEls ? l.endEls.length : 0;
+        if (l._settle === undefined || l._settleN !== nEnd) {
+          let end = 0;
+          for (const list of [l.clusterEls, l.els, l.endEls, l.wrapEls]) if (list) for (const e of list) {
+            if (e.t === 'stem') end = Math.max(end, this.vineStart(e) + e.dur + (e.wrap ? 900 / this._G : 0));
+            else if (e.t === 'leaf') end = Math.max(end, (e.stem ? this.vineCross(e.stem, e.su) : e.d0) + (1000 + (e.lag || 0)) / this._G);
+          }
+          l._settle = end + 200; l._settleN = nEnd;
+        }
+        return age > l._settle && this._now - l.birth > 2600; // the early sway after typing has also died down
+      }
+
+      // Stamp one layer of a settled letter's vines and leaves from a bitmap drawn once. The bitmap follows the letter
+      // as the layout moves and scales; it is redrawn only if the letter grows noticeably or new growth appears.
+      stampPlants(B, l, layer, lists, age, st) {
+        const g = B.ctx, S = st.S, m = g.getTransform ? g.getTransform() : null, scale = m ? Math.hypot(m.a, m.b) : (this.dpr || 1);
+        const key = l._settleN, cache = l._plantCache || (l._plantCache = {});
+        let sp = cache[layer];
+        if (!sp || sp.key !== key || S > sp.S * 1.06 || S < sp.S * 0.6 || Math.abs(scale - sp.scale) > 0.01) {
+          if (this._plantBudget-- <= 0) return false; // rebuild on a later frame; draw live for now
+          if (sp) this.freeBitmap(sp.cv);
+          const draw = Bk => {
+            for (const list of lists) list.forEach((e, i, arr) => {
+              if (e.t === 'rose' || this.thinned(e, arr)) return;
+              if (e.t === 'stem') this.drawStemCustomized(Bk, e, l, age, 1, st, 0, 0, layer);
+              else if ((e.cLayer != null ? e.cLayer : e.layer) === layer) this.drawElCustomized(Bk, e, l, age, 1, st, 0, 0);
+            });
+          };
+          let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+          const grow = (p, pad) => { for (const q of p) { if (q[0] - pad < x0) x0 = q[0] - pad; if (q[1] - pad < y0) y0 = q[1] - pad; if (q[0] + pad > x1) x1 = q[0] + pad; if (q[1] + pad > y1) y1 = q[1] + pad; } };
+          draw({ fill: p => grow(p, 1), stroke: (p, c, w) => grow(p, w / 2 + 1) });
+          if (x1 < x0) { cache[layer] = { empty: true, key, S, scale }; return true; }
+          const w = x1 - x0, h = y1 - y0, cw = Math.max(1, Math.ceil(w * scale)), ch = Math.max(1, Math.ceil(h * scale));
+          const off = typeof OffscreenCanvas !== 'undefined', cv = off ? new OffscreenCanvas(cw, ch) : document.createElement('canvas');
+          if (!off) { cv.width = cw; cv.height = ch; }
+          const cg = cv.getContext('2d');
+          cg.setTransform(scale, 0, 0, scale, -x0 * scale, -y0 * scale);
+          draw(this.backend(cg));
+          sp = cache[layer] = { cv: off && cv.transferToImageBitmap ? cv.transferToImageBitmap() : cv, x0, y0, w, h, S, scale, key, lx: l.x, ly: l.y };
+        }
+        if (sp.empty) return true;
+        const k = S / sp.S;
+        g.save();
+        g.translate(l.x, l.y); g.scale(k, k); g.translate(-sp.lx, -sp.ly);
+        g.drawImage(sp.cv, sp.x0, sp.y0, sp.w, sp.h);
+        g.restore();
+        return true;
       }
 
       // A growing vine's tip hooks over as it searches, straightening out as the vine matures
@@ -1980,6 +2096,9 @@
         if (this._vine && grown < 1) P = this.searchTip(P, grown, e.id, S);
 
         const stemW = S * 0.019 * (e.w || 1);
+        // shadows and the mid tone fade in once the vine has finished growing (a growing vine is drawn cheaper)
+        const done = frO != null || !this._vine ? 1 : Math.min(1, Math.max(0, (age - this.vineStart(e) - e.dur) * this._G / 400));
+        const shA = `rgba(0,0,0,${(0.1 * done).toFixed(3)})`, shB = `rgba(0,0,0,${(0.24 * done).toFixed(3)})`, midC = `rgba(36,89,47,${done.toFixed(3)})`;
 
         for (const sg of e.segs) {
           if (sg.layer !== layer) continue;
@@ -1991,13 +2110,13 @@
             const u0 = sg.u0 + (b - sg.u0) * c / k, u1 = sg.u0 + (b - sg.u0) * (c + 1) / k;
             const w = stemW * (1.25 - 0.6 * (u0 + u1) / 2);
             // Soft shadow cast onto the letter where the vine passes in front of it (light from the upper left)
-            if (layer === 1) {
-              this.strokeOffset(B, P, u0, u1, w * 0.7, w * 1.1, 'rgba(0,0,0,0.1)', w * 2.2);
-              this.strokeOffset(B, P, u0, u1, w * 0.35, w * 0.55, 'rgba(0,0,0,0.24)', w * 1.4);
+            if (layer === 1 && done > 0) {
+              this.strokeOffset(B, P, u0, u1, w * 0.7, w * 1.1, shA, w * 2.2);
+              this.strokeOffset(B, P, u0, u1, w * 0.35, w * 0.55, shB, w * 1.4);
             }
             // Round stem: shaded body, a mid tone and a lit edge nudged toward the light
             this.strokeRange(B, P, u0, u1, '#163a20', w);
-            if (w > 2.5) this.strokeOffset(B, P, u0, u1, -w * 0.12, -w * 0.15, '#24592f', w * 0.62);
+            if (w > 2.5 && done > 0) this.strokeOffset(B, P, u0, u1, -w * 0.12, -w * 0.15, midC, w * 0.62);
             this.strokeOffset(B, P, u0, u1, -w * 0.24, -w * 0.3, '#4f8f5b', w * 0.2);
           }
         }
@@ -2033,47 +2152,80 @@
           const a = this._vine && e.stem ? (age - this.vineCross(e.stem, e.su != null ? e.su : 1)) * this._G - (e.lag || 0) : age - e.d0;
           if (a < 0) return;
           if (kk <= 0.001) return;
-          if (e.stage === undefined) { const hs = this.h(e.id * 3.17 + 0.5); e.stage = hs < 0.1 ? 'full' : hs < 0.4 ? 'bud' : 'half'; }
-          const sz = e.stage === 'full' ? 1.2 : e.stage === 'bud' ? 0.7 : 1;
+          if (e.stage === undefined) {
+            // an occasional full bloom too, but only well clear of the letters (above or below the text), never in front of them
+            const hs = this.h(e.id * 3.17 + 0.5), clear = e.wi == null && (e.y < -0.9 || e.y > 0.15);
+            e.stage = hs < 0.12 && clear ? 'full' : hs < 0.4 ? 'bud' : 'half';
+          }
+          const sz = e.stage === 'full' ? 1.6 : e.stage === 'bud' ? 0.7 : 1;
           let ex = e.x;
           if (e.wi != null) { const ws = e.stem, c = ws.wrap.c[e.wi]; ex = c + (ws.pts[e.wi][0] - c) * this.wrapLoose(ws, age); }
           const p = wx(ex, e.y), tl = st.face ? this.faceTurn(e, p[0], p[1]) : null;
           if ((st.face || st.perchOn) && !l.dead && a > 700) {
-            this.perch.push({ id: e.id, x: p[0], y: p[1], R: e.R * S * kk * sz });
+            // updateFlies aims at (x + 0.05R, y - 0.55R), which assumes an upright bloom; hand it the real bloom centre
+            const Rp = e.R * S * kk * sz, ang = this.roseAim(e) + rw, up = Rp * (e.stage === 'full' ? 0.3 : e.stage === 'bud' ? 0.35 : 0.5);
+            this.perch.push({ id: e.id, x: p[0] + Math.sin(ang) * up - Rp * 0.05, y: p[1] - Math.cos(ang) * up + Rp * 0.55, R: Rp });
           }
-          this.roseCustomized(B, p[0], p[1], e.R * S * kk * sz, e.rot + j[2] + rw + (tl ? tl[0] * 0.22 : 0), e, a, tl);
+          this.roseCustomized(B, p[0], p[1], e.R * S * kk * sz, this.roseAim(e) + j[2] + rw + (tl ? tl[0] * 0.22 : 0), e, a, tl);
         }
       }
 
-      // Draw a settled rose from a bitmap rendered once (re-rendered only when it needs to get bigger).
-      // The bitmap is the rose drawn upright at the origin; position, lean and wither are applied when it is stamped.
-      roseSprite(B, cx, cy, R, rot, e, a) {
+      // A rose faces the way its stem grows: upright on a climbing stem, nodding or hanging on one that droops
+      roseAim(e) {
+        if (e._aim !== undefined) return e._aim;
+        let aim = e.rot;
+        if (e.stem && e.wi == null && e.su === 1) {
+          const P = e.stem.pts, n = P.length, a = P[n - 1], b = P[Math.max(0, n - 5)];
+          let d = Math.atan2(a[1] - b[1], a[0] - b[0]) + Math.PI / 2;
+          d = Math.atan2(Math.sin(d), Math.cos(d));
+          aim = d * 0.85 + e.rot * 0.25;
+        }
+        return (e._aim = aim);
+      }
+
+      // Canvas roses are stamped from a per-rose bitmap. A settled rose is rendered once; an opening rose is re-rendered
+      // about 16 times a second at full size and scaled by its springy growth every frame, so the pop stays smooth.
+      // Renders are rationed per frame (a rose's first render always happens). The bitmap holds the rose upright
+      // around its receptacle; position, aim, a gentle sway and wither are applied when it is stamped.
+      roseSprite(B, cx, cy, R, rot, e, a, grow, opening) {
         const g = B.ctx, m = g.getTransform ? g.getTransform() : null, scale = m ? Math.hypot(m.a, m.b) : (this.dpr || 1);
         let sp = e._spr;
-        if (!sp || R > sp.R * 1.06 || Math.abs(scale - sp.scale) > 0.01) {
-          let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-          const grow = (p, pad) => { for (const q of p) { if (q[0] - pad < x0) x0 = q[0] - pad; if (q[1] - pad < y0) y0 = q[1] - pad; if (q[0] + pad > x1) x1 = q[0] + pad; if (q[1] + pad > y1) y1 = q[1] + pad; } };
-          this._noSprite = true;
-          try {
-            this.roseCustomized({ fill: p => grow(p, 1), stroke: (p, c, w) => grow(p, w / 2 + 1) }, 0, 0, R, 0, e, a, null);
-            if (x1 < x0) { this._noSprite = false; return; }
-            const w = x1 - x0, h = y1 - y0, cw = Math.max(1, Math.ceil(w * scale)), ch = Math.max(1, Math.ceil(h * scale));
-            // An ImageBitmap is immutable and cheap to stamp; fall back to a plain canvas where OffscreenCanvas is missing
-            const off = typeof OffscreenCanvas !== 'undefined', cv = off ? new OffscreenCanvas(cw, ch) : document.createElement('canvas');
-            if (!off) { cv.width = cw; cv.height = ch; }
-            const sg = cv.getContext('2d');
-            sg.setTransform(scale, 0, 0, scale, -x0 * scale, -y0 * scale);
-            this.roseCustomized(this.backend(sg), 0, 0, R, 0, e, a, null);
-            sp = e._spr = { cv: off && cv.transferToImageBitmap ? cv.transferToImageBitmap() : cv, R, scale, x0, y0, w, h };
-          } finally {
-            this._noSprite = false;
+        const due = !sp || R > sp.R * 1.06 || Math.abs(scale - sp.scale) > 0.01 || Math.abs(rot - sp.lr) > 0.3 ||
+          (opening ? (a < sp.a || this._now - sp.t > 60 || !this._throttle) : sp.opening);
+        if (due && (!sp || this._sprBudget-- > 0)) {
+          const Rm = R * 1.2, x0 = -1.05 * Rm, y0 = -1.42 * Rm, w = 2.1 * Rm, h = 2.15 * Rm; // every stage fits with ~15% to spare
+          const cw = Math.max(1, Math.ceil(w * scale)), ch = Math.max(1, Math.ceil(h * scale));
+          let cv = sp && sp.cv && !sp.cv.close ? sp.cv : null;
+          if (!cv || cv.width !== cw || cv.height !== ch) {
+            if (sp) this.freeBitmap(sp.cv);
+            cv = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(cw, ch) : Object.assign(document.createElement('canvas'), { width: cw, height: ch });
           }
+          const sg = cv.getContext('2d');
+          sg.setTransform(1, 0, 0, 1, 0, 0); sg.clearRect(0, 0, cw, ch);
+          sg.setTransform(scale, 0, 0, scale, -x0 * scale, -y0 * scale);
+          this._noSprite = true; this._lightRot = rot; this._growOne = true;
+          try { this.roseCustomized(this.backend(sg), 0, 0, R, 0, e, a, null); }
+          finally { this._noSprite = false; this._lightRot = null; this._growOne = false; }
+          sp = e._spr = { cv, R, scale, x0, y0, w, h, lr: rot, t: this._now, a, opening };
         }
-        const k = R / sp.R;
+        const k = R / sp.R * grow, sway = 0.025 * Math.sin((this._now || 0) / 1000 * 0.9 + e.ph1);
         g.save();
-        g.translate(cx, cy); g.rotate(rot); g.scale(k, k);
+        g.translate(cx, cy); g.rotate(rot + sway); g.scale(k, k);
         g.drawImage(sp.cv, sp.x0, sp.y0, sp.w, sp.h);
         g.restore();
+      }
+
+      // Release a cached bitmap now rather than waiting for garbage collection
+      freeBitmap(cv) {
+        if (!cv) return;
+        if (cv.close) cv.close(); else { cv.width = 0; cv.height = 0; }
+      }
+      releaseLetters(gone) {
+        for (const l of gone) {
+          if (l._plantCache) for (const k in l._plantCache) this.freeBitmap(l._plantCache[k].cv);
+          l._plantCache = null;
+          for (const list of [l.els, l.endEls, l.wrapEls, l.clusterEls]) if (list) for (const e of list) if (e._spr) { this.freeBitmap(e._spr.cv); e._spr = null; }
+        }
       }
 
       // Petals let go by open roses drift down, swaying and tumbling (front face velvet, reverse paler), and fade out
@@ -2089,23 +2241,95 @@
           if (p.t > p.life || p.y > (this.H || 2000) + 60) { F.splice(i, 1); continue; }
           const fade = Math.min(1, p.t / 0.4, (p.life - p.t) / 1.5), fl = Math.cos(p.flip), sx = Math.max(0.12, Math.abs(fl));
           const cr = Math.cos(p.rot + Math.sin(p.t * p.sw + p.ph) * 0.5), sr = Math.sin(p.rot + Math.sin(p.t * p.sw + p.ph) * 0.5);
-          const Lp = p.s, Wp = p.s * 0.85, N = 10, left = [], right = [];
+          // Broad rose petal: a short claw widening into two rounded lobes with a shallow notch between them
+          const Lp = p.s, Wp = p.s * 0.95, N = 8, left = [], right = [], top = [];
           for (let k = 0; k <= N; k++) {
-            const u = k / N, hw = Wp / 2 * (0.35 + 0.65 * Math.sin(Math.min(1, u / 0.65) * Math.PI / 2)) *
-              (u > 0.7 ? Math.sqrt(Math.max(0, 1 - Math.pow((u - 0.7) / 0.3, 2))) : 1);
+            const u = k / N * 0.78, hw = Wp / 2 * (0.22 + 0.78 * Math.sin(Math.min(1, u / 0.6) * Math.PI / 2));
             left.push([-hw, Lp / 2 - u * Lp]); right.push([hw, Lp / 2 - u * Lp]);
           }
+          const yT = Lp / 2 - 0.78 * Lp;
+          for (let k = 1; k < 12; k++) {
+            const t = k / 12;
+            top.push([-Wp / 2 * Math.cos(Math.PI * t), yT - 0.22 * Lp * Math.sin(Math.PI * t) + 0.07 * Lp * Math.exp(-Math.pow((t - 0.5) / 0.09, 2))]);
+          }
           const tr = q => { const x = q[0] * sx; return [p.x + x * cr - q[1] * sr, p.y + x * sr + q[1] * cr]; };
-          const poly = [...left, ...right.reverse()].map(tr), b0 = tr([0, Lp / 2]), b1 = tr([0, -Lp / 2]);
+          const poly = [...left, ...top, ...right.reverse()].map(tr), b0 = tr([0, Lp / 2]), b1 = tr([0, -Lp / 2]);
           const l = 0.55 + 0.45 * Math.abs(fl), c = fl > 0 ? [172, 8, 24] : [190, 40, 52];
           const col = m => `rgba(${(c[0] * l * m) | 0},${(c[1] * l * m) | 0},${(c[2] * l * m) | 0},${fade.toFixed(3)})`;
-          B.fill(poly, { x0: b0[0], y0: b0[1], x1: b1[0], y1: b1[1], stops: [[0, col(0.5)], [0.6, col(0.95)], [1, col(1.1)]] });
+          B.fill(poly, { x0: b0[0], y0: b0[1], x1: b1[0], y1: b1[1], stops: [[0, col(0.45)], [0.55, col(0.95)], [1, col(1.1)]] });
+          // the curled upper rim catching the light
+          B.stroke(top.map(tr), `rgba(255,120,130,${(0.4 * fade * Math.abs(fl)).toFixed(3)})`, Math.max(0.6, Lp * 0.035));
+        }
+      }
+
+      // Depth of field (canvas only): a couple of big out-of-focus petals drift past in front of everything,
+      // and a few tiny dim ones far behind. Each kind is a pre-blurred bitmap stamped with a tumble.
+      dofSprite(kind, S) {
+        const cache = this._dofSpr || (this._dofSpr = {}), cur = cache[kind];
+        if (cur && Math.abs(cur.S - S) < S * 0.25) return cur;
+        const fg = kind === 'fg', L = S * (fg ? 0.38 : 0.085), blur = S * (fg ? 0.03 : 0.006), pad = Math.ceil(blur * 3 + 2);
+        const w = Math.ceil(L * 1.1 + pad * 2), h = w, cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        const g = cv.getContext('2d'), cx = w / 2, cy = h / 2, N = 8, left = [], right = [], top = [];
+        if ('filter' in g) g.filter = `blur(${blur.toFixed(1)}px)`;
+        for (let k = 0; k <= N; k++) {
+          const u = k / N * 0.78, hw = L * 0.475 * (0.22 + 0.78 * Math.sin(Math.min(1, u / 0.6) * Math.PI / 2));
+          left.push([cx - hw, cy + L / 2 - u * L]); right.push([cx + hw, cy + L / 2 - u * L]);
+        }
+        for (let k = 1; k < 12; k++) {
+          const t = k / 12;
+          top.push([cx - L * 0.475 * Math.cos(Math.PI * t), cy + L / 2 - 0.78 * L - 0.22 * L * Math.sin(Math.PI * t) + 0.07 * L * Math.exp(-Math.pow((t - 0.5) / 0.09, 2))]);
+        }
+        const gr = g.createLinearGradient(0, cy + L / 2, 0, cy - L / 2);
+        gr.addColorStop(0, fg ? 'rgb(70,0,10)' : 'rgb(60,0,10)'); gr.addColorStop(0.6, fg ? 'rgb(150,8,24)' : 'rgb(120,6,20)'); gr.addColorStop(1, fg ? 'rgb(190,30,44)' : 'rgb(150,16,30)');
+        g.fillStyle = gr; g.beginPath(); this.path(g, [...left, ...top, ...right.reverse()], true); g.fill();
+        return (cache[kind] = { cv, w, h, S });
+      }
+      dofUpdate(S, dt) {
+        const D = this.dof || (this.dof = []), W = this.W || 1400, H = this.H || 900, k = S / 200;
+        for (let i = D.length - 1; i >= 0; i--) {
+          const p = D[i];
+          p.t += dt; p.x += (p.vx + Math.sin(p.t * p.sw + p.ph) * p.amp) * dt; p.y += p.vy * dt; p.rot += p.spin * dt; p.flip += p.fs * dt;
+          if (p.x > W + 120 || p.y > H + 120) D.splice(i, 1);
+        }
+        for (const [kind, want] of [['fg', 2], ['bg', 5]]) {
+          let n = D.filter(p => p.kind === kind).length;
+          while (n++ < want) {
+            const fg = kind === 'fg', seed = !this._dofSeeded, fromTop = Math.random() < 0.6;
+            D.push({
+              kind, t: 0, x: seed ? Math.random() * W : fromTop ? Math.random() * W * 0.8 : -100, y: seed ? Math.random() * H : fromTop ? -100 : Math.random() * H * 0.6,
+              vx: (fg ? 16 : 7) * (0.7 + Math.random() * 0.6) * k, vy: (fg ? 20 : 8) * (0.7 + Math.random() * 0.6) * k,
+              sw: 0.4 + Math.random() * 0.4, ph: Math.random() * 6.28, amp: (fg ? 18 : 7) * k, rot: Math.random() * 6.28, spin: (Math.random() - 0.5) * 0.5,
+              flip: Math.random() * 6.28, fs: 0.5 + Math.random() * 0.6, sc: 0.8 + Math.random() * 0.45, alpha: fg ? 0.26 + Math.random() * 0.1 : 0.22 + Math.random() * 0.12
+            });
+          }
+        }
+        this._dofSeeded = true;
+      }
+      dofDraw(B, S, front) {
+        const g = B.ctx;
+        if (!g || !this.dof) return;
+        for (const p of this.dof) {
+          if ((p.kind === 'fg') !== front) continue;
+          const sp = this.dofSprite(p.kind, S), sx = Math.max(0.2, Math.abs(Math.cos(p.flip))) * p.sc;
+          // a foreground petal fades almost away while it drifts over the words, so it never smudges the letters
+          let over = 1;
+          if (front && this._band) {
+            const b = this._band, d = Math.hypot(Math.max(b.x0 - p.x, 0, p.x - b.x1), Math.max(b.y0 - p.y, 0, p.y - b.y1)), t = Math.min(1, d / (S * 0.8));
+            over = 0.12 + 0.88 * t * t * (3 - 2 * t);
+          }
+          g.save();
+          g.globalAlpha = p.alpha * over * Math.min(1, p.t / 1.5);
+          g.translate(p.x, p.y); g.rotate(p.rot); g.scale(sx, p.sc);
+          g.drawImage(sp.cv, -sp.w / 2, -sp.h / 2);
+          g.restore();
         }
       }
 
       renderCustomized(B, now, st) {
         const S = st.S, L = st.letters, act = L.filter(l => !l.dead), sp = st.speed || 1;
         this._now = now;
+        this._sprBudget = 8; this._plantBudget = 2; this._throttle = !this.state.busy;
         if (st.vine) {
           this.petalFall = this.petalFall || [];
           this._dt = Math.min(0.05, Math.max(0, (now - (this._pfT || now)) / 1000)); this._pfT = now; this._S = S;
@@ -2126,6 +2350,7 @@
         const kd = l => l.dead ? 1 - this.eo((now - l.dead) / st.wither) : 1;
 
         if (st.vine && this.fontsReady) for (const l of L) if (l.wrapEls === undefined && l.ch !== ' ') this.genWrap(l);
+        if (st.vine) for (const l of L) if (l.clusterEls === undefined && l.els) this.genCluster(l);
 
         const drawCustom = layer => {
           for (const l of L) {
@@ -2139,9 +2364,13 @@
                 this.drawElCustomized(B, e, l, age, kk, st, f, amp);
               }
             };
-            l.els.forEach(each);
-            if (l.endEls) l.endEls.forEach(each);
-            if (st.vine && l.wrapEls) l.wrapEls.forEach(each);
+            // clusters first, so they sit behind their hero
+            const lists = [st.vine && l.clusterEls, l.els, l.endEls, st.vine && l.wrapEls].filter(Boolean);
+            if (st.vine && B.ctx && kk === 1 && !amp && this.plantSettled(l, age) && this.stampPlants(B, l, layer, lists, age, st)) {
+              for (const list of lists) list.forEach((e, i, arr) => { if (e.t === 'rose') each(e, i, arr); });
+            } else {
+              for (const list of lists) list.forEach(each);
+            }
             const i = act.indexOf(l), nx = i >= 0 ? act[i + 1] : null;
             if (l.tend && (l.dead || !nx || nx.ch === ' ')) {
               let fr = this.eo(((now - l.tb) * sp - 150) / 450);
@@ -2150,6 +2379,22 @@
             }
           }
         };
+
+        // A faint warm glow behind the words, fading to black (it eases toward the words rather than jumping per keystroke)
+        const vis = L.filter(l => l.ch !== ' ' && !l.dead);
+        this._band = null;
+        if (vis.length) {
+          let tx = 0, ty = 0, x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+          for (const l of vis) { tx += l.x; ty += l.y; x0 = Math.min(x0, l.x); x1 = Math.max(x1, l.x); y0 = Math.min(y0, l.y); y1 = Math.max(y1, l.y); }
+          tx /= vis.length; ty = ty / vis.length - S * 0.35;
+          this._band = { x0: x0 - S * 0.6, x1: x1 + S * 0.6, y0: y0 - S * 0.95, y1: y1 + S * 0.3 };
+          const tr = Math.max((x1 - x0) * 0.62, S * 2.2), gl = st.vine ? (this._glow || (this._glow = { x: tx, y: ty, r: tr })) : { x: tx, y: ty, r: tr };
+          if (st.vine) { const k = 1 - Math.exp(-(this._dt || 0) * 4); gl.x += (tx - gl.x) * k; gl.y += (ty - gl.y) * k; gl.r += (tr - gl.r) * k; }
+          const mx = gl.x, my = gl.y, rad = gl.r, ring = [];
+          for (let k = 0; k < 40; k++) { const t = k / 40 * Math.PI * 2; ring.push([mx + Math.cos(t) * rad * 1.02, my + Math.sin(t) * rad * 1.02]); }
+          B.fill(ring, { x0: mx, y0: my, r0: 0, x1: mx, y1: my, r1: rad, stops: [[0, 'rgba(92,8,22,0.26)'], [0.5, 'rgba(48,3,12,0.12)'], [1, 'rgba(0,0,0,0)']] });
+        }
+        if (st.vine && B.ctx) { this.dofUpdate(S, this._dt); this.dofDraw(B, S, false); }
 
         // Layer 0: behind text glyphs
         drawCustom(0);
@@ -2164,6 +2409,7 @@
         // Layer 1: in front of text glyphs
         drawCustom(1);
         if (st.vine) this.drawFallingPetals(B, this._dt);
+        if (st.vine && B.ctx) this.dofDraw(B, S, true);
       }
 
       drawSplitDivider(g, splitX, H, isPoster = false) {
@@ -2334,6 +2580,7 @@
           l.tb = 0;
         });
 
+        if (this.posterLetters) this.releaseLetters(this.posterLetters);
         this.posterLetters = L;
         this.posterS = res.S;
         this.pt0 = performance.now();
@@ -2563,10 +2810,11 @@
             if (!p || p.length < 2) return;
             const d = this.pathToSvg(p, true);
             if (typeof col !== 'string') {
-              // Gradient fill {x0, y0, x1, y1, stops} -> userSpaceOnUse linearGradient
+              // Gradient fill -> userSpaceOnUse linearGradient {x0, y0, x1, y1, stops} or radialGradient {x0, y0, r0, x1, y1, r1, stops}
               const id = `lg${gradN++}`;
               const stops = col.stops.map(s => `<stop offset="${s[0]}" stop-color="${s[1]}" />`).join('');
-              svgElements.push(`<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${col.x0.toFixed(2)}" y1="${col.y0.toFixed(2)}" x2="${col.x1.toFixed(2)}" y2="${col.y1.toFixed(2)}">${stops}</linearGradient>`);
+              if (col.r1 != null) svgElements.push(`<radialGradient id="${id}" gradientUnits="userSpaceOnUse" cx="${col.x1.toFixed(2)}" cy="${col.y1.toFixed(2)}" r="${col.r1.toFixed(2)}" fx="${col.x0.toFixed(2)}" fy="${col.y0.toFixed(2)}">${stops}</radialGradient>`);
+              else svgElements.push(`<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${col.x0.toFixed(2)}" y1="${col.y0.toFixed(2)}" x2="${col.x1.toFixed(2)}" y2="${col.y1.toFixed(2)}">${stops}</linearGradient>`);
               col = `url(#${id})`;
             }
             svgElements.push(`<path d="${d}" fill="${col}" />`);
