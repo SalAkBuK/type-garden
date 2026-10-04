@@ -535,9 +535,14 @@
         if (document.fonts) {
           document.fonts.load(`700 100px ${this.F}`).then(() => {
             this.cache = {};
+            this.glyphs = {};
+            this.fontsReady = true;
             this.layout(true);
             this.buildPoster();
-          }).catch(() => {});
+          }).catch(() => { this.fontsReady = true; });
+          setTimeout(() => { this.fontsReady = true; }, 3000);
+        } else {
+          this.fontsReady = true;
         }
 
         this.buildPoster();
@@ -781,6 +786,11 @@
       h(n) { const x = Math.sin(n) * 43758.5453; return x - Math.floor(x); }
       spr(t, k = 7, w = 16) { if (t <= 0) return 0; return 1 - Math.exp(-t * k) * Math.cos(t * w); }
       eo(t) { if (t <= 0) return 0; if (t >= 1) return 1; return 1 - Math.pow(1 - t, 3); }
+      eio(t) { if (t <= 0) return 0; if (t >= 1) return 1; return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(2 - 2 * t, 3) / 2; }
+      eioInv(y) { if (y <= 0) return 0; if (y >= 1) return 1; return y < 0.5 ? Math.cbrt(y / 4) : 1 - Math.cbrt(2 - 2 * y) / 2; }
+      // Vine mode: when a stem starts growing (a branch waits for its parent's tip), and when its tip passes u
+      vineStart(e) { return e.par ? this.vineCross(e.par, e.pu) : e.d0; }
+      vineCross(stem, u) { return this.vineStart(stem) + stem.dur * this.eioInv(u); }
       eb(t) { if (t <= 0) return 0; if (t >= 1) return 1; const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); }
       rng(seed) {
         let s = seed | 0;
@@ -851,7 +861,14 @@
       }
       backend(g) {
         return {
-          fill: (p, col) => { g.beginPath(); this.path(g, p, true); g.fillStyle = col; g.fill(); },
+          ctx: g,
+          fill: (p, col) => {
+            g.beginPath(); this.path(g, p, true);
+            // col is a CSS colour, or a linear gradient {x0, y0, x1, y1, stops: [[offset, colour], ...]}
+            if (typeof col === 'string') g.fillStyle = col;
+            else { const gr = g.createLinearGradient(col.x0, col.y0, col.x1, col.y1); for (const s of col.stops) gr.addColorStop(s[0], s[1]); g.fillStyle = gr; }
+            g.fill();
+          },
           stroke: (p, col, w) => { g.beginPath(); this.path(g, p, false); g.strokeStyle = col; g.lineWidth = w; g.lineCap = 'round'; g.lineJoin = 'round'; g.stroke(); },
           rect: (x, y, w, h, col) => { g.fillStyle = col; g.fillRect(x, y, w, h); },
           text: (ch, x, y, S, col) => { g.font = `700 ${S}px ${this.F}`; g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.fillStyle = col; g.fillText(ch, x, y); }
@@ -1189,29 +1206,30 @@
         const dur = Math.max(320, (o.len || 0.8) * 620);
         const thorns = []; const nt = Math.floor(r() * 2.5);
         for (let i = 0; i < nt; i++) thorns.push({ u: 0.15 + r() * 0.65, s: r() < 0.5 ? -1 : 1 });
-        E.push({ t: 'stem', id: nid(), pts: P, segs, d0: o.d0, dur, w: o.depth ? 0.82 : 1, thorns });
+        const stem = { t: 'stem', id: nid(), pts: P, segs, d0: o.d0, dur, w: o.depth ? 0.82 : 1, thorns, par: o.par || null, pu: o.pu };
+        E.push(stem);
         const nl = Math.floor(r() * 2.8 * p.leafy);
         let sd = r() < 0.5 ? -1 : 1;
         for (let i = 0; i < nl; i++) {
           const u = 0.25 + r() * 0.6, [q, a] = this.at(P, u); sd = -sd;
-          E.push({ t: 'leaf', id: nid(), x: q[0], y: q[1], a: a + sd * (0.55 + r() * 0.5), L: (0.14 + r() * 0.2) * (o.depth ? 0.8 : 1), bend: (r() - 0.5) * 1.2, layer: this.layerAt(segs, u), d0: o.d0 + dur * u });
+          E.push({ t: 'leaf', id: nid(), x: q[0], y: q[1], a: a + sd * (0.55 + r() * 0.5), L: (0.14 + r() * 0.2) * (o.depth ? 0.8 : 1), bend: (r() - 0.5) * 1.2, layer: this.layerAt(segs, u), d0: o.d0 + dur * u, stem, su: u });
         }
         const [tp, ta] = this.at(P, 1), td = o.d0 + dur * 0.8, tl = this.layerAt(segs, 1);
         if (tip === 'rose') {
           const R = (0.13 + r() * 0.15) * p.big * (o.depth ? 0.75 : 1);
           const over = tp[1] > -0.78 && tp[1] < 0.05 && Math.abs(tp[0]) < p.w * 0.5;
           const layer = over ? (r() < 0.22 ? 1 : 0) : (r() < 0.6 ? 1 : tl);
-          E.push({ t: 'rose', id: nid(), x: tp[0], y: tp[1], R, rot: (r() - 0.5) * 1.0, ph1: r() * 6.28, ph2: r() * 6.28, turns: 1.8 + r() * 1, layer, d0: td });
-          if (r() < 0.2) { const oo = ta + (r() < 0.5 ? 1 : -1) * 1.3; E.push({ t: 'rose', id: nid(), x: tp[0] + Math.cos(oo) * R * 1.4, y: tp[1] + Math.sin(oo) * R * 1.4, R: R * (0.6 + r() * 0.3), rot: (r() - 0.5) * 1.2, ph1: r() * 6.28, ph2: r() * 6.28, turns: 1.8 + r(), layer, d0: td + 120 }); }
+          E.push({ t: 'rose', id: nid(), x: tp[0], y: tp[1], R, rot: (r() - 0.5) * 1.0, ph1: r() * 6.28, ph2: r() * 6.28, turns: 1.8 + r() * 1, layer, d0: td, stem, su: 1, stage: o.hero ? 'full' : undefined, cLayer: o.hero && over ? 0 : undefined });
+          if (r() < 0.2) { const oo = ta + (r() < 0.5 ? 1 : -1) * 1.3; E.push({ t: 'rose', id: nid(), x: tp[0] + Math.cos(oo) * R * 1.4, y: tp[1] + Math.sin(oo) * R * 1.4, R: R * (0.6 + r() * 0.3), rot: (r() - 0.5) * 1.2, ph1: r() * 6.28, ph2: r() * 6.28, turns: 1.8 + r(), layer, d0: td + 120, stem, su: 1, lag: 250 }); }
         } else if (tip === 'fan') {
           const spread = 0.6 + r() * 0.3;
-          for (let j = 0; j < 2; j++) E.push({ t: 'leaf', id: nid(), x: tp[0], y: tp[1], a: ta + (j - 0.5) * spread, L: 0.2 + r() * 0.2, bend: (j - 0.5) * 0.8, layer: tl, d0: td + j * 60 });
+          for (let j = 0; j < 2; j++) E.push({ t: 'leaf', id: nid(), x: tp[0], y: tp[1], a: ta + (j - 0.5) * spread, L: 0.2 + r() * 0.2, bend: (j - 0.5) * 0.8, layer: tl, d0: td + j * 60, stem, su: 1, lag: j * 60 });
         } else if (tip === 'leaf') {
-          E.push({ t: 'leaf', id: nid(), x: tp[0], y: tp[1], a: ta + (r() - 0.5) * 0.3, L: 0.16 + r() * 0.16, bend: (r() - 0.5), layer: tl, d0: td });
+          E.push({ t: 'leaf', id: nid(), x: tp[0], y: tp[1], a: ta + (r() - 0.5) * 0.3, L: 0.16 + r() * 0.16, bend: (r() - 0.5), layer: tl, d0: td, stem, su: 1 });
         }
         if (!o.depth && r() < 0.3) {
           const u = 0.35 + r() * 0.35, [q, a] = this.at(P, u);
-          this.grow(r, E, nid, p, { base: q, dir: a + (r() < 0.5 ? -1 : 1) * (0.7 + r() * 0.4), len: (o.len || 0.8) * (0.35 + r() * 0.2), d0: o.d0 + dur * u, depth: 1, layer0: this.layerAt(segs, u) });
+          this.grow(r, E, nid, p, { base: q, dir: a + (r() < 0.5 ? -1 : 1) * (0.7 + r() * 0.4), len: (o.len || 0.8) * (0.35 + r() * 0.2), d0: o.d0 + dur * u, depth: 1, layer0: this.layerAt(segs, u), par: stem, pu: u });
         }
         return P;
       }
@@ -1221,7 +1239,7 @@
         const w = this.mw(l.ch), inX = () => (r() - 0.5) * w * 0.7; p.w = w;
         const nUp = 1 + (r() < 0.45 * p.dens ? 1 : 0);
         for (let i = 0; i < nUp; i++) {
-          this.grow(r, E, nid, p, { base: [inX(), -r() * 0.3], dir: -Math.PI / 2 + p.lean * 0.5 + (r() - 0.5) * 0.7, len: 0.6 + r() * 0.5, d0: 40 + i * 130, tip: l.wi === 0 && i === 0 ? 'rose' : null });
+          this.grow(r, E, nid, p, { base: [inX(), -r() * 0.3], dir: -Math.PI / 2 + p.lean * 0.5 + (r() - 0.5) * 0.7, len: 0.6 + r() * 0.5, d0: 40 + i * 130, tip: l.wi === 0 && i === 0 ? 'rose' : null, hero: l.wi === 0 && i === 0 });
         }
         if (r() < 0.4 * p.dens) this.grow(r, E, nid, p, { base: [inX(), -0.1 - r() * 0.35], dir: Math.PI / 2 + (r() - 0.5) * 0.8, len: 0.35 + r() * 0.35, d0: 160 });
         if (l.prev && r() < p.bridgeP) {
@@ -1360,7 +1378,8 @@
           speed: 1,
           wither: 260,
           face: true,
-          customized: true
+          customized: true,
+          vine: true
         };
         const B = this.backend(g);
 
@@ -1496,17 +1515,30 @@
         if (e._cThorns) return e._cThorns;
         const r = this.rng(e.id * 839 + 17);
         const list = (e.thorns || []).map(th => ({ u: th.u, s: th.s }));
-        const count = 3 + Math.floor(r() * 3);
+        const count = 1 + Math.floor(r() * 2);
         const sorted = [...list];
         for (let i = 0; i < count; i++) {
           const u = 0.12 + (i + 0.5 + (r() - 0.5) * 0.4) * (0.76 / count);
           const s = (i % 2 === 0 ? 1 : -1) * (r() < 0.85 ? 1 : -1);
-          if (!sorted.some(th => Math.abs(th.u - u) < 0.08)) {
+          if (!sorted.some(th => Math.abs(th.u - u) < 0.15)) {
             sorted.push({ u: Math.max(0.1, Math.min(0.9, u)), s });
           }
         }
         sorted.sort((a, b) => a.u - b.u);
         return (e._cThorns = sorted);
+      }
+
+      // A wrap grows loose and cinches tight around its stroke once fully grown
+      wrapLoose(e, age) { return 1 + 0.5 * (1 - this.eo((age - this.vineStart(e) - e.dur) * this._G / 900)); }
+
+      // strokeRange, shifted by (dx, dy): used for shadows and lit edges
+      strokeOffset(B, P, a, b, dx, dy, col, w) {
+        const n = P.length - 1, ia = a * n, ib = b * n;
+        const lerp = t => { const i = Math.min(n - 1, Math.floor(t)), f = t - i; return [P[i][0] + (P[i + 1][0] - P[i][0]) * f + dx, P[i][1] + (P[i + 1][1] - P[i][1]) * f + dy]; };
+        const pts = [lerp(ia)];
+        for (let i = Math.floor(ia) + 1; i < ib; i++) pts.push([P[i][0] + dx, P[i][1] + dy]);
+        pts.push(lerp(ib));
+        if (pts.length >= 2) B.stroke(pts, col, w);
       }
 
       thornCustomized(B, P, u, s, S, fr, eId) {
@@ -1521,9 +1553,9 @@
         // Slender stem width
         const stemW = S * 0.019;
         const hVar = this.h(eId * 19.3 + u * 47.1);
-        const H = stemW * (2.1 + hVar * 0.55) * sc;
-        const bLen = stemW * (2.2 + hVar * 0.4) * sc;
-        const hook = H * (0.62 + hVar * 0.18);
+        const H = stemW * (1.05 + hVar * 0.4) * sc;
+        const bLen = stemW * (1.5 + hVar * 0.3) * sc;
+        const hook = H * (0.45 + hVar * 0.15);
 
         // Key contour points
         const pBaseFwd = [p[0] + cosA * (bLen * 0.42), p[1] + sinA * (bLen * 0.42)];
@@ -1559,19 +1591,19 @@
           pBaseRear
         ];
 
-        // Base woody bark shadow
-        B.fill(thornPoly, '#3a1118');
+        // Olive base blending into the stem
+        B.fill(thornPoly, '#2b3a20');
 
-        // Crimson thorn body
+        // Reddish-brown body
         if (sc > 0.25) {
           const innerPoly = thornPoly.map(pt => [
-            pt[0] * 0.86 + p[0] * 0.14,
-            pt[1] * 0.86 + p[1] * 0.14
+            pt[0] * 0.8 + pTip[0] * 0.2,
+            pt[1] * 0.8 + pTip[1] * 0.2
           ]);
-          B.fill(innerPoly, '#851926');
+          B.fill(innerPoly, '#5c3424');
         }
 
-        // Sharp coral/amber tip highlight
+        // Pale tan point
         if (sc > 0.45 && H > 2.5) {
           const tipArc = [
             [pTip[0] + cosA * (hook * 0.22), pTip[1] + sinA * (hook * 0.22)],
@@ -1579,36 +1611,52 @@
             pTip,
             [pTip[0] - normX * (H * 0.18) + cosA * (hook * 0.15), pTip[1] - normY * (H * 0.18) + sinA * (hook * 0.15)]
           ];
-          B.stroke(tipArc, '#e65a6b', Math.max(0.7, stemW * 0.2));
+          B.stroke(tipArc, '#b89470', Math.max(0.6, stemW * 0.16));
         }
       }
 
+      // Rose leaf: a short leaf stalk carrying one or two opposite pairs of toothed leaflets and a larger end leaflet,
+      // each shaded lighter on the side facing the light (upper left)
       leafCustomized(B, bx, by, a, L, bend) {
         if (L < 0.5) return;
         const ca = Math.cos(a), sa = Math.sin(a), px = -sa, py = ca;
         const ax = u => {
-          const b = Math.sin(Math.PI * u) * bend * 0.15 * L;
+          const b = Math.sin(Math.PI * u * 0.8) * bend * 0.12 * L;
           return [bx + ca * u * L + px * b, by + sa * u * L + py * b];
         };
-        const hw = u => L * 0.19 * Math.sin(Math.PI * Math.pow(u, 0.8));
-        const N = 14, s1 = [], s2 = [];
-        for (let i = 0; i <= N; i++) {
-          const u = i / N, c = ax(u);
-          const flutter = 1 + 0.06 * Math.sin(u * Math.PI * 7);
-          const w = hw(u) * flutter;
-          s1.push([c[0] + px * w, c[1] + py * w]);
-          s2.push([c[0] - px * w, c[1] - py * w]);
+        const dirAt = u => { const p0 = ax(Math.max(0, u - 0.05)), p1 = ax(u + 0.05); return Math.atan2(p1[1] - p0[1], p1[0] - p0[0]); };
+        const stalk = [];
+        for (let i = 0; i <= 8; i++) stalk.push(ax(0.62 * i / 8));
+        B.stroke(stalk, '#183d22', Math.max(0.6, L * 0.028));
+
+        const leaflet = (p, ang, len, wid) => {
+          const c = Math.cos(ang), s = Math.sin(ang), nx = -s, ny = c, N = L > 24 ? 30 : 14, A = [], Z = [];
+          for (let i = 0; i <= N; i++) {
+            const t = i / N, f = (t * 6) % 1, tooth = L > 24 && t > 0.15 && t < 0.9 ? 1 + 0.13 * f : 1;
+            const hw = wid * 0.5 * Math.pow(Math.sin(Math.PI * Math.pow(t, 0.7)), 0.85) * tooth;
+            const mx = p[0] + c * t * len, my = p[1] + s * t * len;
+            A.push([mx + nx * hw, my + ny * hw]); Z.push([mx - nx * hw, my - ny * hw]);
+          }
+          const litA = nx * -0.6 + ny * -0.8 > 0, m = N >> 1;
+          B.fill([...A, ...Z.reverse().slice(1)], {
+            x0: A[m][0], y0: A[m][1], x1: Z[N - m][0], y1: Z[N - m][1],
+            stops: [[0, litA ? '#36763f' : '#11301a'], [0.5, '#1d4c28'], [1, litA ? '#11301a' : '#36763f']]
+          });
+          if (L > 12) B.stroke([p, [p[0] + c * len * 0.85, p[1] + s * len * 0.85]], 'rgba(150,200,150,0.35)', Math.max(0.4, len * 0.025));
+        };
+
+        const pairs = L > 30 ? 2 : 1;
+        for (let k = 0; k < pairs; k++) {
+          const u = 0.22 + k * 0.22, p = ax(u), d = dirAt(u), len = L * (0.3 + 0.05 * k);
+          leaflet(p, d + 0.85, len, len * 0.6);
+          leaflet(p, d - 0.85, len, len * 0.6);
         }
-        const tip = ax(1), base = ax(0);
-        B.fill([base, ...s1.slice(1, N), tip, tip, ...s2.slice(1, N).reverse(), base], '#1b4327');
-        if (L > 5) {
-          const v = [];
-          for (let i = 0; i <= 8; i++) v.push(ax(0.08 + 0.72 * i / 8));
-          B.stroke(v, '#387548', Math.max(0.7, L * 0.035));
-        }
+        const tl = L * 0.42;
+        leaflet(ax(0.6), dirAt(0.6), tl, tl * 0.62);
       }
 
       roseCustomized(B, cx, cy, R, rot, e, a, tl) {
+        if (R < 1.5) return;
         const cr = Math.cos(rot), sr = Math.sin(rot);
         const tm = tl ? Math.hypot(tl[0], tl[1]) : 0, ux = tm ? tl[0] / tm : 0, uy = tm ? tl[1] / tm : 0, sq = -0.28 * tm;
         const T = (x, y, z = 0) => {
@@ -1617,173 +1665,319 @@
           return [cx + dx, cy + dy];
         };
 
-        const st = 85;
-        const lw = Math.max(0.7, R * 0.04);
+        // Bloom state: springy pop-in, then the bud opens to a half-open long-stem rose (outer petals first)
+        const smooth = (x0, x1, x) => { const s = Math.min(1, Math.max(0, (x - x0) / (x1 - x0))); return s * s * (3 - 2 * s); };
+        // Vine mode: the bud emerges as the vine arrives, swells, the sepals peel back, then the petals slowly loosen
+        const vine = this._vine;
+        const grow = vine ? this.spr(a / 700, 6, 9) * (0.8 + 0.2 * smooth(200, 1100, a)) : this.spr(a / 900, 7, 12);
+        if (grow <= 0.02) return;
+        // Stage: a bud stays closed, a half-open rose stops at the goblet, a hero rose keeps going into a full bloom
+        const stage = e.stage || 'half';
+        const openT = vine ? this.eio((a - 1100) / 2600) : this.eo((a - 180) / 1800);
+        const open = stage === 'bud' ? Math.min(openT, 0.16) : openT;
+        const full = stage === 'full' ? (vine ? this.eio((a - 3300) / 2600) : this.eo((a - 1500) / 1800)) : 0;
+        const Rg = R * grow * (1.2 - 0.25 * full); // a slim half-open bloom needs a little more size than a flat one
+        const breathe = 0.04 * Math.sin((this._now || 0) / 1000 * 0.9 + e.ph1);
 
-        // 1. Pointed Sepals (Underneath bloom)
-        const sepFr = this.spr(a / 750, 8, 14);
-        if (sepFr > 0.05 && R >= 4) {
-          const nSep = 5;
-          const sepLen = R * 1.18 * sepFr;
-          for (let k = 0; k < nSep; k++) {
-            const ang = (k / nSep) * Math.PI * 2 + e.ph2 * 0.5;
-            const cA = Math.cos(ang), sA = Math.sin(ang);
-            const nX = -sA, nY = cA;
-            const bW = R * 0.16 * sepFr;
-            const p1 = T(cA * R * 0.22 - nX * bW, sA * R * 0.22 - nY * bW, -0.15);
-            const p2 = T(cA * sepLen * 0.6 - nX * (bW * 0.45), sA * sepLen * 0.6 - nY * (bW * 0.45), -0.08);
-            const tip = T(cA * sepLen + nX * (R * 0.07), sA * sepLen + nY * (R * 0.07), 0);
-            const p3 = T(cA * sepLen * 0.6 + nX * (bW * 0.45), sA * sepLen * 0.6 + nY * (bW * 0.45), -0.08);
-            const p4 = T(cA * R * 0.22 + nX * bW, sA * R * 0.22 + nY * bW, -0.15);
-            B.fill([p1, p2, tip, p3, p4], '#193d22');
-          }
-        }
+        // Camera: the bloom axis (z) leans toward the viewer by `tilt` (0 = face-on, PI/2 = side-on).
+        // A long-stem half-open rose is seen mostly from the side, just high enough to look into the spiral.
+        // V maps flower space to view space [x, y (down), depth (toward viewer)].
+        // (a full bloom turns its face up toward the viewer to show the spiral)
+        const tH = this.h(e.id * 3.31 + 1.7), tiltHalf = 1.0 + 0.3 * tH + 0.15 * (1 - open);
+        const tilt = tiltHalf + (0.8 + 0.3 * tH - tiltHalf) * full;
+        const ct = Math.cos(tilt), stl = Math.sin(tilt);
+        const V = (x, y, z) => [x, y * ct - z * stl, y * stl + z * ct];
+        const S2 = v => T(v[0], v[1], v[2] / R * 0.35);
+        const LX = -0.48, LY = -0.68, LZ = 0.55; // key light from upper left, in front
 
-        // Helper to draw a cupped petal with depth shading and rim highlight
-        const drawCuppedPetal = (centerAngle, rIn, rOut, angSpan, s, colShadow, colBody, colRim, z, cleft = 0.12, scallopPhase = 0, pIndex = 0) => {
-          if (s <= 0.005) return;
-          const N = 18;
-          const outer = [];
-          const inner = [];
-          const pJitter = (this.h(e.id * 13.7 + pIndex * 29.3) - 0.5) * 0.07;
-          const rVar = 1 + (this.h(e.id * 7.1 + pIndex * 19.9) - 0.5) * 0.08;
-          for (let i = 0; i <= N; i++) {
-            const u = i / N;
-            const th = centerAngle + pJitter + (u - 0.5) * angSpan;
-            const scallop = 1 - cleft * Math.sin(u * Math.PI) + 0.035 * Math.sin(u * Math.PI * 3 + scallopPhase);
-            const ro = rOut * rVar * scallop * s;
-            const ri = rIn * (0.8 + 0.2 * Math.sin(u * Math.PI)) * s;
-            outer.push(T(Math.cos(th) * ro, Math.sin(th) * ro, z));
-            inner.push(T(Math.cos(th) * ri, Math.sin(th) * ri, z - 0.06));
-          }
-
-          const fullPoly = [...inner, ...[...outer].reverse()];
-          B.fill(fullPoly, colShadow);
-
-          if (s > 0.25) {
-            const midPoly = outer.map((p, idx) => {
-              const ip = inner[idx];
-              return [p[0] * 0.86 + ip[0] * 0.14, p[1] * 0.86 + ip[1] * 0.14];
-            });
-            B.fill([...inner, ...midPoly.reverse()], colBody);
-          }
-
-          if (colRim && s > 0.35 && R >= 9) {
-            B.stroke(outer, colRim, lw * 0.85);
-          }
+        // Colour ramps [shadow, body, lit] sampled from a crimson long-stem rose (rich face, slightly paler reverse)
+        const FACE = [[66, 0, 8], [172, 8, 24], [226, 38, 50]];
+        const BACK = [[86, 6, 14], [178, 22, 34], [230, 70, 78]];
+        const GREEN = [[12, 30, 16], [28, 66, 36], [58, 112, 64]];
+        const lerp3 = (c1, c2, t) => [c1[0] + (c2[0] - c1[0]) * t, c1[1] + (c2[1] - c1[1]) * t, c1[2] + (c2[2] - c1[2]) * t];
+        const ramp = (stops, l) => l < 0.5 ? lerp3(stops[0], stops[1], l * 2) : lerp3(stops[1], stops[2], l * 2 - 1);
+        const rgb = (c, m = 1) => `rgb(${(c[0] * m) | 0},${(c[1] * m) | 0},${(c[2] * m) | 0})`;
+        // Lambert shade of a surface whose midrib leans `al` from the axis at azimuth `ph`
+        const shade = (al, ph) => {
+          const ca = Math.cos(al), sa = Math.sin(al);
+          let nv = V(-ca * Math.cos(ph), -ca * Math.sin(ph), sa);
+          const inner = nv[2] >= 0;
+          if (!inner) nv = [-nv[0], -nv[1], -nv[2]];
+          return { inner, l: 0.14 + 0.86 * Math.max(0, nv[0] * LX + nv[1] * LY + nv[2] * LZ) };
         };
 
-        // 2. Whorl 1: Outer Guard Petals (6 large overlapping cupped petals)
-        const nW1 = 6;
-        for (let i = 0; i < nW1; i++) {
-          const ph = (i / nW1) * Math.PI * 2 + e.ph1;
-          const span = (Math.PI * 2 / nW1) * 1.48;
-          const sPetal = this.spr((a - i * 25) / 1000, 8, 14);
-          drawCuppedPetal(
-            ph,
-            R * 0.32,
-            R * (0.95 + 0.08 * Math.sin(i * 2 + e.ph2)),
-            span,
-            sPetal,
-            '#38050c',
-            '#8f1122',
-            '#de3e53',
-            0.05,
-            0.14,
-            i,
-            i
-          );
+        // Now and then an open rose lets a petal go
+        if (vine && !this._noSprite && this.petalFall && stage !== 'bud' && open > 0.95 && a > 4200 && this.petalFall.length < 12 &&
+            Math.random() < (this._dt || 0) * (stage === 'full' ? 0.14 : 0.06)) {
+          const c0 = S2(V(0, 0, Rg * 0.7)), k = Math.max(0.5, (this._S || 200) / 200);
+          this.petalFall.push({
+            x: c0[0] + (Math.random() - 0.5) * Rg * 0.4, y: c0[1], s: Rg * (0.4 + Math.random() * 0.15), k, t: 0,
+            vx: (Math.random() - 0.5) * 12 * k, vy: 0, term: (22 + Math.random() * 14) * k,
+            sw: 1.1 + Math.random() * 0.8, ph: Math.random() * 6.28, amp: (12 + Math.random() * 14) * k,
+            rot: Math.random() * 6.28, spin: (Math.random() - 0.5) * 1.6, flip: Math.random() * 6.28, fs: 1.4 + Math.random() * 1.4,
+            life: 9 + Math.random() * 4
+          });
+        }
+        // A rose that has finished opening barely changes: on canvas, draw it from a cached bitmap (SVG export stays vector)
+        if (B.ctx && !this._noSprite && a > 6500) { this.roseSprite(B, cx, cy, R, rot, e, a); return; }
+
+        // Soft shadow the bloom casts onto the letter behind it (light from the upper left)
+        if ((e.cLayer != null ? e.cLayer : e.layer) === 1) {
+          const c0 = S2(V(0, 0, Rg * (0.5 - 0.2 * full))), rad = Rg * (0.5 + 0.2 * full) * Math.min(1, 0.4 + open);
+          for (const [sc, alpha] of [[1.0, 0.1 - 0.03 * full], [0.7, 0.14 - 0.05 * full]]) {
+            const sh = [];
+            for (let s = 0; s < 18; s++) { const th = s / 18 * Math.PI * 2; sh.push([c0[0] + Rg * 0.2 + Math.cos(th) * rad * sc, c0[1] + Rg * 0.28 + Math.sin(th) * rad * 0.9 * sc]); }
+            B.fill(sh, `rgba(0,0,0,${alpha})`);
+          }
         }
 
-        // 3. Whorl 2: Intermediate Cupping Petals (6 cupped petals)
-        const nW2 = 6;
-        for (let i = 0; i < nW2; i++) {
-          const ph = (i / nW2) * Math.PI * 2 + e.ph1 + Math.PI / nW2 + 0.1;
-          const span = (Math.PI * 2 / nW2) * 1.42;
-          const sPetal = this.spr((a - (st * 1.4 + i * 22)) / 1000, 8, 14);
-          drawCuppedPetal(
-            ph,
-            R * 0.22,
-            R * (0.75 + 0.06 * Math.sin(i * 3 + e.ph1)),
-            span,
-            sPetal,
-            '#480812',
-            '#b8162c',
-            '#f06277',
-            0.12,
-            0.16,
-            i * 1.5,
-            i + 6
-          );
+        const detail = R >= 18; // contact shadows only where they read
+        const lw = Math.max(0.5, R * 0.035);
+
+        // 1. Receptacle (hip) hanging below the bloom
+        const hc = V(0, 0, -Rg * 0.05), hr = Rg * 0.1, hip = [];
+        for (let s = 0; s < 16; s++) { const th = s / 16 * Math.PI * 2; hip.push(S2([hc[0] + Math.cos(th) * hr, hc[1] + Math.sin(th) * hr * 1.15, hc[2]])); }
+        B.fill(hip, rgb(GREEN[1]));
+
+        // 2. Sepals: hug the bud, then reflex downward as the bloom opens
+        const sepO = vine ? this.eo((a - 700) / 1300) : this.eo((a - 60) / 1600), sepals = [];
+        for (let s = 0; s < 5; s++) {
+          const phi = e.ph2 + s * Math.PI * 0.4 + (this.h(e.id * 5.7 + s) - 0.5) * 0.4;
+          const a0 = 0.25 + 0.95 * sepO, a1 = -0.05 + 2.45 * sepO;
+          const m = 8, ds = Rg * (0.5 + 0.1 * sepO) / m, Ls = [], Rs = [];
+          let r = Rg * 0.09, z = 0;
+          for (let j = 0; j <= m; j++) {
+            const u = j / m, al = a0 + (a1 - a0) * u * u;
+            if (j > 0) { r += Math.sin(al) * ds; z += Math.cos(al) * ds; }
+            const hw = Rg * 0.07 * Math.pow(1 - u, 0.9) * (1 + 0.4 * Math.sin(u * Math.PI)) / Math.max(r, Rg * 0.05);
+            Ls.push(V(Math.cos(phi - hw) * r, Math.sin(phi - hw) * r, z));
+            Rs.push(V(Math.cos(phi + hw) * r, Math.sin(phi + hw) * r, z));
+          }
+          const sh = shade((a0 + a1) / 2, phi);
+          sepals.push({ poly: Ls.concat(Rs.reverse()).map(S2), col: rgb(ramp(GREEN, sh.l)), front: Ls[m >> 1][2] > 0 });
+        }
+        // Closed bud: front sepals wrap over the petals; open bloom: all sepals sit beneath
+        const sepalsOnTop = sepO < 0.45;
+        for (const sp of sepals) if (!(sepalsOnTop && sp.front)) B.fill(sp.poly, sp.col);
+
+        // 3. Petals: golden-angle spiral, from outer goblet petals with rolled, pointed lips (k=0) to the tight central spiral (k=1)
+        const n = (R < 9 ? 9 : R < 18 ? 13 : 17) + (stage === 'full' ? 6 : 0), GA = 2.39996, M = 12;
+        const hwShape = u => (0.5 + 0.5 * Math.sin(Math.min(1, u / 0.68) * Math.PI / 2)) *
+          (u <= 0.7 ? 1 : Math.sqrt(Math.max(0, 1 - Math.pow((u - 0.7) / 0.3, 2))));
+        const petals = [];
+        for (let i = 0; i < n; i++) {
+          const k = i / (n - 1), q = 1 - k;
+          const o = Math.pow(open, 1 + 1.8 * k);
+          const jit = this.h(e.id * 7.13 + i * 3.71) - 0.5;
+          const phi = e.ph1 + i * GA + jit * 0.3;
+          const len = Rg * (1.1 - 0.3 * k + (-0.1 - 0.02 * k) * full) * (1 + jit * 0.08) * (0.75 + 0.25 * o);
+          // Midrib lean from the axis at the base, waist and lip. Bud: a teardrop with tips curving in.
+          // Half-open: an egg-shaped cup that swells out from a round base, rises upright, and opens
+          // slightly at the lip (the outermost petal or two peel a little further away).
+          const peel = i === 0 ? 0.45 : i === 1 ? 0.2 : 0;
+          const lerp = (b, f) => b + (f - b) * o;
+          let aB = lerp(0.1 + 0.4 * q, 0.3 + 1.05 * Math.pow(q, 0.8));
+          let aM = lerp(0.03, -0.04 - 0.06 * q);
+          let aT = lerp(-0.05 - 0.3 * q, -0.05 + 0.35 * Math.pow(q, 1.5) + peel) + breathe * q;
+          if (full > 0) {
+            // Full bloom: a wide, deep cup whose outer lips roll right back into points around a raised spiral
+            const fB = 0.25 + 0.95 * Math.pow(q, 0.9), fM = 0.1 + 0.35 * Math.pow(q, 1.2), fT = 0.25 + 1.25 * Math.pow(q, 1.3) + peel + breathe * q;
+            aB += (fB - aB) * full; aM += (fM - aM) * full; aT += (fT - aT) * full;
+          }
+          const hwMax = 1.15 + 0.75 * Math.pow(k, 1.4) + (-0.15 + 0.05 * Math.pow(k, 1.4)) * full;
+          const roll = Rg * (0.17 + 0.08 * full) * o * Math.pow(q, 0.6);
+          const al = [], rr = [Rg * (0.08 + (0.05 * q - 0.04) * full)], zz = [Rg * (0.08 + 0.06 * full) * k];
+          for (let j = 0; j <= M; j++) { const u = j / M; al.push(aB + (aM - aB) * smooth(0, 0.42, u) + (aT - aM) * smooth(0.62, 1, u)); }
+          for (let j = 1; j <= M; j++) {
+            const am = (al[j - 1] + al[j]) / 2, ds = len / M;
+            rr.push(rr[j - 1] + Math.sin(am) * ds); zz.push(zz[j - 1] + Math.cos(am) * ds);
+          }
+          // Surface point: j along the midrib, v across (-1..1); margins roll back near the tip
+          const pt = (j, v) => {
+            const u = j / M, rl = roll * Math.pow(Math.abs(v), 3) * smooth(0.55, 1, u);
+            const r = Math.max(Rg * 0.005, rr[j] + rl), ang = phi + hwMax * hwShape(u) * v;
+            return V(Math.cos(ang) * r, Math.sin(ang) * r, zz[j] - rl * 0.6);
+          };
+          // Region j0..j1 of the petal, following the cupped cross-sections at both ends
+          const region = (j0, j1) => {
+            const P = [];
+            for (let j = j0; j <= j1; j++) P.push(pt(j, -1));
+            if (j1 < M) for (let s = 1; s < 6; s++) P.push(pt(j1, -1 + s / 3)); // the tip has no width
+            for (let j = j1; j >= j0; j--) P.push(pt(j, 1));
+            for (let s = 1; s < 6; s++) P.push(pt(j0, 1 - s / 3));
+            return P;
+          };
+          // Shade across the petal (it wraps around the bloom like a cylinder): left edge, midrib, right edge
+          const w6 = hwMax * hwShape(0.5), col = ph => { const sh = shade(al[6], ph); return ramp(sh.inner ? FACE : BACK, sh.l); };
+          petals.push({
+            key: pt(6, 0)[2], pt, region, lTip: shade(al[10], phi).l, dim: 1 - 0.25 * k, k,
+            cL: col(phi - w6), cM: col(phi), cR: col(phi + w6)
+          });
         }
 
-        // 4. Whorl 3: Inner Petal Swirl (5 tightly cupped petals)
-        const nW3 = 5;
-        for (let i = 0; i < nW3; i++) {
-          const ph = (i / nW3) * Math.PI * 2 + e.ph2 + 0.4;
-          const span = (Math.PI * 2 / nW3) * 1.38;
-          const sPetal = this.spr((a - (st * 2.8 + i * 20)) / 1000, 8, 14);
-          drawCuppedPetal(
-            ph,
-            R * 0.12,
-            R * (0.52 + 0.05 * Math.sin(i * 2.5)),
-            span,
-            sPetal,
-            '#2e0408',
-            '#ce1d37',
-            '#f57b8e',
-            0.20,
-            0.18,
-            i * 2,
-            i + 12
-          );
+        // Painter's order: far petals first, near petals last
+        petals.sort((p1, p2) => p1.key - p2.key);
+        const shX = Rg * 0.035, shY = Rg * 0.05;
+        for (const p of petals) {
+          const full = p.region(0, M);
+          if (detail) B.fill(full.map(v => S2([v[0] + shX, v[1] + shY, v[2]])), 'rgba(4,0,1,0.35)');
+          const fullS = full.map(S2);
+          const gL = S2(p.pt(6, -1)), gR = S2(p.pt(6, 1));
+          B.fill(fullS, { x0: gL[0], y0: gL[1], x1: gR[0], y1: gR[1], stops: [[0, rgb(p.cL, p.dim)], [0.5, rgb(p.cM, p.dim)], [1, rgb(p.cR, p.dim)]] });
+          // Shadow pooling toward the petal base, fading out by mid-petal
+          const g0 = S2(p.pt(0, 0)), g1 = S2(p.pt(5, 0));
+          B.fill(p.region(0, 5).map(S2), { x0: g0[0], y0: g0[1], x1: g1[0], y1: g1[1], stops: [[0, 'rgba(30,0,4,0.75)'], [1, 'rgba(30,0,4,0)']] });
+          if (R >= 6) B.stroke([...fullS, fullS[0]], 'rgba(30,0,5,0.4)', lw * 0.4);
+          // Light catching the rolled-back margin
+          if (R >= 10) {
+            const rim = [];
+            for (let j = 6; j <= M; j++) rim.push(S2(p.pt(j, -1)));
+            for (let j = M - 1; j >= 6; j--) rim.push(S2(p.pt(j, 1)));
+            B.stroke(rim, `rgba(240,80,92,${(0.05 + 0.4 * p.lTip * (1 - 0.75 * p.k)).toFixed(3)})`, lw * 0.5);
+          }
         }
 
-        // 5. Whorl 4: Heart & Central Rosette Spiral
-        const sHeart = this.eo((a - st * 4.2) / 520);
-        if (sHeart > 0 && R > 3) {
-          const nCurls = 3;
-          for (let k = 0; k < nCurls; k++) {
-            const ph = (k / nCurls) * Math.PI * 2 + e.ph1 * 1.5;
-            const rO = R * 0.32 * sHeart;
-            const curlPts = [];
-            for (let j = 0; j <= 12; j++) {
-              const u = j / 12;
-              const ang = ph + u * Math.PI * 1.2;
-              const rr = rO * (0.35 + 0.65 * (1 - u * 0.5));
-              curlPts.push(T(Math.cos(ang) * rr, Math.sin(ang) * rr, 0.28));
+        if (sepalsOnTop) for (const sp of sepals) if (sp.front) B.fill(sp.poly, sp.col);
+      }
+
+      // Ink runs of a letter, scanned bottom to top: [{ y, runs: [[x0, x1], ...] }] in em units
+      // (x centred like the drawn text, y measured from the baseline, negative is up)
+      glyph(ch) {
+        this.glyphs = this.glyphs || {};
+        if (this.glyphs[ch]) return this.glyphs[ch];
+        const FS = 160, W = FS * 2, H = FS * 2, base = FS * 1.3;
+        const c = document.createElement('canvas'); c.width = W; c.height = H;
+        const g = c.getContext('2d', { willReadFrequently: true });
+        g.font = `700 ${FS}px ${this.F}`; g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.fillStyle = '#000';
+        g.fillText(ch, W / 2, base);
+        const d = g.getImageData(0, 0, W, H).data, rows = [];
+        for (let py = H - 1; py >= 0; py -= 2) {
+          const runs = []; let x0 = -1;
+          for (let px = 0; px <= W; px++) {
+            const ink = px < W && d[(py * W + px) * 4 + 3] > 128;
+            if (ink && x0 < 0) x0 = px;
+            else if (!ink && x0 >= 0) { runs.push([(x0 - W / 2) / FS, (px - W / 2) / FS]); x0 = -1; }
+          }
+          if (runs.length) rows.push({ y: (py - base) / FS, runs });
+        }
+        return (this.glyphs[ch] = rows);
+      }
+
+      // The tallest continuous climb up one stroke of the glyph: [{ y, c (stroke centre), hw (half width) }]
+      climbTrack(rows) {
+        if (!rows.length) return null;
+        const y0 = rows[0].y, starts = [];
+        for (let i = 0; i < rows.length && rows[i].y > y0 - 0.06; i++) for (const r of rows[i].runs) starts.push({ i, r });
+        let best = null;
+        for (const st of starts) {
+          let last = { y: rows[st.i].y, c: (st.r[0] + st.r[1]) / 2, hw: (st.r[1] - st.r[0]) / 2 };
+          const tr = [last];
+          for (let i = st.i + 1; i < rows.length; i++) {
+            if (last.y - rows[i].y > 0.03) break; // the stroke ended (e.g. the gap under the dot of an i)
+            let pick = null, bd = 1e9;
+            for (const r of rows[i].runs) {
+              const c = (r[0] + r[1]) / 2, ov = Math.min(r[1], last.c + last.hw) - Math.max(r[0], last.c - last.hw);
+              if (ov > -0.01 && Math.abs(c - last.c) < bd) { bd = Math.abs(c - last.c); pick = r; }
             }
-            B.stroke(curlPts, '#db233e', lw * 0.9);
+            if (!pick) break;
+            last = { y: rows[i].y, c: (pick[0] + pick[1]) / 2, hw: (pick[1] - pick[0]) / 2 };
+            tr.push(last);
           }
-
-          const sp = [];
-          const turns = R < 20 ? Math.min(e.turns, 1.4) : e.turns;
-          for (let i = 0; i <= 60; i++) {
-            const u = i / 60;
-            const th = e.ph1 + u * turns * Math.PI * 2;
-            const rr = R * (0.05 + 0.28 * u) * sHeart;
-            sp.push(T(Math.cos(th) * rr, Math.sin(th) * rr * 0.85, 0.32 - 0.18 * u));
-          }
-          this.strokeRange(B, sp, 0, sHeart, '#ffa0af', lw * 0.8);
-
-          if (R >= 12 && sHeart > 0.4) {
-            const foldArc = [];
-            for (let i = 0; i <= 24; i++) {
-              const u = i / 24;
-              const fx = (-0.28 + 0.56 * u) * R * sHeart;
-              const fy = (0.08 + 0.12 * Math.sin(u * Math.PI)) * R * sHeart;
-              foldArc.push(T(fx, fy, 0.24));
-            }
-            this.strokeRange(B, foldArc, 0, sHeart, '#f57b8e', lw * 0.75);
-          }
+          if (!best || tr[0].y - tr[tr.length - 1].y > best[0].y - best[best.length - 1].y) best = tr;
         }
+        return best;
+      }
+
+      // Customized only: a vine that roots at the foot of a stroke, coils up it passing over and under the letter,
+      // then breaks free at the top and ends in a rose (or a leaf)
+      genWrap(l) {
+        l.wrapEls = [];
+        if (l.ch === ' ') return;
+        const tr = this.climbTrack(this.glyph(l.ch));
+        if (!tr || tr[0].y - tr[tr.length - 1].y < 0.25) return;
+        const r = this.rng(l.id * 7919 + 17), E = l.wrapEls; let k0 = 70; const nid = () => l.id * 100 + (k0++);
+        const N = tr.length, sm = tr.map((p, i) => {
+          let c = 0, hw = 0, n = 0;
+          for (let j = Math.max(0, i - 4); j <= Math.min(N - 1, i + 4); j++) { c += tr[j].c; hw += tr[j].hw; n++; }
+          return { y: p.y, c: c / n, hw: hw / n };
+        });
+        // Helix around the stroke: x swings across the stroke as the vine climbs; the front half of each turn is drawn over the letter
+        const pitch = 0.2 + r() * 0.08, side = r() < 0.5 ? 1 : -1, P = [], wrap = { c: [], ph: [] };
+        let ph = r() * 6.28;
+        for (let i = 0; i < N; i++) {
+          const p = sm[i], u = i / (N - 1);
+          if (i > 0) ph += side * (sm[i - 1].y - p.y) * Math.PI * 2 / pitch;
+          const A = Math.min(0.17, p.hw + 0.03) * Math.max(0, Math.min(1, u / 0.06, (1 - u) / 0.15));
+          wrap.c.push(p.c); wrap.ph.push(ph);
+          P.push([p.c + A * Math.sin(ph), p.y]);
+        }
+        const nW = P.length, last = P[nW - 1];
+        P.push(...this.vine(last, -Math.PI / 2 + side * (0.4 + r() * 0.5), 0.22 + r() * 0.2, 0.3, 1 + r(), r() * 6.28, side * 0.6, 14).slice(1));
+        const n = P.length, lay = i => i >= nW - 1 ? 1 : (Math.cos(wrap.ph[i]) > 0 ? 1 : 0), segs = [];
+        let s0 = 0;
+        for (let i = 1; i < n; i++) {
+          if (lay(i) !== lay(s0)) { segs.push({ u0: s0 / (n - 1), u1: i / (n - 1), layer: lay(s0) }); s0 = i; }
+        }
+        segs.push({ u0: s0 / (n - 1), u1: 1, layer: lay(s0) });
+        let len = 0;
+        for (let i = 1; i < n; i++) len += Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]);
+        const thorns = [];
+        for (let i = 0; i < 3; i++) thorns.push({ u: 0.2 + r() * 0.7, s: r() < 0.5 ? -1 : 1 });
+        const stem = { t: 'stem', id: nid(), pts: P, segs, d0: 60, dur: Math.max(500, Math.min(2.4, len) * 520), w: 0.85, thorns, wrap, nW, par: null };
+        E.push(stem);
+        if (r() < 0.55) {
+          let bi = -1;
+          for (let i = Math.floor(nW * 0.35); i < Math.floor(nW * 0.75); i++) {
+            if (Math.cos(wrap.ph[i]) > 0.3 && Math.abs(Math.sin(wrap.ph[i])) > 0.85) { bi = i; break; }
+          }
+          if (bi > 0) E.push({
+            t: 'rose', id: nid(), x: P[bi][0], y: P[bi][1], wi: bi, R: 0.085 + r() * 0.04,
+            rot: Math.sign(Math.sin(wrap.ph[bi])) * (0.45 + r() * 0.3), ph1: r() * 6.28, ph2: r() * 6.28, turns: 2,
+            layer: 1, d0: 0, stem, su: bi / (n - 1), lag: 350, stage: r() < 0.5 ? 'bud' : 'half'
+          });
+        }
+        const lu = Math.min(1, (nW + 3) / (n - 1)), [lq, la] = this.at(P, lu);
+        E.push({ t: 'leaf', id: nid(), x: lq[0], y: lq[1], a: la + side * 0.8, L: 0.13 + r() * 0.08, bend: side * 0.4, layer: 1, d0: 0, stem, su: lu });
+        const tp = P[n - 1], ta = Math.atan2(tp[1] - P[n - 2][1], tp[0] - P[n - 2][0]);
+        if (r() < 0.6) E.push({ t: 'rose', id: nid(), x: tp[0], y: tp[1], R: 0.12 + r() * 0.08, rot: (r() - 0.5) * 0.6, ph1: r() * 6.28, ph2: r() * 6.28, turns: 2, layer: 1, d0: 0, stem, su: 1 });
+        else E.push({ t: 'leaf', id: nid(), x: tp[0], y: tp[1], a: ta, L: 0.15 + r() * 0.08, bend: side * 0.5, layer: 1, d0: 0, stem, su: 1 });
+      }
+
+      // Vine mode keeps the letter wraps legible: drop side branches and about half of the bare wandering vines
+      // (vines that end in a rose, and the wraps themselves, always stay)
+      thinned(e, arr) {
+        const s = e.t === 'stem' ? e : e.stem;
+        if (!s || s.wrap) return false;
+        if (e.t === 'leaf' && e.su < 1 && this.h(e.id * 2.31 + 0.7) < 0.35) return true;
+        if (s._thin === undefined) s._thin = !!s.par || (!arr.some(x => x.stem === s && x.t === 'rose') && this.h(s.id * 1.618) < 0.5);
+        return s._thin;
+      }
+
+      // A growing vine's tip hooks over as it searches, straightening out as the vine matures
+      searchTip(P, fr, id, S) {
+        const n = P.length, span = 0.18, side = id % 2 ? 1 : -1, hook = S * 0.05 * Math.sqrt(1 - fr);
+        return P.map((p, i) => {
+          const w = (i / (n - 1) - (fr - span)) / span;
+          if (w <= 0) return p;
+          const a = P[Math.min(n - 1, i + 1)], b = P[Math.max(0, i - 1)], dx = a[0] - b[0], dy = a[1] - b[1], d = Math.hypot(dx, dy) || 1;
+          const k = side * hook * Math.min(1, w) ** 2;
+          return [p[0] - dy / d * k, p[1] + dx / d * k];
+        });
       }
 
       drawStemCustomized(B, e, l, age, kk, st, f, amp, layer, frO) {
-        const S = st.S, fr = frO != null ? frO : this.eo((age - e.d0) / e.dur) * kk;
+        const S = st.S;
+        const grown = frO != null ? 1 : this._vine ? this.eio((age - this.vineStart(e)) / e.dur) : this.eo((age - e.d0) / e.dur);
+        const fr = frO != null ? frO : grown * kk;
         if (fr <= 0) return;
         const j = this.jit(e.id, f, amp);
-        const P = e.pts.map(p => this.wpt(st, l, l.x + p[0] * S + j[0], l.y + p[1] * S + j[1]));
+        let pts = e.pts;
+        if (e.wrap) {
+          const loose = this.wrapLoose(e, age);
+          pts = e.pts.map((p, i) => i < e.nW ? [e.wrap.c[i] + (p[0] - e.wrap.c[i]) * loose, p[1]] : p);
+        }
+        let P = pts.map(p => this.wpt(st, l, l.x + p[0] * S + j[0], l.y + p[1] * S + j[1]));
+        if (this._vine && grown < 1) P = this.searchTip(P, grown, e.id, S);
 
         const stemW = S * 0.019 * (e.w || 1);
 
@@ -1791,12 +1985,21 @@
           if (sg.layer !== layer) continue;
           const b = Math.min(sg.u1, fr);
           if (b <= sg.u0) continue;
-
-          // Primary slender climbing stem in deep bramble green
-          this.strokeRange(B, P, sg.u0, b, '#1c4528', stemW);
-
-          // Fine cylindrical bark highlight along lit edge
-          this.strokeRange(B, P, sg.u0, b, '#3d7c50', stemW * 0.38);
+          // Drawn in short pieces so the vine tapers: woody at the root, slender at the tip
+          const k = Math.max(1, Math.ceil((b - sg.u0) / 0.18));
+          for (let c = 0; c < k; c++) {
+            const u0 = sg.u0 + (b - sg.u0) * c / k, u1 = sg.u0 + (b - sg.u0) * (c + 1) / k;
+            const w = stemW * (1.25 - 0.6 * (u0 + u1) / 2);
+            // Soft shadow cast onto the letter where the vine passes in front of it (light from the upper left)
+            if (layer === 1) {
+              this.strokeOffset(B, P, u0, u1, w * 0.7, w * 1.1, 'rgba(0,0,0,0.1)', w * 2.2);
+              this.strokeOffset(B, P, u0, u1, w * 0.35, w * 0.55, 'rgba(0,0,0,0.24)', w * 1.4);
+            }
+            // Round stem: shaded body, a mid tone and a lit edge nudged toward the light
+            this.strokeRange(B, P, u0, u1, '#163a20', w);
+            if (w > 2.5) this.strokeOffset(B, P, u0, u1, -w * 0.12, -w * 0.15, '#24592f', w * 0.62);
+            this.strokeOffset(B, P, u0, u1, -w * 0.24, -w * 0.3, '#4f8f5b', w * 0.2);
+          }
         }
 
         // Distinctly thorny internode distribution
@@ -1812,25 +2015,103 @@
         const S = st.S, j = this.jit(e.id, f, amp), wx = (x, y) => this.wpt(st, l, l.x + x * S + j[0], l.y + y * S + j[1]);
         const rw = st.rotw ? st.rotw(e) : 0;
         if (e.t === 'leaf') {
+          if (this._vine && e.stem) {
+            // ms since the vine tip passed this leaf: it grows out curled, then relaxes open
+            const la = (age - this.vineCross(e.stem, e.su)) * this._G - 60 - (e.lag || 0);
+            const sc = this.eo(la / 650) * kk;
+            if (sc <= 0) return;
+            const p = wx(e.x, e.y), curl = (1 - this.eo(la / 900)) * 1.8 * (e.bend < 0 ? -1 : 1);
+            this.leafCustomized(B, p[0], p[1], e.a + j[2] + rw, e.L * S * sc, e.bend + curl);
+            return;
+          }
           const sc = this.spr((age - e.d0) / 1000, 7, 15) * kk;
           if (sc <= 0) return;
           const p = wx(e.x, e.y);
           this.leafCustomized(B, p[0], p[1], e.a + j[2] + rw, e.L * S * sc, e.bend);
         } else if (e.t === 'rose') {
-          const a = age - e.d0;
+          // Vine mode: the rose's clock starts (in real ms) when the vine reaches it
+          const a = this._vine && e.stem ? (age - this.vineCross(e.stem, e.su != null ? e.su : 1)) * this._G - (e.lag || 0) : age - e.d0;
           if (a < 0) return;
           if (kk <= 0.001) return;
-          const p = wx(e.x, e.y), tl = st.face ? this.faceTurn(e, p[0], p[1]) : null;
+          if (e.stage === undefined) { const hs = this.h(e.id * 3.17 + 0.5); e.stage = hs < 0.1 ? 'full' : hs < 0.4 ? 'bud' : 'half'; }
+          const sz = e.stage === 'full' ? 1.2 : e.stage === 'bud' ? 0.7 : 1;
+          let ex = e.x;
+          if (e.wi != null) { const ws = e.stem, c = ws.wrap.c[e.wi]; ex = c + (ws.pts[e.wi][0] - c) * this.wrapLoose(ws, age); }
+          const p = wx(ex, e.y), tl = st.face ? this.faceTurn(e, p[0], p[1]) : null;
           if ((st.face || st.perchOn) && !l.dead && a > 700) {
-            this.perch.push({ id: e.id, x: p[0], y: p[1], R: e.R * S * kk });
+            this.perch.push({ id: e.id, x: p[0], y: p[1], R: e.R * S * kk * sz });
           }
-          this.roseCustomized(B, p[0], p[1], e.R * S * kk, e.rot + j[2] + rw + (tl ? tl[0] * 0.22 : 0), e, a, tl);
+          this.roseCustomized(B, p[0], p[1], e.R * S * kk * sz, e.rot + j[2] + rw + (tl ? tl[0] * 0.22 : 0), e, a, tl);
+        }
+      }
+
+      // Draw a settled rose from a bitmap rendered once (re-rendered only when it needs to get bigger).
+      // The bitmap is the rose drawn upright at the origin; position, lean and wither are applied when it is stamped.
+      roseSprite(B, cx, cy, R, rot, e, a) {
+        const g = B.ctx, m = g.getTransform ? g.getTransform() : null, scale = m ? Math.hypot(m.a, m.b) : (this.dpr || 1);
+        let sp = e._spr;
+        if (!sp || R > sp.R * 1.06 || Math.abs(scale - sp.scale) > 0.01) {
+          let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+          const grow = (p, pad) => { for (const q of p) { if (q[0] - pad < x0) x0 = q[0] - pad; if (q[1] - pad < y0) y0 = q[1] - pad; if (q[0] + pad > x1) x1 = q[0] + pad; if (q[1] + pad > y1) y1 = q[1] + pad; } };
+          this._noSprite = true;
+          try {
+            this.roseCustomized({ fill: p => grow(p, 1), stroke: (p, c, w) => grow(p, w / 2 + 1) }, 0, 0, R, 0, e, a, null);
+            if (x1 < x0) { this._noSprite = false; return; }
+            const w = x1 - x0, h = y1 - y0, cw = Math.max(1, Math.ceil(w * scale)), ch = Math.max(1, Math.ceil(h * scale));
+            // An ImageBitmap is immutable and cheap to stamp; fall back to a plain canvas where OffscreenCanvas is missing
+            const off = typeof OffscreenCanvas !== 'undefined', cv = off ? new OffscreenCanvas(cw, ch) : document.createElement('canvas');
+            if (!off) { cv.width = cw; cv.height = ch; }
+            const sg = cv.getContext('2d');
+            sg.setTransform(scale, 0, 0, scale, -x0 * scale, -y0 * scale);
+            this.roseCustomized(this.backend(sg), 0, 0, R, 0, e, a, null);
+            sp = e._spr = { cv: off && cv.transferToImageBitmap ? cv.transferToImageBitmap() : cv, R, scale, x0, y0, w, h };
+          } finally {
+            this._noSprite = false;
+          }
+        }
+        const k = R / sp.R;
+        g.save();
+        g.translate(cx, cy); g.rotate(rot); g.scale(k, k);
+        g.drawImage(sp.cv, sp.x0, sp.y0, sp.w, sp.h);
+        g.restore();
+      }
+
+      // Petals let go by open roses drift down, swaying and tumbling (front face velvet, reverse paler), and fade out
+      drawFallingPetals(B, dt) {
+        const F = this.petalFall;
+        for (let i = F.length - 1; i >= 0; i--) {
+          const p = F[i];
+          p.t += dt;
+          p.vy += (p.term - p.vy) * Math.min(1, dt * 1.5);
+          p.x += (p.vx + Math.sin(p.t * p.sw + p.ph) * p.amp) * dt;
+          p.y += p.vy * dt;
+          p.rot += p.spin * dt; p.flip += p.fs * dt;
+          if (p.t > p.life || p.y > (this.H || 2000) + 60) { F.splice(i, 1); continue; }
+          const fade = Math.min(1, p.t / 0.4, (p.life - p.t) / 1.5), fl = Math.cos(p.flip), sx = Math.max(0.12, Math.abs(fl));
+          const cr = Math.cos(p.rot + Math.sin(p.t * p.sw + p.ph) * 0.5), sr = Math.sin(p.rot + Math.sin(p.t * p.sw + p.ph) * 0.5);
+          const Lp = p.s, Wp = p.s * 0.85, N = 10, left = [], right = [];
+          for (let k = 0; k <= N; k++) {
+            const u = k / N, hw = Wp / 2 * (0.35 + 0.65 * Math.sin(Math.min(1, u / 0.65) * Math.PI / 2)) *
+              (u > 0.7 ? Math.sqrt(Math.max(0, 1 - Math.pow((u - 0.7) / 0.3, 2))) : 1);
+            left.push([-hw, Lp / 2 - u * Lp]); right.push([hw, Lp / 2 - u * Lp]);
+          }
+          const tr = q => { const x = q[0] * sx; return [p.x + x * cr - q[1] * sr, p.y + x * sr + q[1] * cr]; };
+          const poly = [...left, ...right.reverse()].map(tr), b0 = tr([0, Lp / 2]), b1 = tr([0, -Lp / 2]);
+          const l = 0.55 + 0.45 * Math.abs(fl), c = fl > 0 ? [172, 8, 24] : [190, 40, 52];
+          const col = m => `rgba(${(c[0] * l * m) | 0},${(c[1] * l * m) | 0},${(c[2] * l * m) | 0},${fade.toFixed(3)})`;
+          B.fill(poly, { x0: b0[0], y0: b0[1], x1: b1[0], y1: b1[1], stops: [[0, col(0.5)], [0.6, col(0.95)], [1, col(1.1)]] });
         }
       }
 
       renderCustomized(B, now, st) {
         const S = st.S, L = st.letters, act = L.filter(l => !l.dead), sp = st.speed || 1;
         this._now = now;
+        if (st.vine) {
+          this.petalFall = this.petalFall || [];
+          this._dt = Math.min(0.05, Math.max(0, (now - (this._pfT || now)) / 1000)); this._pfT = now; this._S = S;
+        }
+        // Vine choreography: growth runs on a slower clock (G), and leaves and roses wait for the vine tip to reach them
+        this._vine = !!st.vine; this._G = st.vine ? 1.6 : 1;
         if (st.face) this.perch = [];
         if (st.face) for (const l of L) {
           let tx = 0, ty = 0;
@@ -1844,19 +2125,23 @@
         const f = st.boil ? Math.floor(now / 120) : 0, amp = st.boil ? Math.max(0.8, S * 0.01) : 0;
         const kd = l => l.dead ? 1 - this.eo((now - l.dead) / st.wither) : 1;
 
+        if (st.vine && this.fontsReady) for (const l of L) if (l.wrapEls === undefined && l.ch !== ' ') this.genWrap(l);
+
         const drawCustom = layer => {
           for (const l of L) {
             if (l.ch === ' ' || !l.els) continue;
-            const age = (now - l.birth) * sp, kk = kd(l);
-            const each = e => {
+            const age = (now - l.birth) * sp / this._G, kk = kd(l);
+            const each = (e, _, arr) => {
+              if (st.vine && this.thinned(e, arr)) return;
               if (e.t === 'stem') {
                 this.drawStemCustomized(B, e, l, age, kk, st, f, amp, layer);
-              } else if (e.layer === layer) {
+              } else if ((e.cLayer != null ? e.cLayer : e.layer) === layer) {
                 this.drawElCustomized(B, e, l, age, kk, st, f, amp);
               }
             };
             l.els.forEach(each);
             if (l.endEls) l.endEls.forEach(each);
+            if (st.vine && l.wrapEls) l.wrapEls.forEach(each);
             const i = act.indexOf(l), nx = i >= 0 ? act[i + 1] : null;
             if (l.tend && (l.dead || !nx || nx.ch === ' ')) {
               let fr = this.eo(((now - l.tb) * sp - 150) / 450);
@@ -1878,6 +2163,7 @@
 
         // Layer 1: in front of text glyphs
         drawCustom(1);
+        if (st.vine) this.drawFallingPetals(B, this._dt);
       }
 
       drawSplitDivider(g, splitX, H, isPoster = false) {
@@ -2271,10 +2557,18 @@
           : this.mainState();
 
         const svgElements = [];
+        let gradN = 0;
         const svgBackend = {
           fill: (p, col) => {
             if (!p || p.length < 2) return;
             const d = this.pathToSvg(p, true);
+            if (typeof col !== 'string') {
+              // Gradient fill {x0, y0, x1, y1, stops} -> userSpaceOnUse linearGradient
+              const id = `lg${gradN++}`;
+              const stops = col.stops.map(s => `<stop offset="${s[0]}" stop-color="${s[1]}" />`).join('');
+              svgElements.push(`<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${col.x0.toFixed(2)}" y1="${col.y0.toFixed(2)}" x2="${col.x1.toFixed(2)}" y2="${col.y1.toFixed(2)}">${stops}</linearGradient>`);
+              col = `url(#${id})`;
+            }
             svgElements.push(`<path d="${d}" fill="${col}" />`);
           },
           stroke: (p, col, w) => {
@@ -2293,7 +2587,7 @@
 
         if (treatment === 'customized') {
           svgElements.push(`<rect width="${W}" height="${H}" fill="#000000" />`);
-          const stCustom = { ...st, C: { red: '#C41A30', blue: '#1C4528', line: '#F07082', text: '#FFFFFF', vein: '#000000' } };
+          const stCustom = { ...st, vine: !isPoster, C: { red: '#C41A30', blue: '#1C4528', line: '#F07082', text: '#FFFFFF', vein: '#000000' } };
           this.renderCustomized(svgBackend, performance.now(), stCustom);
         } else if (treatment === 'baseline') {
           svgElements.push(`<rect width="${W}" height="${H}" fill="${pal.bg}" />`);
@@ -2312,7 +2606,7 @@
           // Customized right
           svgElements.push(`<g clip-path="url(#clip-customized)">`);
           svgElements.push(`<rect width="${W}" height="${H}" fill="#000000" />`);
-          const stCustom = { ...st, C: { red: '#C41A30', blue: '#1C4528', line: '#F07082', text: '#FFFFFF', vein: '#000000' } };
+          const stCustom = { ...st, vine: !isPoster, C: { red: '#C41A30', blue: '#1C4528', line: '#F07082', text: '#FFFFFF', vein: '#000000' } };
           this.renderCustomized(svgBackend, performance.now(), stCustom);
           svgElements.push(`</g>`);
           // Hairline divider
