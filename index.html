@@ -176,6 +176,13 @@
       cursor: default;
     }
     [data-tg="appearance"][hidden] { display: none; }
+    [data-tg="appearance"] { max-height: calc(100vh - 96px); overflow-y: auto; }
+    [data-tg="ap-fx"] { display: flex; flex-direction: column; gap: 5px; margin-top: -2px; }
+    [data-tg="ap-fx"][hidden] { display: none; }
+    [data-tg="ap-fxrow"] { display: flex; align-items: center; gap: 7px; min-height: 18px; }
+    [data-tg="ap-fxrow"] > span { width: 78px; flex: none; white-space: nowrap; }
+    [data-tg="ap-fxrow"] input[type="range"] { flex: 1; min-width: 0; height: 14px; margin: 0; accent-color: #EDEDED; cursor: pointer; }
+    [data-tg="ap-fxval"] { width: 34px; flex: none; text-align: right; color: #8C8C8C; font-size: 10px; }
     [data-tg="ap-row"] { display: flex; align-items: center; gap: 7px; min-height: 22px; }
     [data-tg="ap-row"] > span:not([data-tg]) { width: 64px; flex: none; }
     [data-tg="ap-row"] > span:not([data-tg]) + input + span { width: auto; margin-left: auto; }
@@ -339,6 +346,10 @@
       <div data-tg="ap-row"><span>Butterfly</span><input type="color" data-ap="wing" aria-label="Butterfly wing colour"><input type="color" data-ap="wingMarks" aria-label="Butterfly marking colour"></div>
       <div data-tg="ap-row"><span>Font</span><select data-ap="font" aria-label="Typeface"></select><button type="button" data-tg="ap-upload" title="Use your own font file (.ttf, .otf, .woff or .woff2)">Upload</button><input type="file" data-tg="ap-file" accept=".ttf,.otf,.woff,.woff2" hidden></div>
       <div data-tg="ap-note" aria-live="polite"></div>
+      <div data-tg="ap-row"><span>Bleeding</span><span data-tg="ap-seg" role="radiogroup" aria-label="How the blood behaves"><button type="button" role="radio" data-bleed="legacy" title="The original splatter, with trails that creep down and drip">legacy</button><button type="button" role="radio" data-bleed="fluid" title="Rivulets that wander down the letters, pool and hang beads">fluid</button><button type="button" role="radio" data-bleed="custom" title="Your own">custom</button></span></div>
+      <div data-tg="ap-fx" hidden>
+        <div data-tg="ap-row"><span>Based on</span><span data-tg="ap-seg" role="radiogroup" aria-label="Trail style"><button type="button" role="radio" data-fxstyle="legacy" title="Start from the legacy effect's values: splatter, with trails creeping straight down">legacy</button><button type="button" role="radio" data-fxstyle="fluid" title="Start from the fluid effect's values: rivulets traced over the letters">fluid</button></span></div>
+      </div>
       <div data-tg="ap-warn" aria-live="polite"></div>
     </div>
 
@@ -524,6 +535,29 @@
         // middle tone of its shading; the leaf stalk, the leaf's lit, middle and dark tones and the light along its midrib; the
         // sepal and hip ramp (shadow, body, lit); and where thorns grow from the cane (the small prickle's base, the hooked
         // thorn's root). A rewritten letter's regrowth still starts bronze and greens over to these.
+        // How blood (or ichor) behaves, whatever its colour: the bleeding presets, each a trail style (legacy: splatter with
+        // trails creeping straight down the strokes and dripping from their ends; fluid: rivulets traced over the ink that
+        // pool and hang beads) with the values it was made with, and the controls a custom effect is built from (min, max,
+        // step). Each style reads the controls in its own way (see addStainLegacy, addStainFluid).
+        this.BLEEDS = [
+          { id: 'legacy', name: 'Legacy', fx: { style: 'legacy', amount: 1, trails: 1.45, thick: 1, length: 1, wander: 0.25, splat: 1, splatSize: 1, beads: 1, pool: 0, merge: 0, dry: 25, gloss: 1, aged: 1 } },
+          { id: 'fluid', name: 'Fluid', fx: { style: 'fluid', amount: 1, trails: 1.3, thick: 1, length: 1, wander: 0.5, splat: 1, splatSize: 1, beads: 1, pool: 1, merge: 1, dry: 25, gloss: 1, aged: 1 } }
+        ];
+        this.BLEED_CONTROLS = [
+          { k: 'amount', label: 'Amount', min: 0.25, max: 3, step: 0.05, title: 'How much a bitten rose bleeds' },
+          { k: 'trails', label: 'Trails', min: 0, max: 4, step: 0.05, title: 'Drip trails from each splash, on average' },
+          { k: 'thick', label: 'Thickness', min: 0.4, max: 2.5, step: 0.05, title: 'How thick the trails run' },
+          { k: 'length', label: 'Length', min: 0.15, max: 2.5, step: 0.05, title: 'How far the trails run down, and how long the drips hang' },
+          { k: 'wander', label: 'Wander', min: 0, max: 1, step: 0.01, title: 'Straight trails, or wandering ones' },
+          { k: 'splat', label: 'Splatter', min: 0, max: 3, step: 0.05, title: 'How many droplets a splash throws' },
+          { k: 'splatSize', label: 'Splat size', min: 0.4, max: 2.5, step: 0.05, title: 'How big the splashes and their droplets are' },
+          { k: 'beads', label: 'Beads', min: 0, max: 3, step: 0.05, title: 'Beads and drips at the ends of the trails' },
+          { k: 'pool', label: 'Pooling', min: 0, max: 2, step: 0.05, title: 'Blood pooling where a trail meets an edge' },
+          { k: 'merge', label: 'Merging', min: 0, max: 2, step: 0.05, title: 'New trails following older wet ones' },
+          { k: 'dry', label: 'Drying', min: 5, max: 120, step: 1, title: 'Seconds the blood takes to dry' },
+          { k: 'gloss', label: 'Gloss', min: 0, max: 2, step: 0.05, title: 'The wet shine, and the glow of ichor' },
+          { k: 'aged', label: 'Dried look', min: 0, max: 2, step: 0.05, title: 'Stays fresh-looking, dries darker and matte, or darkens further and fades' }
+        ];
         this.VINES = {
           green: { stem: '#163a20', stemLit: '#4f8f5b', stemMid: '#24592f', stalk: '#183d22', leafLit: '#36763f', leafMid: '#1d4c28',
             leafDark: '#11301a', leafRim: '#96c896', sepal: ['#0c1e10', '#1c4224', '#3a7040'], prickle: '#2b3a20', thornRoot: '#1f2914' }
@@ -555,6 +589,7 @@
           preset: 'breathe',
           palette: 0,
           look: 'crimson', // the customized view's preset (see LOOKS)
+          bleed: 'legacy', // its bleeding effect: a preset (see BLEEDS) or 'custom'
           text: 'in bloom',
           seed: 7,
           status: '',
@@ -563,6 +598,7 @@
 
         this.appearance = { ...this.look().appearance, font: 'playfair' }; // what the customized garden is drawn in (see LOOKS, compileTheme)
         this.STORE = 'typeGarden.appearance'; // where the visitor's appearance is kept in their browser
+        this.bloodFx = this.BLEEDS[0].fx; // how the blood behaves (see setBleed)
         this.restoreAppearance();
 
         this.init();
@@ -935,11 +971,11 @@
       }
       // ---------- Kept in the browser ----------
       // The visitor's appearance (the preset or 'custom', the appearance in use with its typeface, and their custom appearance)
-      // is written at most every 300 ms (see paint) and read back on load. Storage can be missing or refuse; then nothing is
+      // and bleeding effect (likewise) are written at most every 300 ms (see paint) and read back on load. Storage can be missing or refuse; then nothing is
       // kept, and the garden behaves exactly the same.
       storeAppearance() {
         this._unsaved = false;
-        try { localStorage.setItem(this.STORE, JSON.stringify({ look: this.state.look, appearance: this.appearance, custom: this.customAppearance || null })); } catch (e) { /* not kept */ }
+        try { localStorage.setItem(this.STORE, JSON.stringify({ look: this.state.look, appearance: this.appearance, custom: this.customAppearance || null, bleed: this.bleed(), bleedCustom: this.customBleed || null })); } catch (e) { /* not kept */ }
       }
       restoreAppearance() {
         let saved = null;
@@ -964,6 +1000,16 @@
           this._theme = null;
         }
         if (C) this.customAppearance = C;
+        const fx = this.cleanBleed(saved.bleedCustom), P = this.BLEEDS.find(b => b.id === saved.bleed);
+        if (fx) this.customBleed = fx;
+        if (P || (saved.bleed === 'custom' && fx)) { this.state.bleed = saved.bleed; this.bloodFx = P ? P.fx : fx; }
+      }
+      // A kept custom effect, its values checked (anything unrecognised keeps the legacy preset's), or null
+      cleanBleed(F) {
+        if (!F || typeof F !== 'object') return null;
+        const out = { ...this.BLEEDS[0].fx, style: F.style === 'fluid' ? 'fluid' : 'legacy' };
+        for (const c of this.BLEED_CONTROLS) if (typeof F[c.k] === 'number' && Number.isFinite(F[c.k])) out[c.k] = Math.min(c.max, Math.max(c.min, F[c.k]));
+        return out;
       }
       // ---------- Custom appearance ----------
       // A small panel over the artwork whose controls show, and set, the appearance in use, whichever look it started from
@@ -1013,6 +1059,49 @@
         this._unsaved = true;
         this.syncAppearanceUI();
       }
+      // ---------- Bleeding ----------
+      // How the blood (or ichor) behaves, apart from its colour: a preset (see BLEEDS), or the visitor's own, built on either
+      // trail style with the controls of BLEED_CONTROLS and started from the effect showing (or from a style's own values; see
+      // baseBleed). A new effect is for the splashes to come; the marks already on the letters keep the effect they were made
+      // with, though their gloss, drying and dried look follow the one in use. Returns whether anything changed.
+      bleed() { return this.state.bleed || 'legacy'; }
+      setBleed(id) {
+        const P = this.BLEEDS.find(b => b.id === id);
+        if ((!P && id !== 'custom') || id === this.bleed()) return false;
+        if (!P) this.customBleed = this.customBleed || { ...this.fx() };
+        this.state.bleed = id;
+        this.bloodFx = P ? P.fx : this.customBleed;
+        this._unsaved = true;
+        if (this.apOpen) this.syncAppearanceUI();
+        return true;
+      }
+      // The custom effect started over on one trail style, from that style's own values (its preset's), so the controls always
+      // describe one style as it was made rather than a mix of the two; choosing the style already in use starts it over too
+      baseBleed(style) {
+        const P = this.BLEEDS.find(b => b.fx.style === style);
+        if (!P) return false;
+        this.bloodFx = this.customBleed = { ...P.fx };
+        this.state.bleed = 'custom';
+        this._unsaved = true;
+        if (this.apOpen) this.syncAppearanceUI();
+        return true;
+      }
+      // An edit to a control of the custom effect (its trail style is chosen with baseBleed): applied, and kept as the
+      // visitor's own
+      editBleed(patch) {
+        const F = this.fx(), next = { ...F };
+        for (const k in patch) {
+          const c = this.BLEED_CONTROLS.find(x => x.k === k), v = +patch[k];
+          if (c && Number.isFinite(v)) next[k] = Math.min(c.max, Math.max(c.min, v));
+        }
+        if (this.bleed() === 'custom' && Object.keys(next).every(k => next[k] === F[k])) return false;
+        this.bloodFx = this.customBleed = next; // (a new object: the marks made before keep theirs)
+        this.state.bleed = 'custom';
+        this._unsaved = true;
+        if (this.apOpen) this.syncAppearanceUI();
+        return true;
+      }
+      fxLabel(k, v) { return k === 'dry' ? `${Math.round(v)} s` : String(+(+v).toFixed(2)); }
       // The panel's controls follow the appearance in use (a control being dragged is left alone), the Custom swatch shows
       // its colours, and the warning line names any contrast worry
       syncAppearanceUI() {
@@ -1024,6 +1113,17 @@
           el.value = el.type === 'color' ? v.toLowerCase() : el.dataset.ap === 'font' ? this._fontWant || v : v; // (a typeface loading shows)
         }
         for (const b of this.apEl.querySelectorAll('[data-role]')) b.setAttribute('aria-checked', String(b.dataset.role === A.secondaryRole));
+        // the bleeding effect: its preset, and the custom controls (shown for a custom effect)
+        const F = this.fx(), bleed = this.bleed(), box = this.apEl.querySelector('[data-tg="ap-fx"]');
+        for (const b of this.apEl.querySelectorAll('[data-bleed]')) b.setAttribute('aria-checked', String(b.dataset.bleed === bleed));
+        for (const b of this.apEl.querySelectorAll('[data-fxstyle]')) b.setAttribute('aria-checked', String(b.dataset.fxstyle === F.style));
+        if (box) box.hidden = bleed !== 'custom';
+        for (const el of this.apEl.querySelectorAll('[data-fx]')) {
+          const v = F[el.dataset.fx];
+          if (el !== active) el.value = String(v);
+          const out = el.nextElementSibling;
+          if (out) out.textContent = this.fxLabel(el.dataset.fx, v);
+        }
         const warn = this.apEl.querySelector('[data-tg="ap-warn"]');
         if (warn) warn.textContent = this.contrastWarning(A);
         const sw = this.customSwatchEl, C = this.customAppearance || A;
@@ -1034,19 +1134,35 @@
         if (!panel) return;
         const menu = panel.querySelector('[data-ap="font"]'), file = panel.querySelector('[data-tg="ap-file"]');
         this.buildFontMenu();
+        // one slider for each of the custom bleeding's controls
+        const box = panel.querySelector('[data-tg="ap-fx"]'), doc = panel.ownerDocument;
+        if (box) for (const c of this.BLEED_CONTROLS) {
+          const row = doc.createElement('label'), name = doc.createElement('span'), input = doc.createElement('input'), out = doc.createElement('output');
+          row.setAttribute('data-tg', 'ap-fxrow'); row.title = c.title;
+          name.textContent = c.label;
+          Object.assign(input, { type: 'range', min: String(c.min), max: String(c.max), step: String(c.step) });
+          input.dataset.fx = c.k; input.setAttribute('aria-label', c.label);
+          out.setAttribute('data-tg', 'ap-fxval');
+          row.append(name, input, out);
+          box.appendChild(row);
+        }
         const upload = panel.querySelector('[data-tg="ap-upload"]');
         if (upload && file) {
           upload.addEventListener('click', () => file.click());
           file.addEventListener('change', () => { const f = file.files && file.files[0]; file.value = ''; if (f) this.uploadFont(f); });
         }
         panel.addEventListener('input', e => {
-          const k = e.target.dataset && e.target.dataset.ap;
+          const k = e.target.dataset && e.target.dataset.ap, f = e.target.dataset && e.target.dataset.fx;
           if (k && k !== 'font') this.editAppearance({ [k]: e.target.value });
+          else if (f) this.editBleed({ [f]: e.target.value });
         });
         panel.addEventListener('change', e => { if (e.target === menu) this.setFont(menu.value); });
         panel.addEventListener('click', e => {
           const b = e.target.closest && e.target.closest('[data-role]');
           if (b) this.editAppearance({ secondaryRole: b.dataset.role });
+          const p = e.target.closest && e.target.closest('[data-bleed]'), y = e.target.closest && e.target.closest('[data-fxstyle]');
+          if (p) this.setBleed(p.dataset.bleed);
+          if (y) this.baseBleed(y.dataset.fxstyle);
         });
         panel.addEventListener('pointerdown', e => e.stopPropagation()); // a click in the panel never reaches the garden
       }
@@ -1262,11 +1378,25 @@
           const st = stains[i], at = st.l.ch === ' ' ? null : this.nearestInk(st.l.ch, st.lx, st.ly, 0.18);
           if (!at) { stains.splice(i, 1); continue; }
           [st.lx, st.ly] = at;
-          st.runs = st.runs.filter(run => {
-            run.y1 = this.inkEnd(st.l.ch, st.lx + run.dx, st.ly);
-            run.len = Math.min(run.len, Math.max(0, run.y1 - st.ly));
-            return run.y1 - st.ly > 0.02;
-          });
+          if (!this.fluid(st)) {
+            st.runs = st.runs.filter(run => {
+              run.y1 = this.inkEnd(st.l.ch, st.lx + run.dx, st.ly);
+              run.len = Math.min(run.len, Math.max(0, run.y1 - st.ly));
+              return run.y1 - st.ly > 0.02;
+            });
+            continue;
+          }
+          st.lobes = this.splashLobes(st.l.ch, st, this.rng(Math.floor(st.seed * 7919) + 3));
+          st.specks = (st.specks || []).filter(p => this.inkAt(st.l.ch, p.x, p.y));
+          for (const run of st.runs) {
+            const t = this.tracePath(st.l.ch, st.lx + run.dx, st.ly + st.r * 0.25, run.seed || 0, run.w * 0.5, this.stFx(st).wander / 0.5);
+            Object.assign(run, this.runGeometry(t.pts), { end: t.pts[t.pts.length - 1], edge: t.edge, ledge: t.ledge, joined: false });
+            run.len = Math.min(run.len, run.total);
+            if (run.len < run.total - 1e-9) run.bead = null;
+            if (!run.stalls) run.stalls = [];
+            if (run.reach == null) run.reach = run.total;
+          }
+          st.runs = st.runs.filter(run => run.path.length >= 2);
         }
       }
       // The nearest point of a letter's ink to (lx, ly), within reach (em), or null
@@ -3515,13 +3645,19 @@
 
       // ---------- Blood (customized view, canvas only) ----------
       // A rose a visitor has fed on bleeds a few drops. Each beads on the lowest petals (over a letter where it can), falls,
-      // and splashes onto the letter below. From the splash, blood creeps slowly down the stroke to its bottom edge, where a
-      // bead swells and drips off (onto a letter further down, if there is one). The blood darkens as it dries and stays
-      // for as long as the letter does.
+      // and splashes onto the letter below. What the blood does there is the bleeding effect's (see BLEEDS): in the legacy
+      // style it creeps slowly down the stroke to its bottom edge, where a bead swells and drips off (onto a letter further
+      // down, if there is one); in the fluid style it runs down the letter along the ink, pools at the edge it reaches and
+      // hangs beads that stretch and let go (see addStainFluid). Either way it darkens as it dries and stays for as long as the
+      // letter does. Its colour and material are the appearance's (see ICHOR); a splash keeps the effect it was made with.
       biteRose(id, now) {
         const bites = this.bites || (this.bites = {});
-        if (id != null && !bites[id]) bites[id] = { t: now, next: now + 250, n: 0, max: 4 + Math.floor(Math.random() * 3) };
+        if (id != null && !bites[id]) bites[id] = { t: now, next: now + 250, n: 0, max: Math.max(1, Math.round((4 + Math.floor(Math.random() * 3)) * this.fx().amount)) };
       }
+      // The bleeding effect in use (a preset's, or the visitor's own; see setBleed), and the one a splash was made with
+      fx() { return this.bloodFx || this.BLEEDS[0].fx; }
+      stFx(st) { return st.fx || this.BLEEDS[0].fx; }
+      fluid(st) { return this.stFx(st).style === 'fluid'; }
       // Ink rows of a letter keyed by floor(y * 80) (em units, the same 2px rows as the glyph scan)
       inkIndex(ch) {
         const L = this._inkIdx || (this._inkIdx = {});
@@ -3586,7 +3722,13 @@
           }
           if (d.st === 'spray') {
             d.vy += grav * dt; d.x += d.vx * dt; d.y += d.vy * dt;
-            if (d.t > 0.45) drops.splice(i, 1);
+            // (fluid) a droplet coming back down onto its letter leaves a speck there
+            const st = d.stain, l = st && st.l;
+            if (l && !l.dead && d.vy > 0 && d.t > 0.06) {
+              const lx = (d.x - l.x) / S, ly = (d.y - l.y) / S;
+              if (this.inkAt(l.ch, lx, ly)) { st.specks.push({ x: lx, y: ly, s: d.r / S, a: Math.atan2(d.vy, d.vx), e: 1.2 + Math.random() * 0.8 }); drops.splice(i, 1); continue; }
+            }
+            if (d.t > (d.life || 0.45)) drops.splice(i, 1);
             continue;
           }
           const px = d.x, py = d.y;
@@ -3604,53 +3746,115 @@
             if (hit) { d.x = hx; d.y = hy; }
           }
           if (hit) {
-            this.addStain(hit, d.r / S * (2.0 + Math.random() * 0.7), now);
-            for (let k = 0; k < 4; k++) drops.push({ st: 'spray', x: d.x, y: d.y, vx: (Math.random() - 0.5) * S * 1.2, vy: -S * (0.3 + Math.random() * 0.6), r: d.r * (0.2 + Math.random() * 0.2), t: 0 });
+            const st = this.addStain(hit, d.r / S * (2.0 + Math.random() * 0.7), now);
+            this.splashSpray(d, st, S);
             drops.splice(i, 1);
           } else if (d.y > (this.H || 2000) + 30) drops.splice(i, 1);
         }
-        // trails creep down their strokes; at the bottom a bead swells and drips off
+        // the splashes' blood moves on, each in its own effect (see stepLegacy, flowRun)
         for (let i = stains.length - 1; i >= 0; i--) {
           const st = stains[i];
           if (st.l.dead || !L.includes(st.l)) { stains.splice(i, 1); continue; }
           if (st.done) continue;
           let live = false;
-          for (const run of st.runs) {
-            const total = run.y1 - st.ly;
-            if (run.len < total) { run.len = Math.min(total, run.len + run.v * dt * (1 - 0.45 * run.len / total)); live = true; continue; }
-            if (run.dropped) continue;
-            run.bead = Math.min(1, run.bead + dt / 1.6); live = true;
-            if (run.bead >= 1) {
-              run.dropped = true;
-              drops.push({ st: 'fall', id: null, x: st.l.x + (st.lx + run.dx + run.wob) * S, y: st.l.y + run.y1 * S + run.w * S * 0.6, vx: 0, vy: 0, r: run.w * S * 0.75, t: 0 });
-            }
-          }
+          if (this.fluid(st)) { for (const run of st.runs) if (this.flowRun(st, run, now, dt, S)) live = true; }
+          else live = this.stepLegacy(st, dt, S, drops);
           if (!live) { st.done = true; st.doneT = now; }
         }
       }
-      // A splash on a letter, with one or two trails. Repeat visits add to the marks already there.
-      addStain(hit, r, now) {
-        const stains = this.stains, runs = [];
+      // A splash on a letter, in the bleeding effect in use (which it keeps). Repeat visits add to the marks already there.
+      addStain(hit, r, now) { return this.fx().style === 'fluid' ? this.addStainFluid(hit, r, now) : this.addStainLegacy(hit, r, now); }
+      splashSpray(d, st, S) { if (this.fluid(st)) this.splashSprayFluid(d, st, S); else this.splashSprayLegacy(d, st, S); }
+      paintStain(g, l, st, S, now) { if (this.fluid(st)) this.paintStainFluid(g, l, st, S, now); else this.paintStainLegacy(g, l, st, S, now); }
+      paintStainBeads(g, l, st, S, now) { if (this.fluid(st)) this.paintBeadsFluid(g, l, st, S, now); else this.paintBeadsLegacy(g, l, st, S, now); }
+      // How big a trail's beads are, for the effect's beads (none at 0)
+      beadScale(fx) { return fx.beads > 0 ? 0.75 + 0.25 * Math.min(fx.beads, 3) : 0; }
+
+      // ---------- Legacy bleeding ----------
+      // A splash with one or two trails (as many as the effect has), each running straight down the stroke below it to the
+      // stroke's bottom edge (or part of the way, for short trails). With merging, a trail that starts close beside an older
+      // one runs down that one's channel.
+      addStainLegacy(hit, r, now) {
+        const fx = this.fx(), stains = this.stains, runs = [], f = fx.wander / 0.25;
         const trail = (dx, w) => {
+          const ch = fx.merge > 0 ? this.legacyChannel(hit, dx, fx.merge) : null;
+          if (ch) dx = ch.dx;
           const y1 = this.inkEnd(hit.l.ch, hit.lx + dx, hit.ly);
-          if (y1 - hit.ly > 0.02) runs.push({ dx, w, y1, len: 0, v: 0.035 + Math.random() * 0.03, wob: (Math.random() - 0.5) * 0.02, bead: 0, dropped: false });
+          if (y1 - hit.ly > 0.02) {
+            const run = { dx, w, y1, len: 0, v: 0.035 + Math.random() * 0.03, wob: (Math.random() - 0.5) * 0.02 * f, bead: 0, dropped: false };
+            if (ch) run.wob = ch.wob;
+            runs.push(run);
+          }
         };
-        trail(0, r * 0.5);
-        if (Math.random() < 0.45) trail((Math.random() < 0.5 ? -1 : 1) * r * (0.9 + Math.random() * 0.5), r * 0.3);
-        stains.push({ l: hit.l, lx: hit.lx, ly: hit.ly, r, born: now, seed: Math.random() * 100, runs, done: !runs.length, doneT: now });
+        const T = fx.trails;
+        if (T >= 1 || Math.random() < T) trail(0, r * 0.5 * fx.thick);
+        for (let k = 1, side = 0; k < 4 && T > k; k++) {
+          if (T - k < 1 && !(Math.random() < T - k)) break;
+          side = side ? -side : Math.random() < 0.5 ? -1 : 1;
+          trail(side * r * (0.9 + Math.random() * 0.5) * (k > 2 ? 1.7 : 1), r * 0.3 * fx.thick);
+        }
+        const st = { l: hit.l, lx: hit.lx, ly: hit.ly, r: r * fx.splatSize, born: now, seed: Math.random() * 100, runs, done: !runs.length, doneT: now, fx };
+        stains.push(st);
+        return st;
       }
+      // (the older legacy trail on the letter whose line passes within reach of a new trail's start, as { dx, wob } to follow
+      // it down to its end, or null)
+      legacyChannel(hit, dx, merge) {
+        let best = null, near = 0.035 * merge;
+        for (const s of this.stains) {
+          if (s.l !== hit.l || this.fluid(s)) continue;
+          for (const q of s.runs) {
+            const span = q.y1 - s.ly, t = (hit.ly - s.ly) / Math.max(1e-6, span);
+            if (t < -0.1 || t > 0.85) continue;
+            const x = s.lx + q.dx + q.wob * Math.max(0, t), d = Math.abs(x - (hit.lx + dx));
+            if (d < near) { near = d; best = { dx: x - hit.lx, wob: s.lx + q.dx + q.wob - x }; }
+          }
+        }
+        return best;
+      }
+      // How far a trail runs (all the way down unless the effect's trails are short), and how many drips its bead lets go
+      legacyStop(st, run, fx) {
+        const total = run.y1 - st.ly;
+        return fx.length >= 1 ? total : total * Math.min(1, fx.length * (0.7 + 0.6 * this.h(st.seed + run.dx * 31)));
+      }
+      legacyDrips(st, fx) { return fx.beads > 0 ? Math.floor(fx.beads) + (this.h(st.seed * 3.7) < fx.beads % 1 ? 1 : 0) : 0; }
+      // Each trail creeps down (slowing as it goes); at the bottom edge a bead swells and drips off
+      stepLegacy(st, dt, S, drops) {
+        const fx = this.stFx(st), drips = this.legacyDrips(st, fx);
+        let live = false;
+        for (const run of st.runs) {
+          const total = run.y1 - st.ly, stop = this.legacyStop(st, run, fx);
+          if (run.len < stop) { run.len = Math.min(stop, run.len + run.v * dt * (1 - 0.45 * run.len / stop)); live = true; continue; }
+          if (run.dropped || stop < total || !drips) continue;
+          run.bead = Math.min(1, run.bead + dt / 1.6); live = true;
+          if (run.bead >= 1) {
+            drops.push({ st: 'fall', id: null, x: st.l.x + (st.lx + run.dx + run.wob) * S, y: st.l.y + run.y1 * S + run.w * S * 0.6, vx: 0, vy: 0, r: run.w * S * 0.75 * this.beadScale(fx), t: 0 });
+            if (drips > 1 && (run.n = (run.n || 1) + 1) <= drips) run.bead = 0.25; else run.dropped = true;
+          }
+        }
+        return live;
+      }
+      splashSprayLegacy(d, st, S) {
+        const fx = this.stFx(st), drops = this.drops || (this.drops = []);
+        for (let k = 0, n = Math.round(4 * fx.splat); k < n; k++) drops.push({ st: 'spray', x: d.x, y: d.y, vx: (Math.random() - 0.5) * S * 1.2, vy: -S * (0.3 + Math.random() * 0.6), r: d.r * (0.2 + Math.random() * 0.2) * fx.splatSize, t: 0 });
+      }
+      // The colour of legacy blood dry by `dry` (0 to 1), for the dried look in use: none (0), the dried colour (1), or darker
+      // still (up to 2), when it also fades
+      legacyTone(I, dry, aged) { return I.wet.map((v, i) => Math.max(0, v - (v - I.dry[i]) * (dry * aged))); }
+      legacyAlpha(dry, aged) { return aged > 1 ? +(0.95 * (1 - 0.5 * (aged - 1) * dry)).toFixed(3) : 0.95; }
       // One stain: the splash, its satellite droplets and its trails (masked to the glyph by paintLetterStains), in what the
       // look's roses bleed (see ICHOR); ichor glows faintly within the letter
-      paintStain(g, l, st, S, now) {
-        const dry = Math.min(1, (now - st.born) / 25000), age = now - st.born, I = this.theme().blood;
-        const c = I.wet.map((v, i) => v - (v - I.dry[i]) * dry), col = m => `rgba(${(c[0] * m) | 0},${(c[1] * m) | 0},${(c[2] * m) | 0},0.95)`;
+      paintStainLegacy(g, l, st, S, now) {
+        const F = this.fx(), fx = this.stFx(st), Tk = F.dry / 25, G = F.gloss, f = fx.wander / 0.25;
+        const dry = Math.min(1, (now - st.born) / (F.dry * 1000)), age = now - st.born, I = this.theme().blood;
+        const c = this.legacyTone(I, dry, F.aged), al = this.legacyAlpha(dry, F.aged), col = m => `rgba(${(c[0] * m) | 0},${(c[1] * m) | 0},${(c[2] * m) | 0},${al})`;
         const cx = l.x + st.lx * S, cy = l.y + st.ly * S, R = st.r * S;
-        if (I.glow) { g.shadowColor = I.glow; g.shadowBlur = R * 0.8 * (g.getTransform ? g.getTransform().a : 1); }
+        if (I.glow) { g.shadowColor = I.glow; g.shadowBlur = R * 0.8 * G * (g.getTransform ? g.getTransform().a : 1); }
         g.fillStyle = col(1);
         g.beginPath();
         for (let k = 0; k < 12; k++) { const th = k / 12 * 6.283, rr = R * (0.8 + 0.35 * this.h(st.seed + k * 1.7)); g[k ? 'lineTo' : 'moveTo'](cx + Math.cos(th) * rr, cy + Math.sin(th) * rr); }
         g.closePath(); g.fill();
-        for (let k = 0; k < 5; k++) {
+        for (let k = 0, n = Math.round(5 * fx.splat); k < n; k++) {
           const th = this.h(st.seed + k * 3.1) * 6.283, dd = R * (1.3 + this.h(st.seed + k * 5.3) * 1.1);
           g.beginPath(); g.arc(cx + Math.cos(th) * dd, cy + Math.sin(th) * dd, R * (0.1 + this.h(st.seed + k * 7.7) * 0.2), 0, 6.283); g.fill();
         }
@@ -3660,7 +3864,7 @@
           // a liquid trail: thick by the splash, thinning as it runs, with small bulges and a gentle wander
           const x0 = cx + run.dx * S, w = run.w * S, len = run.len * S, sd = st.seed + run.dx * 97, N = 12;
           const at = (t, k) => {
-            const x = x0 + run.wob * S * t + Math.sin(t * 6.3 + sd) * w * 0.12, hw = w * 0.5 * k * (1.15 - 0.45 * t + 0.14 * Math.sin(t * 9 + sd * 1.3));
+            const x = x0 + run.wob * S * t + Math.sin(t * 6.3 + sd) * w * 0.12 * f, hw = w * 0.5 * k * (1.15 - 0.45 * t + 0.14 * Math.sin(t * 9 + sd * 1.3));
             return [x, cy + len * t, hw];
           };
           for (const [m, k] of [[0.78, 1], [1.12, 0.45]]) {
@@ -3671,24 +3875,321 @@
             for (let i = R.length - 1; i >= 0; i--) g.lineTo(R[i][0], R[i][1]);
             g.closePath(); g.fill();
           }
-          if (age < 6000) {
-            g.strokeStyle = `rgba(${I.shine},${(0.28 * (1 - age / 6000)).toFixed(3)})`; g.lineWidth = Math.max(0.5, w * 0.14);
+          if (fx.pool > 0 && run.len >= run.y1 - st.ly) { // blood gathered along the edge the trail reached (the mask holds it in)
+            const [x] = at(1, 1), pw = w * (0.7 + 0.8 * fx.pool), ph = w * (0.3 + 0.3 * fx.pool);
+            g.fillStyle = col(0.9); g.beginPath(); g.ellipse(x, cy + len - ph * 0.4, pw, ph, 0, 0, 6.283); g.fill();
+          }
+          if (age < 6000 * Tk) {
+            g.strokeStyle = `rgba(${I.shine},${(0.28 * G * (1 - age / (6000 * Tk))).toFixed(3)})`; g.lineWidth = Math.max(0.5, w * 0.14);
             g.beginPath(); for (let i = 0; i <= N; i++) { const [x, y, hw] = at(i / N, 1); g[i ? 'lineTo' : 'moveTo'](x - hw * 0.45, y); } g.stroke();
           }
         }
-        if (age < 4000) { g.fillStyle = `rgba(${I.shine},${(0.35 * (1 - age / 4000)).toFixed(3)})`; g.beginPath(); g.ellipse(cx - R * 0.3, cy - R * 0.3, R * 0.22, R * 0.14, -0.6, 0, 6.283); g.fill(); }
+        if (age < 4000 * Tk) { g.fillStyle = `rgba(${I.shine},${(0.35 * G * (1 - age / (4000 * Tk))).toFixed(3)})`; g.beginPath(); g.ellipse(cx - R * 0.3, cy - R * 0.3, R * 0.22, R * 0.14, -0.6, 0, 6.283); g.fill(); }
         if (I.glow) g.shadowBlur = 0;
       }
-      // The bead at the bottom of each finished trail, hanging off the letter's edge (drawn without the clip)
-      paintStainBeads(g, l, st, S, now) {
-        const dry = Math.min(1, (now - st.born) / 25000), I = this.theme().blood, c = I.wet.map((v, i) => v - (v - I.dry[i]) * dry);
+      // The bead at the bottom of each finished trail, hanging off the letter's edge (drawn without the clip); long trails
+      // hang longer drips
+      paintBeadsLegacy(g, l, st, S, now) {
+        const F = this.fx(), fx = this.stFx(st), k = this.beadScale(fx);
+        if (!this.legacyDrips(st, fx)) return;
+        const dry = Math.min(1, (now - st.born) / (F.dry * 1000)), I = this.theme().blood, c = this.legacyTone(I, dry, F.aged), al = this.legacyAlpha(dry, F.aged);
         for (const run of st.runs) {
           if (run.len < run.y1 - st.ly) continue;
-          const br = run.w * S * (run.dropped ? 0.45 : 0.45 + 0.4 * run.bead), x = l.x + (st.lx + run.dx + run.wob) * S, y = l.y + run.y1 * S;
-          g.fillStyle = `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},0.95)`;
-          g.beginPath(); g.ellipse(x, y + br * 0.35, br * 0.85, br, 0, 0, 6.283); g.fill();
+          const br = run.w * S * (run.dropped ? 0.45 : 0.45 + 0.4 * run.bead) * k, x = l.x + (st.lx + run.dx + run.wob) * S, y = l.y + run.y1 * S;
+          const hang = fx.length > 1 ? (fx.length - 1) * br * 1.6 : 0;
+          g.fillStyle = `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${al})`;
+          g.beginPath(); g.ellipse(x, y + br * 0.35 + hang * 0.5, br * 0.85, br + hang * 0.5, 0, 0, 6.283); g.fill();
           if (I.rim) { g.strokeStyle = `rgba(${I.rim},0.55)`; g.lineWidth = Math.max(0.5, br * 0.12); g.stroke(); } // (pale ichor needs an edge on a pale page)
-          g.fillStyle = `rgba(${I.bead},0.3)`; g.beginPath(); g.arc(x - br * 0.3, y + br * 0.1, br * 0.25, 0, 6.283); g.fill();
+          g.fillStyle = `rgba(${I.bead},${0.3 * F.gloss})`; g.beginPath(); g.arc(x - br * 0.3, y + br * 0.1, br * 0.25, 0, 6.283); g.fill();
+        }
+      }
+
+      // ---------- Fluid bleeding ----------
+      // A splash on a letter. Its liquid runs down in one main run (now and then a second, thinner one; as many as the effect
+      // has) along a path traced over the ink (see tracePath); a run that comes near an older run's track follows it, as
+      // liquid takes a wet channel, and gets farther along it. How much liquid a run carries decides how far it goes: a small
+      // one stops partway, a big one reaches the edge below, pools there and hangs a bead that drips. A wetter letter takes
+      // smaller marks that keep to its old tracks, so most of the letter stays clean. Repeat visits add to the marks there.
+      addStainFluid(hit, r, now) {
+        const fx = this.fx(), l = hit.l, ch = l.ch, others = this.stains.filter(s => s.l === l), crowded = Math.min(1, this.wetCover(l, others) / (0.3 * fx.amount));
+        r *= 1 - 0.55 * crowded;
+        const seed = Math.random() * 100, rnd = this.rng(Math.floor(seed * 7919) + 3);
+        const st = { l, lx: hit.lx, ly: hit.ly, r: r * fx.splatSize, born: now, seed, runs: [], specks: [], lobes: null, done: false, doneT: now, fx };
+        st.lobes = this.splashLobes(ch, st, rnd);
+        // satellite droplets: a few, of very different sizes, the farther the finer and the more drawn out along their flight
+        const n = Math.round((3 + rnd() * 6) * (1 - 0.6 * crowded) * fx.splat);
+        for (let k = 0; k < n; k++) {
+          const a = rnd() * Math.PI * 2, far = rnd() ** 1.7, d = st.r * (1.15 + 1.9 * far);
+          const x = hit.lx + Math.cos(a) * d, y = hit.ly + Math.sin(a) * d * 0.9;
+          if (this.inkAt(ch, x, y)) st.specks.push({ x, y, s: st.r * (0.2 - 0.13 * far) * (0.5 + rnd()), a, e: 1 + far * 2.2 });
+        }
+        const reach = (0.05 + 0.03 * crowded) * fx.merge, T = fx.trails; // (how close a wet track must come to be followed)
+        if (T >= 1 || rnd() < T) this.addRun(st, 0, r * 0.56 * fx.thick, (0.12 + rnd() * 0.62) * r / 0.045 * fx.length, others, reach, rnd);
+        for (let k = 1, side = 0; k < 4 && T > k; k++) {
+          if (!(rnd() < Math.min(1, T - k) * (1 - crowded))) break;
+          side = side ? -side : rnd() < 0.5 ? -1 : 1;
+          this.addRun(st, side * r * (0.5 + rnd() * 0.4) * (k > 2 ? 1.7 : 1), r * 0.28 * fx.thick, (0.1 + rnd() * 0.3) * r / 0.045 * fx.length, [...others, st], reach, rnd);
+        }
+        st.done = !st.runs.length;
+        this.stains.push(st);
+        return st;
+      }
+      // How much of a letter is already wet, as a share of its ink (roughly)
+      wetCover(l, stains) {
+        let a = 0;
+        for (const s of stains) { a += Math.PI * s.r * s.r * 0.8; for (const q of s.runs || []) a += (q.len || 0) * (q.w || 0) * 0.7; }
+        return a / Math.max(0.05, this.mw(l.ch) * 0.3);
+      }
+      // A run from a splash: its path traced down the letter, joining the first older track it comes close to, where that
+      // track's liquid has run; past the join it carries on further (the way is already wet) and ends where that track ends
+      addRun(st, dx, w, amount, others, near, rnd) {
+        const ch = st.l.ch, seed = rnd() * 1000, t = this.tracePath(ch, st.lx + dx, st.ly + st.r * 0.25, seed, w * 0.5, this.stFx(st).wander / 0.5);
+        let pts = t.pts, end = t, joinAt = -1;
+        const row = p => Math.floor(p[1] * 80);
+        find: for (let k = 2; k < pts.length; k++) for (const s of others) for (const q of s.runs || []) {
+          if (!q.path) continue;
+          const j = row(pts[k]) - row(q.path[0]);
+          if (j < 1 || j >= q.path.length || q.cum[j] > q.len || Math.abs(q.path[j][0] - pts[k][0]) >= near) continue;
+          // ease over to the track across the last few rows (no sideways jump), then follow it
+          const dx = q.path[j][0] - pts[k][0], own = pts.slice(0, k).map((p, i) => [p[0] + dx * Math.max(0, (i - (k - 5)) / 5), p[1]]);
+          pts = [...own, ...q.path.slice(j)]; end = q; joinAt = k;
+          break find;
+        }
+        if (pts.length < 2) return;
+        const run = { dx, w, seed, ...this.runGeometry(pts), len: 0, v: 0.045 + rnd() * 0.035, wetAt: st.born, bead: null, joined: joinAt > 0,
+          end: pts[pts.length - 1], edge: end.edge, ledge: end.ledge };
+        const sJoin = joinAt > 0 ? run.cum[joinAt] : Infinity;
+        run.reach = amount > sJoin ? sJoin + (amount - sJoin) * 1.8 : amount;
+        run.stalls = [run.total * (0.2 + 0.25 * rnd()), run.total * (0.55 + 0.3 * rnd())];
+        st.runs.push(run);
+      }
+      runGeometry(pts) {
+        const cum = [0];
+        for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+        return { path: pts, cum, total: cum[cum.length - 1] };
+      }
+      // The way liquid runs down a letter from (x, y), one glyph-scan row (1/80 em) at a time: straight down with a slight
+      // meander (wander times as much), kept on the ink a little in from its sides. Where the ink below ends it slides along
+      // the edge if that falls away steeply (a row aside per row at most); otherwise it stops at the edge, where it will pool
+      // and hang. { pts, edge: the edge's y below the end, ledge: [x0, x1] of the ink along that edge }
+      tracePath(ch, x, y, seed, hw, wander = 1) {
+        const rnd = this.rng(Math.floor(seed * 9973) + 11), pts = [[x, y]];
+        let k = Math.floor(y * 80), drift = 0;
+        const here = (this.inkRuns(ch, k) || []).find(q => x >= q[0] && x <= q[1]);
+        let ledge = here ? [here[0], here[1]] : [x - hw, x + hw];
+        for (let n = 0; n < 150; n++) {
+          const runs = this.inkRuns(ch, k + 1);
+          drift = drift * 0.94 + (rnd() - 0.5) * 0.0032 * wander;
+          let nx = x + drift, on = runs && runs.find(q => nx >= q[0] && nx <= q[1]);
+          if (!on && runs) { // the ink has stepped aside below: follow its edge, if it is within a row
+            let best = null;
+            for (const q of runs) { const d = nx < q[0] ? q[0] - nx : nx - q[1]; if (d <= 1 / 80 && (!best || d < best.d)) best = { q, d }; }
+            if (best) { on = best.q; nx = nx < on[0] ? on[0] : on[1]; drift = 0; }
+          }
+          if (!on) break;
+          // kept a little in from the sides, and drawn gently back off an edge it wanders up to (so it never traces one)
+          const m = Math.min(hw * 1.8, (on[1] - on[0]) / 2), lo = on[0] + m, hi = on[1] - m;
+          if (nx < lo + hw) drift += 0.0009; else if (nx > hi - hw) drift -= 0.0009;
+          x = Math.max(lo, Math.min(hi, nx)); k++;
+          pts.push([x, (k + 0.5) / 80]); ledge = [on[0], on[1]];
+        }
+        return { pts, edge: (k + 1) / 80, ledge };
+      }
+      // The ink of a letter's glyph-scan row k (see inkIndex)
+      inkRuns(ch, k) { return this.inkIndex(ch).get(k); }
+      // The splash's outline: lobes around its centre, a few thrown out further as points, each drawn in where the ink ends,
+      // so the splash keeps to the letter rather than being cut off by it
+      splashLobes(ch, st, rnd) {
+        const n = 18, fingers = new Set(Array.from({ length: 2 + Math.floor(rnd() * 3) }, () => Math.floor(rnd() * n))), out = [];
+        for (let i = 0; i < n; i++) {
+          const a = i / n * Math.PI * 2;
+          let k = (0.72 + 0.32 * rnd()) * (fingers.has(i) ? 1.35 + 0.4 * rnd() : 1);
+          while (k > 0.35 && !this.inkAt(ch, st.lx + Math.cos(a) * st.r * k, st.ly + Math.sin(a) * st.r * k * 0.92)) k *= 0.85;
+          out.push(k);
+        }
+        return out;
+      }
+      // One run's step: its front creeps on (slower as its liquid runs out, pausing where it stalls) until it reaches the
+      // edge below or has nothing left; at the edge the rest feeds a bead that swells, stretches and lets go, more than once
+      // when there is liquid enough (smaller beads, more often, for more beads). Returns whether anything moved.
+      flowRun(st, run, now, dt, S) {
+        const stop = Math.min(run.total, run.reach);
+        if (run.len < stop - 1e-9) {
+          const left = run.reach - run.len, stalled = run.stalls.some(s => Math.abs(run.len - s) < 0.01);
+          run.len = Math.min(stop, run.len + run.v * (stalled ? 0.18 : 1) * (0.3 + 0.7 * Math.min(1, left / 0.25)) * dt);
+          run.wetAt = now;
+          return true;
+        }
+        if (run.reach <= run.total) return false; // it ran dry on the way down: its rounded head dries where it stopped
+        const fx = this.stFx(st), b = run.bead || (run.bead = { f: 0, left: run.reach - run.total, drops: 0, snap: 0 }), DRIP = 0.3 / Math.max(fx.beads, 1e-6);
+        let moving = b.snap > 0;
+        b.snap = Math.max(0, b.snap - dt * 3);
+        if (b.f < 1 && b.left - b.f * DRIP > 1e-6) { b.f = Math.min(1, b.f + dt * 0.45, b.left / DRIP); run.wetAt = now; moving = true; }
+        if (b.f >= 1) {
+          const g = this.beadShape(run, this.beadScale(fx)), l = st.l;
+          (this.drops || (this.drops = [])).push({ st: 'fall', id: null, x: l.x + g.x * S, y: l.y + g.cy * S, vx: 0, vy: 0, r: g.r * S, t: 0 });
+          b.left -= DRIP; b.drops++; b.f = 0.2; b.snap = 1; run.wetAt = now; moving = true;
+        }
+        return moving;
+      }
+      // A run's hanging bead, in em: from the edge where the run ended it swells, and stretches on a narrowing neck as it
+      // fills, until it lets go (snap: the little spring back of what is left); k sizes it for the effect's beads
+      beadShape(run, k = 1) {
+        const b = run.bead, f = b ? b.f : 0, w = run.w, r = w * (0.55 + 0.85 * f) * k;
+        const neck = w * (0.6 + 0.2 * f) * (1 - 0.5 * Math.max(0, (f - 0.6) / 0.4));
+        const stretch = Math.max(0, w * 2.4 * Math.max(0, (f - 0.55) / 0.45) ** 1.5 - (b ? b.snap : 0) * w * 0.5);
+        return { x: run.end[0], top: run.edge, neck, r, cy: run.edge + stretch + r * 0.8 };
+      }
+      // How wet liquid still is, from when it last moved: glossy at first, then drying to matte over the effect's drying time
+      // (about 25 s)
+      wetness(t0, now) {
+        const a = (now - t0) / 1000, k = this.fx().dry / 25;
+        if (a <= 3 * k) return 1;
+        if (a >= 25 * k) return 0;
+        const u = (a - 3 * k) / (22 * k);
+        return 1 - u * u * (3 - 2 * u);
+      }
+      // The paint for liquid last moved at t0, in what the look's roses bleed (see ICHOR): its body, a darker edge, how
+      // see-through it is (dried ichor lets the letter show through), and the effect's gloss (G) and dried look
+      liquidTone(t0, now) {
+        const F = this.fx(), I = this.theme().blood, w = this.wetness(t0, now), d = (1 - w) * F.aged;
+        const c = I.wet.map((v, i) => Math.max(0, v + (I.dry[i] - v) * d));
+        let a = I.glow ? 0.95 - 0.4 * ((1 - w) * Math.min(F.aged, 1)) : 0.95;
+        if (F.aged > 1) a = +(a * (1 - 0.5 * (F.aged - 1) * (1 - w))).toFixed(3);
+        const rgb = k => c.map(v => Math.min(255, v * k) | 0).join(',');
+        const edgeRGB = I.rim || rgb(0.55 - 0.12 * (1 - w));
+        return { w, a, body: `rgba(${rgb(1)},${a})`, edge: `rgba(${edgeRGB},${a})`, edgeRGB, I, G: F.gloss };
+      }
+      // A fresh liquid's tight inner glow (ichor only), or none
+      liquidGlow(g, T, px) {
+        if (T.I.glow && T.w > 0.3) { g.shadowColor = T.I.glow; g.shadowBlur = Math.max(0, px * T.w * T.G * (g.getTransform ? g.getTransform().a : 1)); }
+        else g.shadowBlur = 0;
+      }
+      // One stain: the splash with its satellites, then its runs and the pools at their edges (masked to the glyph by
+      // paintLetterStains). Wet liquid is glossy, with a darker edge and small broken highlights; dried, it is matte, a touch
+      // thinner, with a darker rim.
+      paintStainFluid(g, l, st, S, now) {
+        const T = this.liquidTone(st.born, now), R = st.r * S, cx = l.x + st.lx * S, cy = l.y + st.ly * S, lobes = st.lobes || [1, 1, 1, 1, 1, 1, 1, 1];
+        const n = lobes.length, pt = i => { const a = i / n * Math.PI * 2, k = lobes[(i % n + n) % n]; return [cx + Math.cos(a) * R * k, cy + Math.sin(a) * R * k * 0.92]; };
+        g.fillStyle = T.body;
+        this.liquidGlow(g, T, R * 0.35);
+        g.beginPath();
+        const m0 = pt(n - 1), p0 = pt(0);
+        g.moveTo((m0[0] + p0[0]) / 2, (m0[1] + p0[1]) / 2);
+        for (let i = 0; i < n; i++) { const p = pt(i), q = pt(i + 1); g.quadraticCurveTo(p[0], p[1], (p[0] + q[0]) / 2, (p[1] + q[1]) / 2); }
+        g.closePath(); g.fill();
+        g.shadowBlur = 0;
+        g.strokeStyle = T.edge; g.lineWidth = Math.max(0.5, R * (0.06 + 0.06 * (1 - T.w))); g.stroke();
+        for (const sp of st.specks || []) {
+          const s = sp.s * S;
+          if (s < 0.25) continue;
+          g.beginPath(); g.ellipse(l.x + sp.x * S, l.y + sp.y * S, s * sp.e, s, sp.a, 0, 6.283); g.fill();
+          if (s > 1.6) { g.lineWidth = Math.max(0.4, s * 0.25); g.stroke(); }
+        }
+        if (T.w > 0.3) { // the light on the fresh splash
+          g.fillStyle = `rgba(${T.I.shine},${(0.32 * T.G * T.w).toFixed(3)})`;
+          g.beginPath(); g.ellipse(cx - R * 0.28, cy - R * 0.3, R * 0.26, R * 0.12, -0.6, 0, 6.283); g.fill();
+        }
+        for (const run of st.runs || []) if (run.path) this.paintRun(g, l, run, S, now, this.stFx(st).pool);
+        g.shadowBlur = 0;
+      }
+      // A run's width along it (em, half): wide where it leaves the splash, a thin film further down, with bulges where it
+      // stalled, and a slow waver
+      runHalfWidth(run, s) {
+        let bulge = 1;
+        for (const p of run.stalls || []) if (run.len > p) bulge += 0.55 * Math.exp(-(((s - p) / 0.014) ** 2));
+        return run.w * 0.5 * (0.68 + 0.32 * Math.exp(-s / 0.12)) * (1 + 0.1 * Math.sin(s * 47 + run.seed)) * bulge;
+      }
+      paintRun(g, l, run, S, now, pool = 1) {
+        const L = run.len;
+        if (L <= 0.001) return;
+        const T = this.liquidTone(run.wetAt, now), shrink = 0.86 + 0.14 * T.w, P = run.path, C = run.cum;
+        const at = s => { // the point s along the path, and its direction
+          let i = 1;
+          while (i < C.length - 1 && C[i] < s) i++;
+          const u = C[i] > C[i - 1] ? Math.min(1, Math.max(0, (s - C[i - 1]) / (C[i] - C[i - 1]))) : 1, a = P[i - 1], b = P[i];
+          return [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u, Math.atan2(b[1] - a[1], b[0] - a[0])];
+        };
+        const left = [], right = [], spine = [], n = P.length;
+        // (each point faces along the path through its neighbours, so a turn never folds the outline)
+        for (let i = 0; i < n && C[i] < L; i++) { const p = P[Math.max(0, i - 1)], q = P[Math.min(n - 1, i + 1)]; spine.push([P[i][0], P[i][1], Math.atan2(q[1] - p[1], q[0] - p[0]), C[i]]); }
+        spine.push([...at(L), L]);
+        for (const [x, y, a, s] of spine) {
+          const hw = this.runHalfWidth(run, s) * shrink, nx = -Math.sin(a), ny = Math.cos(a);
+          left.push([l.x + (x - nx * hw) * S, l.y + (y - ny * hw) * S]); right.push([l.x + (x + nx * hw) * S, l.y + (y + ny * hw) * S]);
+        }
+        const moving = L < Math.min(run.total, run.reach) - 1e-6, front = spine[spine.length - 1];
+        const head = run.bead ? 0 : this.runHalfWidth(run, L) * shrink * (moving ? 1.5 : 1.15) * S; // a heavier front while it runs
+        const shape = () => {
+          g.beginPath();
+          g.moveTo(left[0][0], left[0][1]);
+          for (const p of left) g.lineTo(p[0], p[1]);
+          for (let i = right.length - 1; i >= 0; i--) g.lineTo(right[i][0], right[i][1]);
+          g.closePath();
+          if (head > 0) { g.moveTo(l.x + front[0] * S + head, l.y + front[1] * S); g.arc(l.x + front[0] * S, l.y + front[1] * S, head, 0, 6.283); }
+        };
+        g.fillStyle = T.body;
+        this.liquidGlow(g, T, run.w * S * 0.6);
+        shape(); g.fill();
+        g.shadowBlur = 0;
+        g.strokeStyle = T.edge; g.lineWidth = Math.max(0.4, run.w * S * (0.12 + 0.1 * (1 - T.w))); g.stroke();
+        if (run.bead && pool > 0) this.paintPool(g, l, run, S, T, pool);
+        if (T.w > 0.3) { // small broken highlights on the side facing the light, where the liquid is thick enough to catch it
+          g.strokeStyle = `rgba(${T.I.shine},${(0.5 * T.G * T.w).toFixed(3)})`; g.lineWidth = Math.max(0.5, run.w * S * 0.16);
+          g.beginPath();
+          let on = false;
+          for (let i = 0; i < spine.length; i++) {
+            const [x, y, a, s] = spine[i], hw = this.runHalfWidth(run, s) * shrink;
+            if (hw < run.w * 0.33 || i % 9 > 4) { on = false; continue; }
+            const px = l.x + (x - Math.sin(a) * hw * 0.45) * S, py = l.y + (y + Math.cos(a) * hw * 0.45) * S;
+            if (on) g.lineTo(px, py); else { g.moveTo(px, py); on = true; }
+          }
+          g.stroke();
+          if (head > 1.5) { g.fillStyle = `rgba(${T.I.shine},${(0.6 * T.G * T.w).toFixed(3)})`; g.beginPath(); g.arc(l.x + front[0] * S - head * 0.35, l.y + front[1] * S - head * 0.3, head * 0.28, 0, 6.283); g.fill(); }
+        }
+      }
+      // Liquid gathered along the edge where a run ended, spreading sideways with how much has come down (the glyph mask
+      // cuts it at the edge, as the edge holds it), as much as the effect pools
+      paintPool(g, l, run, S, T, pool = 1) {
+        const b = run.bead, fill = Math.min(1, (b.left + b.f * 0.3 + b.drops * 0.15) / 0.6), hw = this.runHalfWidth(run, run.total);
+        const half = Math.max(hw, (run.ledge[1] - run.ledge[0]) / 2 * 0.92), pw = Math.min(half, hw * (1.4 + 2.2 * fill) * pool), ph = hw * (0.8 + 0.7 * fill) * (0.5 + 0.5 * pool);
+        const x = Math.max(run.ledge[0] + pw, Math.min(run.ledge[1] - pw, run.end[0])), y = run.edge - ph * 0.35;
+        g.beginPath(); g.ellipse(l.x + x * S, l.y + y * S, pw * S, ph * S, 0, 0, 6.283);
+        g.fillStyle = T.body; g.fill(); g.lineWidth = Math.max(0.4, run.w * S * 0.12); g.stroke();
+      }
+      // The splash's spray: a few droplets of very different sizes (mostly fine, now and then a large one), the fine ones
+      // flung faster; those that come back down on the letter leave specks
+      splashSprayFluid(d, st, S) {
+        const fx = this.stFx(st), n = Math.round((2 + Math.floor(Math.random() * 6)) * fx.splat);
+        for (let k = 0; k < n; k++) {
+          const big = Math.random() ** 3, size = d.r * (0.08 + 0.42 * big) * fx.splatSize, speed = S * (0.5 + 1.3 * (1 - big)) * (0.6 + Math.random() * 0.6);
+          const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.6;
+          (this.drops || (this.drops = [])).push({ st: 'spray', x: d.x, y: d.y, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed * 0.75, r: size, t: 0, life: 0.25 + Math.random() * 0.45, stain: st });
+        }
+      }
+      // The beads hanging off the letter's edges (drawn without the glyph mask): a pendant drop on a neck
+      paintBeadsFluid(g, l, st, S, now) {
+        const k = this.beadScale(this.stFx(st));
+        if (!k) return;
+        for (const run of st.runs || []) {
+          if (!run.bead || !run.path) continue;
+          const T = this.liquidTone(run.wetAt, now), B = this.beadShape(run, k), x = l.x + B.x * S, top = l.y + B.top * S, cy = l.y + B.cy * S;
+          const r = B.r * S, nk = B.neck * S;
+          g.beginPath();
+          g.moveTo(x - nk, top - 1);
+          g.bezierCurveTo(x - nk, top + (cy - top) * 0.45, x - r, cy - r * 0.9, x - r, cy);
+          g.arc(x, cy, r, Math.PI, 0, true);
+          g.bezierCurveTo(x + r, cy - r * 0.9, x + nk, top + (cy - top) * 0.45, x + nk, top - 1);
+          g.closePath();
+          g.fillStyle = T.body;
+          this.liquidGlow(g, T, r * 0.8);
+          g.fill();
+          g.shadowBlur = 0;
+          g.strokeStyle = T.edge; g.lineWidth = Math.max(0.4, r * 0.16); g.stroke();
+          // the bulb's shaded underside (light from the upper left), so it reads as a round drop on any page
+          g.fillStyle = `rgba(${T.edgeRGB},${(0.4 * T.a).toFixed(3)})`;
+          g.beginPath(); g.arc(x + r * 0.12, cy + r * 0.1, r * 0.82, -0.3, Math.PI * 0.9); g.fill();
+          if (T.w > 0.3 && r > 1.2) { g.fillStyle = `rgba(${T.I.bead},${(0.75 * T.G * T.w).toFixed(3)})`; g.beginPath(); g.arc(x - r * 0.35, cy - r * 0.3, r * 0.26, 0, 6.283); g.fill(); }
         }
       }
       // A reusable layer at the current canvas resolution. The ink scan is for collision detection only.
@@ -3722,10 +4223,11 @@
       // Moving stains share one scratch canvas; dried stains retain one bitmap per letter.
       drawLetterStains(g, now, S) {
         const m = g.getTransform ? g.getTransform() : null, scale = m ? Math.hypot(m.a, m.b) : (this.dpr || 1);
-        const byLetter = new Map();
+        const byLetter = new Map(), dryMs = this.fx().dry * 1000;
         for (const st of this.stains || []) { const a = byLetter.get(st.l); if (a) a.push(st); else byLetter.set(st.l, [st]); }
         for (const [l, list] of byLetter) {
-          const settled = list.filter(st => st.done && now - st.born > 25000), live = list.filter(st => !settled.includes(st));
+          const still = st => Math.max(st.born, ...(st.runs || []).map(run => run.wetAt || 0)); // (when its blood last moved)
+          const settled = list.filter(st => st.done && now - still(st) > dryMs), live = list.filter(st => !settled.includes(st));
           if (settled.length) this.stampStains(g, l, settled, S, now);
           if (live.length) {
             const c = this._stainLayer = this.stainCanvas(l, S, scale, this._stainLayer);
@@ -3738,21 +4240,22 @@
       stampStains(g, l, settled, S, now) {
         const m = g.getTransform ? g.getTransform() : null, scale = m ? Math.hypot(m.a, m.b) : (this.dpr || 1);
         let c = l._stainCache;
-        const blood = this.theme().blood;
-        if (!c || c.blood !== blood || c.n !== settled.length || c.list.some((st, i) => st !== settled[i]) || S > c.S * 1.06 || S < c.S * 0.6 || Math.abs(scale - c.scale) > 0.01) {
+        const blood = this.theme().blood, F = this.fx(), finish = `${F.gloss},${F.aged},${F.dry}`;
+        if (!c || c.blood !== blood || c.finish !== finish || c.n !== settled.length || c.list.some((st, i) => st !== settled[i]) || S > c.S * 1.06 || S < c.S * 0.6 || Math.abs(scale - c.scale) > 0.01) {
           if (c) this.freeBitmap(c.cv);
           c = this.stainCanvas(l, S, scale);
           this.paintLetterStains(c, l.ch, settled, now, true);
-          c.n = settled.length; c.list = settled.slice(); c.blood = blood;
+          c.n = settled.length; c.list = settled.slice(); c.blood = blood; c.finish = finish;
           l._stainCache = c;
         }
         const k = S / c.S;
         g.save(); g.translate(l.x, l.y); g.scale(k, k);
         g.drawImage(c.cv, 0, 0, c.cw, c.ch, c.x0, c.y0, c.w, c.h); g.restore();
       }
-      // The drops themselves: beading on a bloom, falling, or sprayed up by a splash
-      drawBloodFront(g, now, S) {
-        const I = this.theme().blood;
+      // The drops themselves: beading on a bloom, falling, or sprayed up by a splash, drawn in the effect in use
+      drawBloodFront(g, now, S) { if (this.fx().style === 'fluid') this.drawDropsFluid(g, now, S); else this.drawDropsLegacy(g, now, S); }
+      drawDropsLegacy(g, now, S) {
+        const I = this.theme().blood, G = this.fx().gloss;
         for (const d of this.drops || []) {
           const r = d.r * (d.st === 'bead' ? Math.min(1, d.t / Math.max(0.2, d.hold * 0.8)) : 1);
           if (r < 0.3) continue;
@@ -3760,10 +4263,28 @@
           const a = d.st === 'spray' ? Math.max(0, 1 - d.t / 0.45) : 1;
           g.save();
           g.translate(d.x, d.y); if (d.st === 'fall') g.rotate(Math.atan2(d.vy, d.vx) - Math.PI / 2);
-          if (I.glow) { g.shadowColor = I.glow; g.shadowBlur = r * 2.5; }
+          if (I.glow) { g.shadowColor = I.glow; g.shadowBlur = r * 2.5 * G; }
           g.fillStyle = `rgba(${I.drop},${a.toFixed(3)})`; g.beginPath(); g.ellipse(0, d.st === 'bead' ? r * 0.15 : 0, r, r * stretch, 0, 0, 6.283); g.fill();
           if (I.rim) { g.shadowBlur = 0; g.strokeStyle = `rgba(${I.rim},${(0.6 * a).toFixed(3)})`; g.lineWidth = Math.max(0.5, r * 0.14); g.stroke(); }
-          if (d.st !== 'spray') { g.fillStyle = `rgba(${I.dropShine},${(0.45 * a).toFixed(3)})`; g.beginPath(); g.arc(-r * 0.3, -r * 0.25 * stretch, r * 0.28, 0, 6.283); g.fill(); }
+          if (d.st !== 'spray') { g.fillStyle = `rgba(${I.dropShine},${(0.45 * a * G).toFixed(3)})`; g.beginPath(); g.arc(-r * 0.3, -r * 0.25 * stretch, r * 0.28, 0, 6.283); g.fill(); }
+          g.restore();
+        }
+      }
+      // (fluid: drawn out along their flight, with a darker edge and a small highlight)
+      drawDropsFluid(g, now, S) {
+        const I = this.theme().blood, G = this.fx().gloss;
+        for (const d of this.drops || []) {
+          const r = d.r * (d.st === 'bead' ? Math.min(1, d.t / Math.max(0.2, d.hold * 0.8)) : 1);
+          if (r < 0.3) continue;
+          const v = Math.hypot(d.vx, d.vy), stretch = d.st === 'bead' ? 1.15 : 1 + Math.min(d.st === 'spray' ? 2.4 : 1.6, v / (S * 3));
+          const a = d.st === 'spray' ? Math.max(0, 1 - d.t / (d.life || 0.45)) : 1;
+          g.save();
+          g.translate(d.x, d.y); if (d.st !== 'bead') g.rotate(Math.atan2(d.vy, d.vx) - Math.PI / 2);
+          if (I.glow) { g.shadowColor = I.glow; g.shadowBlur = r * 1.2 * G; } // (a tight glow: ichor only)
+          g.fillStyle = `rgba(${I.drop},${a.toFixed(3)})`; g.beginPath(); g.ellipse(0, d.st === 'bead' ? r * 0.15 : 0, r, r * stretch, 0, 0, 6.283); g.fill();
+          g.shadowBlur = 0;
+          if (r > 1.2) { g.strokeStyle = I.rim ? `rgba(${I.rim},${(0.6 * a).toFixed(3)})` : `rgba(0,0,0,${(0.22 * a).toFixed(3)})`; g.lineWidth = Math.max(0.5, r * 0.14); g.stroke(); }
+          if (r > 1.5) { g.fillStyle = `rgba(${I.dropShine},${(0.45 * a * G).toFixed(3)})`; g.beginPath(); g.arc(-r * 0.3, -r * 0.25 * stretch, r * 0.26, 0, 6.283); g.fill(); }
           g.restore();
         }
       }

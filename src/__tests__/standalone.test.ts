@@ -29,7 +29,7 @@ function constructorTable(name: string) {
   }
   return runInNewContext(`(${classSource.slice(open, end + 1)})`);
 }
-const TABLES = { ...Object.fromEntries(['LOOKS', 'INK', 'ICHOR', 'WINGS', 'DOF', 'VINES', 'GROUNDS', 'FONTS'].map(name => [name, constructorTable(name)])), FW: 700 };
+const TABLES = { ...Object.fromEntries(['LOOKS', 'INK', 'ICHOR', 'WINGS', 'DOF', 'VINES', 'GROUNDS', 'FONTS', 'BLEEDS', 'BLEED_CONTROLS'].map(name => [name, constructorTable(name)])), FW: 700 };
 
 function app() {
   return Object.assign(Object.create(StandaloneApp.prototype), {
@@ -116,6 +116,31 @@ function stainHarness(scale = 1) {
     paintStainBeads: vi.fn((g: any, _letter: any, stain: any) => g.operations.push({ kind: 'bead', stain, operation: g.globalCompositeOperation })),
   });
   return { garden, context: context(scale) };
+}
+
+// A test letterform as the glyph scan gives it: a row of ink runs (em) for each 1/80 em row k that ink(k) gives any for
+function glyphRows(ink: (k: number) => number[][] | null, from = -64, to = 4) {
+  const rows: { y: number; runs: number[][] }[] = [];
+  for (let k = from; k <= to; k++) { const runs = ink(k); if (runs) rows.push({ y: (k + 0.5) / 80, runs }); }
+  return rows;
+}
+// An upright stroke 0.16 em wide, from the cap height down to its bottom edge 0.2 em above the baseline
+const stroke = () => glyphRows(k => (k >= -60 && k < -16 ? [[-0.08, 0.08]] : null));
+// The bleeding effects (legacy is the default), and the legacy one with some of its values changed
+const FLUID = () => (TABLES as any).BLEEDS.find((b: any) => b.id === 'fluid').fx;
+const LEGACY = (patch: Record<string, number> = {}) => ({ ...(TABLES as any).BLEEDS.find((b: any) => b.id === 'legacy').fx, ...patch });
+// A stand-in canvas that keeps the fill styles and glow it is given, and counts its arcs and ellipses
+function fillLog() {
+  const fills: string[] = [], blurs: number[] = [], ellipses: number[][] = [];
+  let blur = 0, arcs = 0;
+  const g: any = {
+    set fillStyle(value: string) { fills.push(value); }, get fillStyle() { return fills[fills.length - 1]; },
+    set shadowBlur(value: number) { blur = value; blurs.push(value); }, get shadowBlur() { return blur; },
+    strokeStyle: '', lineWidth: 1, lineCap: '', shadowColor: '', getTransform: () => ({ a: 1 }),
+    beginPath() {}, moveTo() {}, lineTo() {}, closePath() {}, fill() {}, stroke() {}, quadraticCurveTo() {}, bezierCurveTo() {},
+    arc() { arcs++; }, ellipse(...a: number[]) { ellipses.push(a); },
+  };
+  return { g, fills, blurs, ellipses, arcs: () => arcs };
 }
 
 function roseLayerHarness() {
@@ -1155,11 +1180,194 @@ describe('Standalone TypeGardenApp retained blood splatter', () => {
     expect(stain.done).toBe(true);
   });
 
-  it('accumulates splashes across return visits without restarting earlier trails', () => {
+  it('in the fluid effect, runs down a letter stroke, then pools at its bottom edge and hangs a bead that drips, while liquid is left', () => {
+    const garden = Object.assign(writer(), { stains: [], glyphs: { l: stroke() }, bloodFx: FLUID() });
+    const letter = { ch: 'l', x: 20, y: 100 };
+    garden.addStain({ l: letter, lx: 0.02, ly: -0.6 }, 0.04, 1000);
+    const stain = garden.stains[0], run = stain.runs[0];
+    expect(stain.r).toBe(0.04); // the first mark on a clean letter keeps its size
+    // its way keeps to the ink, a little in from the stroke's sides, and ends at the stroke's bottom edge
+    expect(run.path.every(([x, y]: number[]) => garden.inkAt('l', x, y) && Math.abs(x) < 0.08 - run.w / 2)).toBe(true);
+    expect([run.edge, run.ledge, run.joined]).toEqual([-0.2, [-0.08, 0.08], false]);
+    stain.runs.length = 1; run.reach = run.total + 0.65; // liquid enough to reach the edge and drip twice
+
+    garden.bloodStep(2000, 1, 100, [letter]);
+    expect(run.len).toBeGreaterThan(0);
+    expect(run.len).toBeLessThan(run.total);
+    expect(run.bead).toBeNull();
+    let t = 2000;
+    while (run.len < run.total && t < 60000) garden.bloodStep(t += 100, 0.1, 100, [letter]);
+    expect(run.len).toBe(run.total);
+    // at the edge, the bead swells and draws down until it lets go
+    let fall: any;
+    const shapes: any[] = [];
+    while (!fall && t < 60000) {
+      garden.bloodStep(t += 100, 0.1, 100, [letter]);
+      if (run.bead?.drops === 0) shapes.push(garden.beadShape(run));
+      fall = garden.drops.find((drop: any) => drop.st === 'fall' && drop.id === null);
+    }
+    expect(shapes.length).toBeGreaterThan(5);
+    expect(shapes[shapes.length - 1].r).toBeGreaterThan(shapes[0].r);
+    expect(shapes[shapes.length - 1].cy - shapes[shapes.length - 1].r).toBeGreaterThan(shapes[0].cy - shapes[0].r);
+    expect(fall.x).toBeCloseTo(letter.x + run.end[0] * 100, 9);
+    expect(fall.y).toBeGreaterThan(letter.y + run.edge * 100);
+    expect(run.bead).toMatchObject({ drops: 1, f: 0.2, snap: 1 }); // what is left springs back and starts again
+    while (!stain.done && t < 60000) garden.bloodStep(t += 100, 0.1, 100, [letter]);
+    expect(stain.done).toBe(true);
+    expect(run.bead.drops).toBe(2);
+    expect(run.bead.left).toBeLessThan(0.3);
+  });
+
+  it('in the fluid effect, stops partway down when it carries little liquid, its front slowing as it runs out', () => {
+    const garden = Object.assign(writer(), { stains: [], glyphs: { l: stroke() }, bloodFx: FLUID() });
+    const letter = { ch: 'l', x: 20, y: 100 };
+    garden.addStain({ l: letter, lx: 0, ly: -0.7 }, 0.04, 0);
+    const stain = garden.stains[0], run = stain.runs[0];
+    stain.runs.length = 1; Object.assign(run, { reach: 0.1, stalls: [] });
+    expect(run.total).toBeGreaterThan(0.4);
+    const steps: number[] = [];
+    let t = 0;
+    while (!stain.done && t < 30000) { const len = run.len; garden.bloodStep(t += 100, 0.1, 100, [letter]); steps.push(run.len - len); }
+    expect(stain.done).toBe(true);
+    expect(run.len).toBeCloseTo(0.1, 9);
+    expect(run.bead).toBeNull();
+    expect(garden.drops).toHaveLength(0);
+    const full = steps.filter(step => step > 0).slice(0, -1);
+    full.forEach((step, i) => { if (i) expect(step).toBeLessThan(full[i - 1]); });
+  });
+
+  it('in the fluid effect, takes an older run\'s wet track where it comes near it, easing over to it and getting farther along it', () => {
+    const garden = Object.assign(writer(), { stains: [], glyphs: { l: stroke() }, bloodFx: FLUID() });
+    const letter = { ch: 'l', x: 20, y: 100 };
+    const old = { l: letter, lx: 0, ly: -0.7, r: 0.04, born: 0, seed: 1, runs: [] as any[], fx: FLUID() };
+    garden.addRun(old, 0, 0.0224, 0.5, [], 0.05, garden.rng(3));
+    const track = old.runs[0];
+    const later = { l: letter, lx: 0.015, ly: -0.68, r: 0.03, born: 1000, seed: 2, runs: [] as any[], fx: FLUID() };
+    track.len = 0; // not yet wet: the new run keeps to its own way
+    garden.addRun(later, 0, 0.015, 0.3, [old], 0.05, garden.rng(5));
+    expect(later.runs[0].joined).toBe(false);
+    expect(later.runs[0].reach).toBe(0.3);
+
+    track.len = track.total; // wet all the way down
+    later.runs.length = 0;
+    garden.addRun(later, 0, 0.015, 0.3, [old], 0.05, garden.rng(5));
+    const run = later.runs[0];
+    expect(run.joined).toBe(true);
+    expect(run.path.slice(-10)).toEqual(track.path.slice(-10));
+    expect([run.end, run.edge, run.ledge]).toEqual([track.path[track.path.length - 1], track.edge, track.ledge]);
+    expect(run.reach).toBeGreaterThan(0.3); // the wet way lets its liquid go farther
+    // no sideways jump onto the track (they start 0.015 em apart): no step aside larger than the track's own meander
+    const widest = (path: number[][]) => Math.max(...path.slice(1).map((p, i) => Math.abs(p[0] - path[i][0])));
+    expect(widest(run.path)).toBeLessThanOrEqual(widest(track.path));
+  });
+
+  it('in the fluid effect, traces a run along a slanting stroke, and stops it where the ink below steps away', () => {
+    const garden = Object.assign(writer(), {
+      glyphs: {
+        '/': glyphRows(k => (k >= -60 && k < 0 ? [[-0.05 + (k + 60) * 0.6 / 80, 0.05 + (k + 60) * 0.6 / 80]] : null)),
+        'Z': glyphRows(k => (k >= -60 && k < -30 ? [[-0.1, 0]] : k >= -30 && k < 0 ? [[0.05, 0.15]] : null)),
+      },
+    });
+    const slant = garden.tracePath('/', 0, -0.74, 1, 0.01);
+    expect(slant.pts.every(([x, y]: number[]) => garden.inkAt('/', x, y))).toBe(true);
+    expect(slant.edge).toBe(0);
+    expect(slant.pts[slant.pts.length - 1][0]).toBeGreaterThan(0.3); // carried along with the stroke
+    const step = garden.tracePath('Z', -0.05, -0.74, 1, 0.01);
+    expect(step.edge).toBe(-30 / 80);
+    expect(step.ledge).toEqual([-0.1, 0]);
+    expect(step.pts.every(([x, y]: number[]) => x >= -0.1 && x <= 0 && y < -30 / 80)).toBe(true);
+  });
+
+  it('in the fluid effect, hangs a bead that swells and stretches on a narrowing neck, and springs back up as a drop lets go', () => {
+    const garden = app();
+    const run: any = { w: 0.02, end: [0.01, -0.21], edge: -0.2, bead: { f: 0.1, snap: 0 } };
+    const small = garden.beadShape(run);
+    expect([small.x, small.top]).toEqual([0.01, -0.2]);
+    expect(small.cy).toBeCloseTo(-0.2 + small.r * 0.8, 12); // no stretch while it is small
+    run.bead.f = 0.95;
+    const full = garden.beadShape(run);
+    expect(full.r).toBeGreaterThan(small.r);
+    expect(full.neck).toBeLessThan(small.neck);
+    expect(full.cy - full.r).toBeGreaterThan(small.cy - small.r); // drawn down below the edge
+    run.bead.snap = 1;
+    expect(garden.beadShape(run).cy).toBeLessThan(full.cy);
+  });
+
+  it('in the fluid effect, throws up spray of mixed sizes, the fine droplets faster; those that come down on the letter leave specks', () => {
+    const garden = Object.assign(writer(), { stains: [], glyphs: { l: stroke() }, bloodFx: FLUID() });
+    const letter = { ch: 'l', x: 20, y: 100 }, S = 100;
+    const st = { l: letter, lx: 0, ly: -0.5, r: 0.04, born: 0, seed: 1, runs: [], specks: [] as any[], done: true, fx: FLUID() };
+    garden.stains.push(st);
+    const spray: any[] = [];
+    for (let i = 0; i < 40; i++) {
+      garden.drops = [];
+      garden.splashSpray({ x: 20, y: 50, r: 2 }, st, S);
+      expect(garden.drops.length).toBeGreaterThanOrEqual(2);
+      expect(garden.drops.length).toBeLessThanOrEqual(7);
+      spray.push(...garden.drops);
+    }
+    expect(spray.every(d => d.st === 'spray' && d.stain === st && d.vy < 0 && d.r >= 0.16 && d.r <= 1 && d.life >= 0.25 && d.life <= 0.7)).toBe(true);
+    const sizes = spray.map(d => d.r).sort((a, b) => a - b), speed = (d: any) => Math.hypot(d.vx, d.vy);
+    expect(sizes[sizes.length - 1]).toBeGreaterThan(sizes[0] * 3);
+    const bySize = spray.slice().sort((a, b) => a.r - b.r), third = Math.floor(spray.length / 3);
+    const mean = (list: any[]) => list.reduce((sum, d) => sum + speed(d), 0) / list.length;
+    expect(mean(bySize.slice(0, third))).toBeGreaterThan(mean(bySize.slice(-third)));
+
+    garden.drops = [
+      { st: 'spray', x: 20, y: 50, vx: 0, vy: 10, r: 0.6, t: 0.1, life: 0.5, stain: st }, // coming down onto the ink
+      { st: 'spray', x: 90, y: 50, vx: 0, vy: 10, r: 0.6, t: 0.1, life: 0.5, stain: st }, // beside the letter
+    ];
+    garden.bloodStep(1000, 0.01, S, [letter]);
+    expect(st.specks).toHaveLength(1);
+    expect(st.specks[0].x).toBe(0);
+    expect(st.specks[0].s).toBeCloseTo(0.006, 12);
+    expect(garden.drops).toHaveLength(1);
+    garden.bloodStep(1500, 0.5, S, [letter]);
+    expect(garden.drops).toHaveLength(0); // the other has faded out
+    expect(garden.stains).toEqual([st]); // spray never starts new splashes
+  });
+
+  it('in the fluid effect, keeps most of a wet letter clean: later splashes on it are smaller, with fewer satellites and a single run', () => {
+    const garden = Object.assign(writer(), { stains: [], glyphs: { l: stroke() }, bloodFx: FLUID() });
+    const letter = { ch: 'l', x: 20, y: 100 };
+    garden.addStain({ l: letter, lx: 0, ly: -0.6 }, 0.04, 0);
+    expect(garden.stains[0].r).toBe(0.04);
+    garden.stains[0].r = 0.2; // a letter already well covered
+    for (let i = 0; i < 20; i++) garden.addStain({ l: letter, lx: 0, ly: -0.5 }, 0.04, 1000);
+    const later = garden.stains.slice(1);
+    expect(later.every((s: any) => Math.abs(s.r - 0.018) < 1e-12 && s.runs.length === 1 && s.specks.length <= 4)).toBe(true);
+  });
+
+  it('in the fluid effect, dries from glossy to matte over about 25 s after its liquid last moved, as blood or as see-through ichor', () => {
+    const garden = app();
+    expect([0, 3000, 25000, 40000].map(t => garden.wetness(0, t))).toEqual([1, 1, 0, 0]);
+    expect(garden.wetness(0, 14000)).toBeGreaterThan(0);
+    expect(garden.wetness(0, 14000)).toBeLessThan(1);
+    expect([garden.liquidTone(0, 0).body, garden.liquidTone(0, 30000).body]).toEqual(['rgba(150,10,22,0.95)', 'rgba(88,8,14,0.95)']);
+    Object.assign(garden, { state: { look: 'silver' }, _theme: null }); garden.appearance = { ...garden.look().appearance };
+    expect(garden.liquidTone(0, 0).body).toBe('rgba(240,244,252,0.95)');
+    const dried = garden.liquidTone(0, 30000);
+    expect(dried.a).toBeCloseTo(0.55, 9); // dried ichor lets the letter show through
+    expect(dried.edgeRGB).toBe(garden.ICHOR.ichor.rim);
+  });
+
+  it('keeps a stain live while its liquid still moves, and settles it once that has been still for 25 s', () => {
+    const { garden, context } = stainHarness();
+    const letter: any = { ch: 'O', x: 20, y: 100 };
+    const stain = { l: letter, done: true, born: 0, runs: [{ wetAt: 20000 }] }; // splashed long ago; its bead only just dripped
+    garden.stains = [stain];
+    garden.drawLetterStains(context, 30000, 100);
+    expect(letter._stainCache).toBeUndefined();
+    expect(garden._stainLayer.cg.operations[0].stain).toBe(stain);
+    garden.drawLetterStains(context, 46000, 100);
+    expect(letter._stainCache.list).toEqual([stain]);
+  });
+
+  for (const [effect, bloodFx] of [['legacy', undefined], ['fluid', FLUID()]] as const) it(`accumulates splashes across return visits without restarting earlier trails (${effect})`, () => {
     const letter = { ch: 'O', x: 100, y: 100 };
     const garden = Object.assign(writer(), {
       _blooms: { 5: { x: 100, y: 0, R: 8, stage: 'half' } },
-      stains: [], inkBelow: () => true, inkAt: () => true, inkEnd: () => -0.2,
+      stains: [], inkBelow: () => true, glyphs: { O: stroke() }, bloodFx,
     });
     let landed = 0;
     let originals: { stain: any; born: number; runs: any[]; lengths: number[] }[] = [];
@@ -1193,9 +1401,10 @@ describe('Standalone TypeGardenApp retained blood splatter', () => {
       expect(original.stain.runs).toBe(original.runs);
       expect(original.runs.length).toBeGreaterThan(0);
       original.runs.forEach((run: any, i: number) => {
-        expect(run.len).toBeGreaterThan(original.lengths[i]);
-        expect(run.dropped).toBe(false);
+        expect(run.len).toBeGreaterThanOrEqual(original.lengths[i]); // (a small second fluid run may already have stopped)
+        expect(run.dropped || run.bead).toBeFalsy(); // not yet down at the edge
       });
+      expect(original.runs[0].len).toBeGreaterThan(original.lengths[0]);
     }
   });
 
@@ -1372,6 +1581,209 @@ describe('Standalone TypeGardenApp retained blood splatter', () => {
   });
 });
 
+describe('Standalone TypeGardenApp bleeding effects', () => {
+  const letter = { ch: 'l', x: 20, y: 100 };
+  // a garden whose letters are upright strokes, bleeding in the legacy effect with `patch`, its splashes left in place
+  const bleeding = (patch: Record<string, number> = {}) => Object.assign(writer(), { stains: [], drops: [], H: 1e9, glyphs: { l: stroke() }, bloodFx: LEGACY(patch) });
+  const settle = (garden: any, st: any) => { let t = 0; while (!st.done && t < 120000) garden.bloodStep(t += 100, 0.1, 100, [letter]); };
+  const falls = (garden: any) => garden.drops.filter((d: any) => d.st === 'fall' && d.id === null).length;
+
+  it('bleeds in the legacy effect unless another is chosen, and each splash keeps the effect it was made with', () => {
+    const garden = Object.assign(writer(), { stains: [], glyphs: { l: stroke() }, paintStainLegacy: vi.fn(), paintStainFluid: vi.fn() });
+    expect([garden.bleed(), garden.fx()]).toEqual(['legacy', garden.BLEEDS[0].fx]);
+    const old = garden.addStain({ l: letter, lx: 0, ly: -0.7 }, 0.04, 0);
+    expect(old.fx.style).toBe('legacy');
+    expect(old.runs.every((run: any) => run.y1 === -0.2 && !run.path)).toBe(true); // straight down to the stroke's bottom edge
+    expect(garden.setBleed('fluid')).toBe(true);
+    expect(garden.setBleed('fluid')).toBe(false); // (already in use)
+    expect(garden.setBleed('watercolour')).toBe(false);
+    const fresh = garden.addStain({ l: letter, lx: 0, ly: -0.5 }, 0.04, 1000);
+    expect(fresh.fx.style).toBe('fluid');
+    expect(fresh.runs.length && fresh.runs.every((run: any) => run.path)).toBeTruthy();
+    garden.bloodStep(2000, 1, 100, [letter]);
+    expect(old.runs[0].len).toBeGreaterThan(0); // the older splash's trails creep on in their own way
+    for (const st of [old, fresh]) garden.paintStain({}, letter, st, 100, 2000);
+    expect(garden.paintStainLegacy.mock.calls.map((call: any) => call[2])).toEqual([old]);
+    expect(garden.paintStainFluid.mock.calls.map((call: any) => call[2])).toEqual([fresh]);
+  });
+
+  it('builds a custom effect from the one showing, on either trail style, each change a new effect', () => {
+    const garden = writer();
+    garden.setBleed('custom'); // nothing built yet: it starts from the effect showing
+    expect([garden.bleed(), garden.fx()]).toEqual(['custom', garden.BLEEDS[0].fx]);
+    expect(garden.fx()).not.toBe(garden.BLEEDS[0].fx);
+    garden.setBleed('fluid');
+    expect(garden.editBleed({ trails: 3, thick: 99, nonsense: 5 })).toBe(true);
+    const custom = garden.fx();
+    expect(garden.bleed()).toBe('custom');
+    expect(custom).toEqual({ ...FLUID(), trails: 3, thick: 2.5 }); // from the fluid effect showing, kept within each control's range
+    expect(garden.customBleed).toBe(custom);
+    expect(garden.BLEEDS[1].fx).toEqual(FLUID()); // the preset itself is untouched
+    expect(garden.editBleed({ trails: 3 })).toBe(false);
+    expect(garden.editBleed({ style: 'legacy' })).toBe(false); // (a control edit never changes the trail style)
+    garden.editBleed({ pool: 1.5 });
+    expect(garden.fx()).not.toBe(custom); // (splashes made with the earlier one keep it)
+    const mine = garden.fx();
+    garden.setBleed('legacy');
+    expect(garden.fx()).toBe(garden.BLEEDS[0].fx);
+    garden.setBleed('custom'); // the visitor's own comes back
+    expect(garden.fx()).toBe(mine);
+    // choosing a trail style starts the custom effect over from that style's own values, never a mix of the two
+    expect(garden.baseBleed('legacy')).toBe(true);
+    expect([garden.bleed(), garden.fx(), garden.customBleed]).toEqual(['custom', LEGACY(), garden.fx()]);
+    expect(garden.fx()).not.toBe(garden.BLEEDS[0].fx);
+    garden.editBleed({ trails: 2 });
+    expect(garden.baseBleed('legacy')).toBe(true); // the style in use again: back to its own values
+    expect(garden.fx()).toEqual(LEGACY());
+    garden.baseBleed('fluid');
+    expect(garden.fx()).toEqual(FLUID());
+    expect(garden.baseBleed('watercolour')).toBe(false);
+  });
+
+  it('bleeds more or less from each bite with the amount', () => {
+    for (const [amount, lo, hi] of [[1, 4, 6], [2, 8, 12], [0.25, 1, 2]]) {
+      const garden = Object.assign(writer(), { bloodFx: LEGACY({ amount }) });
+      garden.biteRose(5, 0);
+      expect(garden.bites[5].max).toBeGreaterThanOrEqual(lo);
+      expect(garden.bites[5].max).toBeLessThanOrEqual(hi);
+    }
+  });
+
+  it('in the legacy style, sets how many trails a splash has, how thick, and how straight they run', () => {
+    const splash = (patch: Record<string, number>) => { const garden = bleeding(patch); return garden.addStain({ l: letter, lx: 0, ly: -0.7 }, 0.04, 0); };
+    expect(splash({ trails: 3 }).runs).toHaveLength(3);
+    expect(splash({ trails: 0 })).toMatchObject({ runs: [], done: true });
+    expect(splash({ trails: 1, thick: 2 }).runs.map((run: any) => run.w)).toEqual([0.04]);
+    expect(Math.abs(splash({ trails: 1, wander: 0 }).runs[0].wob)).toBe(0);
+    expect(splash({ splatSize: 1.5 }).r).toBeCloseTo(0.06, 12);
+  });
+
+  it('in the legacy style, short trails stop on the way down, and the beads drip as many times as there are beads', () => {
+    let garden = bleeding({ trails: 1, length: 0.4 });
+    const short = garden.addStain({ l: letter, lx: 0, ly: -0.7 }, 0.04, 0);
+    settle(garden, short);
+    const run = short.runs[0];
+    expect(run.len).toBeLessThan(run.y1 - short.ly);
+    expect([run.bead, run.dropped, falls(garden)]).toEqual([0, false, 0]);
+    for (const [beads, drips] of [[1, 1], [2, 2], [3, 3], [0, 0]]) {
+      garden = bleeding({ trails: 1, beads });
+      const st = garden.addStain({ l: letter, lx: 0, ly: -0.7 }, 0.04, 0);
+      settle(garden, st);
+      expect(st.runs[0].len).toBe(st.runs[0].y1 - st.ly);
+      expect(falls(garden)).toBe(drips);
+      const { g, ellipses } = fillLog();
+      garden.paintStainBeads(g, letter, st, 100, 60000);
+      expect(ellipses).toHaveLength(beads ? 1 : 0); // no beads, nothing hangs
+    }
+    // long trails hang longer drips
+    const hanging = (length: number) => {
+      const g2 = bleeding({ trails: 1, length }), st = g2.addStain({ l: letter, lx: 0, ly: -0.7 }, 0.04, 0);
+      settle(g2, st);
+      const { g, ellipses } = fillLog();
+      g2.paintStainBeads(g, letter, st, 100, 60000);
+      return ellipses[0][3];
+    };
+    expect(hanging(2)).toBeGreaterThan(hanging(1) * 1.5);
+  });
+
+  it('in the legacy style, sends a new trail down an older one\'s channel when merging', () => {
+    const garden = bleeding({ trails: 1, merge: 1 });
+    const first = garden.addStain({ l: letter, lx: 0, ly: -0.7 }, 0.04, 0), a = first.runs[0];
+    const second = garden.addStain({ l: letter, lx: 0.02, ly: -0.6 }, 0.04, 1000), b = second.runs[0];
+    // it starts where the older trail passes and ends where it ends
+    expect(second.lx + b.dx).toBeCloseTo(first.lx + a.dx + a.wob * (0.1 / (a.y1 + 0.7)), 12);
+    expect(second.lx + b.dx + b.wob).toBeCloseTo(first.lx + a.dx + a.wob, 12);
+    expect(b.y1).toBe(a.y1);
+    garden.bloodFx = LEGACY({ trails: 1 });
+    expect(garden.addStain({ l: letter, lx: 0.02, ly: -0.6 }, 0.04, 2000).runs[0].dx).toBe(0); // without merging, its own line
+  });
+
+  it('in the legacy style, sets the splatter thrown and its size, and pools blood at the edges only when pooling', () => {
+    const garden = writer();
+    for (const [splat, n] of [[1, 4], [2, 8], [0, 0]]) {
+      garden.drops = [];
+      garden.splashSpray({ x: 0, y: 0, r: 2 }, { fx: LEGACY({ splat, splatSize: 1.5 }) }, 100);
+      expect(garden.drops).toHaveLength(n);
+      expect(garden.drops.every((d: any) => d.r >= 0.6 - 1e-9 && d.r <= 1.2 + 1e-9)).toBe(true);
+    }
+    const marks = (fx: any) => {
+      const { g, arcs, ellipses } = fillLog();
+      const run = { dx: 0, w: 0.02, y1: -0.2, len: 0.4, v: 0.04, wob: 0, bead: 1, dropped: true };
+      garden.paintStain(g, { x: 0, y: 0 }, { lx: 0, ly: -0.6, r: 0.04, born: 0, seed: 1, runs: [run], fx }, 100, 10000);
+      return [arcs(), ellipses.length];
+    };
+    expect(marks(LEGACY())).toEqual([5, 0]); // the satellite droplets; no pool
+    expect(marks(LEGACY({ splat: 2, pool: 1 }))).toEqual([10, 1]);
+    expect(marks(LEGACY({ splat: 0 }))).toEqual([0, 0]);
+  });
+
+  it('paints every splash, older ones too, with the drying time, dried look and gloss in use', () => {
+    const garden = app(), { g, fills, blurs } = fillLog();
+    const st = { lx: 0, ly: -0.5, r: 0.05, born: 0, seed: 1, runs: [] };
+    const body = (now: number) => { fills.length = 0; garden.paintStain(g, { x: 0, y: 0 }, st, 100, now); return fills[0]; };
+    expect(body(30000)).toBe('rgba(88,8,14,0.95)'); // dried
+    garden.bloodFx = LEGACY({ dry: 60 });
+    expect(body(30000)).toBe('rgba(119,9,18,0.95)'); // half dry
+    garden.bloodFx = LEGACY({ aged: 0 });
+    expect(body(30000)).toBe('rgba(150,10,22,0.95)'); // still fresh-looking
+    garden.bloodFx = LEGACY({ aged: 2 });
+    expect(body(30000)).toBe('rgba(26,6,6,0.475)'); // darker still, and fading
+    Object.assign(garden, { state: { look: 'silver' }, _theme: null }); garden.appearance = { ...garden.look().appearance };
+    for (const gloss of [1, 0]) {
+      garden.bloodFx = LEGACY({ gloss });
+      blurs.length = 0;
+      body(0);
+      expect(Math.max(...blurs) > 0).toBe(gloss > 0); // ichor glows only with gloss
+      expect(fills.some(f => f.startsWith('rgba(255,255,255,') && !f.endsWith(',0.000)'))).toBe(gloss > 0); // and shines
+    }
+  });
+
+  it('settles splashes into the letter once dry, for the drying time in use, and repaints them when the finish changes', () => {
+    const { garden, context } = stainHarness();
+    const letter: any = { ch: 'O', x: 20, y: 100 }, stain = { l: letter, done: true, born: 0 };
+    garden.stains = [stain];
+    garden.bloodFx = LEGACY({ dry: 60 });
+    garden.drawLetterStains(context, 30000, 100);
+    expect(letter._stainCache).toBeUndefined(); // still drying
+    garden.drawLetterStains(context, 61000, 100);
+    const cache = letter._stainCache;
+    expect(cache.list).toEqual([stain]);
+    garden.drawLetterStains(context, 62000, 100);
+    expect(letter._stainCache).toBe(cache);
+    garden.bloodFx = LEGACY({ dry: 60, gloss: 0.5 });
+    garden.drawLetterStains(context, 63000, 100);
+    expect(letter._stainCache).not.toBe(cache); // repainted in the new finish
+  });
+
+  it('in the fluid style, sets how far runs wander, whether they merge and pool, and how many beads drip', () => {
+    const garden = Object.assign(writer(), { stains: [], drops: [], glyphs: { l: stroke() }, bloodFx: { ...FLUID(), trails: 1, wander: 0 } });
+    const straight = garden.addStain({ l: letter, lx: 0, ly: -0.7 }, 0.04, 0).runs[0];
+    expect(straight.path.every((p: number[]) => p[0] === straight.path[0][0])).toBe(true);
+    // a splash beside a wet track follows it, unless merging is off
+    for (const [merge, joined] of [[1, true], [0, false]] as const) {
+      garden.stains = [];
+      garden.bloodFx = { ...FLUID(), trails: 1, merge };
+      const track = garden.addStain({ l: letter, lx: 0, ly: -0.7 }, 0.04, 0).runs[0];
+      track.len = track.total;
+      expect(garden.addStain({ l: letter, lx: 0.01, ly: -0.65 }, 0.03, 1000).runs[0].joined).toBe(joined);
+    }
+    // pooling, and the number of drips from the same liquid
+    const run = () => ({ dx: 0, w: 0.02, seed: 1, path: [[0, -0.49], [0, -0.4], [0, -0.3]], cum: [0, 0.09, 0.19], total: 0.19, len: 0.19,
+      reach: 0.79, stalls: [], wetAt: 0, bead: null, end: [0, -0.3], edge: -0.29, ledge: [-0.08, 0.08] });
+    for (const [beads, drips] of [[1, 2], [2, 4], [0, 0]]) {
+      garden.drops = [];
+      const st = { l: letter, runs: [run()], fx: { ...FLUID(), beads } }, r = st.runs[0];
+      for (let t = 0; t < 600 && garden.flowRun(st, r, t * 100, 0.1, 100); t++);
+      expect(garden.drops).toHaveLength(drips);
+    }
+    garden.paintPool = vi.fn();
+    const { g } = fillLog();
+    const pooled = (pool: number) => { const st = { l: letter, lx: 0, ly: -0.5, r: 0.04, born: 0, seed: 1, runs: [{ ...run(), bead: { f: 0.5, left: 0.3, drops: 0, snap: 0 } }], fx: { ...FLUID(), pool } }; garden.paintStain(g, letter, st, 100, 0); };
+    pooled(1); pooled(0);
+    expect(garden.paintPool).toHaveBeenCalledOnce();
+  });
+});
+
 describe('Standalone TypeGardenApp looks and appearance', () => {
   // a hero, an earned bloom, then buds, partly open roses and cluster roses
   const roses = () => [
@@ -1488,12 +1900,7 @@ describe('Standalone TypeGardenApp looks and appearance', () => {
   });
 
   it('bleeds red blood in the crimson preset and luminous silver ichor in the silver preset', () => {
-    const garden = app(), fills: string[] = [];
-    const g: any = {
-      set fillStyle(value: string) { fills.push(value); }, get fillStyle() { return fills[fills.length - 1]; },
-      strokeStyle: '', lineWidth: 1, lineCap: '', shadowBlur: 0, shadowColor: '', getTransform: () => ({ a: 1 }),
-      beginPath() {}, moveTo() {}, lineTo() {}, closePath() {}, fill() {}, arc() {}, ellipse() {}, stroke() {},
-    };
+    const garden = app(), { g, fills } = fillLog();
     const stain = { lx: 0, ly: -0.5, r: 0.05, born: 0, seed: 1, runs: [] };
     garden.paintStain(g, { x: 0, y: 0 }, stain, 100, 0);
     expect(fills[0]).toBe('rgba(150,10,22,0.95)');
@@ -1504,6 +1911,28 @@ describe('Standalone TypeGardenApp looks and appearance', () => {
     expect(fills[0]).toBe('rgba(240,244,252,0.95)');
     expect(g.shadowColor).toBe(garden.ICHOR.ichor.glow);
     expect(g.shadowBlur).toBe(0); // the glow is switched off again for whatever is painted next
+  });
+
+  it('in the fluid effect, bleeds red blood in the crimson preset and luminous silver ichor in the silver preset', () => {
+    const garden = app(), { g, fills } = fillLog();
+    // a splash with one run that has reached the edge below and hangs a bead there
+    const run = { dx: 0, w: 0.02, seed: 1, path: [[0, -0.49], [0, -0.4], [0, -0.3]], cum: [0, 0.09, 0.19], total: 0.19, len: 0.19,
+      reach: 0.5, stalls: [0.1], wetAt: 0, bead: { f: 0.7, left: 0.3, drops: 0, snap: 0 }, end: [0, -0.3], edge: -0.29, ledge: [-0.08, 0.08] };
+    const stain = { lx: 0, ly: -0.5, r: 0.05, born: 0, seed: 1, runs: [run], fx: FLUID() };
+    garden.paintStain(g, { x: 0, y: 0 }, stain, 100, 0);
+    garden.paintStainBeads(g, { x: 0, y: 0 }, stain, 100, 0);
+    expect(fills[0]).toBe('rgba(150,10,22,0.95)');
+    expect(fills.filter(fill => fill === 'rgba(150,10,22,0.95)').length).toBeGreaterThanOrEqual(3); // splash, run and bead
+    expect(g.shadowColor).toBe('');
+    use(garden, 'silver');
+    fills.length = 0;
+    garden.paintStain(g, { x: 0, y: 0 }, stain, 100, 0);
+    expect(g.shadowBlur).toBe(0); // the glow is switched off again for whatever is painted next
+    garden.paintStainBeads(g, { x: 0, y: 0 }, stain, 100, 0);
+    expect(fills[0]).toBe('rgba(240,244,252,0.95)');
+    expect(g.shadowColor).toBe(garden.ICHOR.ichor.glow);
+    expect(fills.some(fill => fill.startsWith(`rgba(${garden.ICHOR.ichor.rim},`))).toBe(true); // the bead's shaded underside
+    expect(g.shadowBlur).toBe(0);
   });
 
   it('generates a full rose ink for any colour, its body that colour and its ramps running dark to light', () => {
@@ -1825,6 +2254,36 @@ describe('Standalone TypeGardenApp looks and appearance', () => {
     expect(garden.stains).toHaveLength(2);
   });
 
+  it('refits fluid splashes to a new typeface too, tracing their runs again over the new letterforms', () => {
+    const garden = writer();
+    let half = 0.2;
+    garden.glyph = () => Array.from({ length: 57 }, (_, i) => ({ y: -0.7 + i / 80, runs: [[-half, half]] }));
+    garden.mw = (ch: string) => (ch === ' ' ? 0.45 : half * 3);
+    typeInto(garden, 'ab', 0, 120);
+    const letters = live(garden);
+    // a run part-way down, with a bead it hung at the edge of the letters it ran down before
+    const run = () => ({ dx: 0, w: 0.02, seed: 1, path: [], cum: [0], total: 0, len: 0.2, v: 0.04, wetAt: 0,
+      bead: { f: 0.5, left: 0.2, drops: 0, snap: 0 }, stalls: [], reach: 1 });
+    garden.stains = [
+      { l: letters[0], lx: 0.1, ly: -0.5, r: 0.04, born: 0, seed: 1, runs: [run()], specks: [], fx: FLUID() },
+      { l: letters[1], lx: 0.25, ly: -0.5, r: 0.04, born: 0, seed: 2, runs: [run()], specks: [], fx: FLUID() }, // only the wider typeface has ink here
+    ];
+    half = 0.3;
+    garden.reshape();
+    half = 0.2;
+    garden.reshape();
+    expect(garden.stains).toHaveLength(2);
+    expect(garden.stains[1].lx).toBeCloseTo(0.2, 9);
+    for (const s of garden.stains) {
+      expect(s.runs).toHaveLength(1);
+      for (const r of s.runs) {
+        expect(r.path.every(([x, y]: number[]) => garden.inkAt(s.l.ch, x, y))).toBe(true); // traced again over the letter
+        expect(r.len).toBeLessThanOrEqual(r.total);
+        expect(r.bead).toBeNull(); // not down at the new edge, so nothing hangs there
+      }
+    }
+  });
+
   it('switches typeface only once it has loaded, the latest choice winning, and keeps it across presets', async () => {
     const garden = Object.assign(writer(), { updateTheme: vi.fn(), buildPalettesUI: vi.fn(), paint: vi.fn(), focus: vi.fn(), reshape: vi.fn(),
       F: '"Playfair Display",Georgia,serif' }); // (as the constructor sets it)
@@ -1905,6 +2364,26 @@ describe('Standalone TypeGardenApp looks and appearance', () => {
     expect(() => { refused.garden.restoreAppearance(); refused.garden.storeAppearance(); }).not.toThrow();
   });
 
+  it('keeps the bleeding effect in the browser with the appearance, and brings back only what it recognises', () => {
+    const first = storeHarness();
+    first.garden.setBleed('fluid');
+    first.garden.editBleed({ trails: 2.5, gloss: 0.4 });
+    first.garden.storeAppearance();
+    const saved = JSON.parse(first.data['typeGarden.appearance']);
+    expect([saved.bleed, saved.bleedCustom]).toEqual(['custom', first.garden.customBleed]);
+    const next = storeHarness(first.data['typeGarden.appearance']);
+    next.garden.restoreAppearance();
+    expect([next.garden.bleed(), next.garden.fx(), next.garden.customBleed]).toEqual(['custom', first.garden.customBleed, first.garden.customBleed]);
+    // values out of range are brought into it; anything unrecognised keeps the legacy preset's
+    const odd = storeHarness(JSON.stringify({ bleed: 'custom', bleedCustom: { style: 'watercolour', trails: 99, gloss: 'shiny', dry: -5 } }));
+    odd.garden.restoreAppearance();
+    expect([odd.garden.bleed(), odd.garden.fx()]).toEqual(['custom', LEGACY({ trails: 4, dry: 5 })]);
+    for (const [bleed, shown] of [['fluid', 'fluid'], ['nonsense', 'legacy'], ['custom', 'legacy']]) { // (custom, with nothing kept)
+      const { garden } = storeHarness(JSON.stringify({ bleed }));
+      garden.restoreAppearance();
+      expect([garden.bleed(), garden.fx()]).toEqual([shown, garden.BLEEDS.find((b: any) => b.id === shown).fx]);
+    }
+  });
   // a minimal TrueType file whose name table holds a full name (nameID 4) and a family name (nameID 1), in UTF-16
   const fontFile = (full: string, family = 'Fam') => {
     const names = [[4, full], [1, family]] as const, strings = names.map(([, s]) => s);
