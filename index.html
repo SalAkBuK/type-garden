@@ -161,7 +161,7 @@
       right: calc(24px + env(safe-area-inset-right));
       bottom: calc(66px + env(safe-area-inset-bottom));
       z-index: 30;
-      width: 272px;
+      width: 288px;
       box-sizing: border-box;
       padding: 12px 14px;
       display: flex;
@@ -192,6 +192,17 @@
     [data-tg="ap-seg"] button { background: transparent; border: 0; color: #8C8C8C; font: inherit; font-size: 10px; padding: 3px 6px; cursor: pointer; white-space: nowrap; }
     [data-tg="ap-seg"] button:hover { color: #FFFFFF; }
     [data-tg="ap-seg"] button[aria-checked="true"] { background: #FFFFFF; color: #000000; }
+    [data-tg="appearance"] select {
+      flex: 1; min-width: 0; background: #000000; color: #EDEDED; border: 1px solid #2A2A2A; border-radius: 8px;
+      font: inherit; font-size: 11px; padding: 4px 6px;
+    }
+    [data-tg="ap-upload"] {
+      flex: none; background: transparent; border: 1px solid #2A2A2A; border-radius: 8px; color: #BDBDBD;
+      font: inherit; font-size: 10.5px; padding: 4px 7px; cursor: pointer;
+    }
+    [data-tg="ap-upload"]:hover, [data-tg="ap-upload"]:focus-visible { border-color: #FFFFFF; color: #FFFFFF; }
+    [data-tg="ap-note"] { color: #8C8C8C; font-size: 10.5px; margin-top: -4px; padding-left: 71px; }
+    [data-tg="ap-note"]:empty { display: none; }
     [data-tg="ap-warn"] { color: #D9B26A; font-size: 10.5px; line-height: 1.4; }
     [data-tg="ap-warn"]::before { content: '\25CF'; margin-right: 6px; font-size: 8px; vertical-align: 1px; }
     [data-tg="ap-warn"]:empty { display: none; }
@@ -326,6 +337,8 @@
       <div data-tg="ap-row"><span>Second</span><span data-tg="ap-seg" role="radiogroup" aria-label="Where the second rose colour goes"><button type="button" role="radio" data-role="focal" title="The hero and earned blooms">focal</button><button type="button" role="radio" data-role="scattered" title="Scattered among the smaller roses">scattered</button><button type="button" role="radio" data-role="off" title="Not used">off</button></span></div>
       <div data-tg="ap-row"><span>Blood</span><input type="color" data-ap="blood" aria-label="Blood colour"><span>Vines</span><input type="color" data-ap="vine" aria-label="Vine and leaf colour"></div>
       <div data-tg="ap-row"><span>Butterfly</span><input type="color" data-ap="wing" aria-label="Butterfly wing colour"><input type="color" data-ap="wingMarks" aria-label="Butterfly marking colour"></div>
+      <div data-tg="ap-row"><span>Font</span><select data-ap="font" aria-label="Typeface"></select><button type="button" data-tg="ap-upload" title="Use your own font file (.ttf, .otf, .woff or .woff2)">Upload</button><input type="file" data-tg="ap-file" accept=".ttf,.otf,.woff,.woff2" hidden></div>
+      <div data-tg="ap-note" aria-live="polite"></div>
       <div data-tg="ap-warn" aria-live="polite"></div>
     </div>
 
@@ -401,7 +414,19 @@
         this.statusEl = document.getElementById('poster-status');
 
         this.SENT = String.fromCharCode(0x200b); // Zero-width space sentinel
-        this.F = '"Playfair Display",Georgia,serif';
+        // The curated typefaces (Google Fonts, loaded when first chosen): the family, the weight it is drawn in, a fallback
+        // stack and its stylesheet query. Playfair Display arrives with the page.
+        this.FONTS = [
+          { id: 'playfair', name: 'Playfair Display', family: 'Playfair Display', weight: 700, fallback: 'Georgia,serif', css: 'Playfair+Display:wght@700' },
+          { id: 'cormorant', name: 'Cormorant Garamond', family: 'Cormorant Garamond', weight: 700, fallback: 'Georgia,serif', css: 'Cormorant+Garamond:wght@700' },
+          { id: 'ebgaramond', name: 'EB Garamond', family: 'EB Garamond', weight: 700, fallback: 'Georgia,serif', css: 'EB+Garamond:wght@700' },
+          { id: 'bodoni', name: 'Bodoni Moda', family: 'Bodoni Moda', weight: 700, fallback: 'Didot,Georgia,serif', css: 'Bodoni+Moda:wght@700' },
+          { id: 'dmserif', name: 'DM Serif Display', family: 'DM Serif Display', weight: 400, fallback: 'Georgia,serif', css: 'DM+Serif+Display' },
+          { id: 'cinzel', name: 'Cinzel', family: 'Cinzel', weight: 700, fallback: 'Georgia,serif', css: 'Cinzel:wght@700' },
+          { id: 'unifraktur', name: 'UnifrakturMaguntia (blackletter)', family: 'UnifrakturMaguntia', weight: 400, fallback: 'Georgia,serif', css: 'UnifrakturMaguntia' }
+        ];
+        this.F = '"Playfair Display",Georgia,serif'; // the typeface in use and its weight (see useFont)
+        this.FW = 700;
         this.C = { red: '#FF1400', blue: '#3257FF', line: '#FFB4A8', text: '#FFFFFF', vein: '#000000' };
 
         this.PRESETS = [
@@ -435,32 +460,32 @@
         //   hero and earned blooms, 'scattered': about 40% of the smaller roses, 'off')
         //   blood: what a bitten rose bleeds (a pale colour glows, like ichor)
         //   vine: the leaves (canes, sepals and thorn bases follow it); wing, wingMarks: the butterfly's velvet and markings
-        //   font: the typeface (Playfair Display, for now)
+        //   font: the typeface (see FONTS); the looks don't set it, so a chosen typeface stays as the presets are tried
         // The looks are presets: a complete appearance, the swatch (dot/ring), and a finish (art-directed glow and cast shadow)
         // that holds while the preset's page and primary rose colour are unchanged.
         this.LOOKS = [
           { id: 'crimson', name: 'Crimson gothic', dot: '#C41A30',
-            appearance: { bg: '#000000', text: '#FFFFFF', rosePrimary: '#AC0818', roseSecondary: '#AC0818', secondaryRole: 'off', blood: '#960A16', vine: '#1D4C28', wing: '#0B0406', wingMarks: '#9E0F1E', font: 'playfair' },
+            appearance: { bg: '#000000', text: '#FFFFFF', rosePrimary: '#AC0818', roseSecondary: '#AC0818', secondaryRole: 'off', blood: '#960A16', vine: '#1D4C28', wing: '#0B0406', wingMarks: '#9E0F1E' },
             finish: { glow: ['rgba(92,8,22,0.26)', 'rgba(48,3,12,0.12)'], shade: '0,0,0', shadeK: 1 } },
           { id: 'ivory', name: 'Ivory', dot: '#C41A30', ring: '#FBF6EA',
-            appearance: { bg: '#EEE6D5', text: '#120E0B', rosePrimary: '#AC0818', roseSecondary: '#E4DAC4', secondaryRole: 'scattered', blood: '#CC1222', vine: '#1D4C28', wing: '#0B0406', wingMarks: '#9E0F1E', font: 'playfair' },
+            appearance: { bg: '#EEE6D5', text: '#120E0B', rosePrimary: '#AC0818', roseSecondary: '#E4DAC4', secondaryRole: 'scattered', blood: '#CC1222', vine: '#1D4C28', wing: '#0B0406', wingMarks: '#9E0F1E' },
             finish: { glow: ['rgba(255,252,242,0.8)', 'rgba(255,250,238,0.38)'], shade: '70,52,32', shadeK: 0.45 } },
           { id: 'silver', name: 'Silver ichor', dot: '#F7F8FB', ring: '#9EA4B2',
-            appearance: { bg: '#DEDFE5', text: '#0D0D11', rosePrimary: '#D6D8E2', roseSecondary: '#D6D8E2', secondaryRole: 'off', blood: '#F0F4FC', vine: '#1D4C28', wing: '#0B0406', wingMarks: '#8F95A3', font: 'playfair' },
+            appearance: { bg: '#DEDFE5', text: '#0D0D11', rosePrimary: '#D6D8E2', roseSecondary: '#D6D8E2', secondaryRole: 'off', blood: '#F0F4FC', vine: '#1D4C28', wing: '#0B0406', wingMarks: '#8F95A3' },
             finish: { glow: ['rgba(252,253,255,0.85)', 'rgba(247,249,254,0.4)'], shade: '44,48,66', shadeK: 0.45 } },
           { id: 'blackrose', name: 'Black rose', dot: '#0A0405', ring: '#C41A30',
-            appearance: { bg: '#150C0F', text: '#EFE6D4', rosePrimary: '#AC0818', roseSecondary: '#3A0810', secondaryRole: 'focal', blood: '#960A16', vine: '#1D4C28', wing: '#0B0406', wingMarks: '#9E0F1E', font: 'playfair' },
+            appearance: { bg: '#150C0F', text: '#EFE6D4', rosePrimary: '#AC0818', roseSecondary: '#3A0810', secondaryRole: 'focal', blood: '#960A16', vine: '#1D4C28', wing: '#0B0406', wingMarks: '#9E0F1E' },
             finish: { glow: ['rgba(150,18,40,0.42)', 'rgba(80,6,20,0.2)'], shade: '0,0,0', shadeK: 1 } },
           // black roses need a light page to read as silhouettes; pink needs a dark one to glow, unless black roses and letters
           // carry the contrast, when a cool neutral grey suits it best
           { id: 'mourning', name: 'Mourning', dot: '#2A0710',
-            appearance: { bg: '#ECE5D8', text: '#0E0B0A', rosePrimary: '#3A0810', roseSecondary: '#3A0810', secondaryRole: 'off', blood: '#CC1222', vine: '#1D4C28', wing: '#0B0406', wingMarks: '#9E0F1E', font: 'playfair' },
+            appearance: { bg: '#ECE5D8', text: '#0E0B0A', rosePrimary: '#3A0810', roseSecondary: '#3A0810', secondaryRole: 'off', blood: '#CC1222', vine: '#1D4C28', wing: '#0B0406', wingMarks: '#9E0F1E' },
             finish: { glow: ['rgba(255,252,246,0.8)', 'rgba(255,250,242,0.38)'], shade: '60,44,30', shadeK: 0.45 } },
           { id: 'oldrose', name: 'Old rose', dot: '#D7809B',
-            appearance: { bg: '#1B0B18', text: '#F4EAE0', rosePrimary: '#CE6886', roseSecondary: '#CE6886', secondaryRole: 'off', blood: '#960A16', vine: '#1D4C28', wing: '#0B0406', wingMarks: '#9E0F1E', font: 'playfair' },
+            appearance: { bg: '#1B0B18', text: '#F4EAE0', rosePrimary: '#CE6886', roseSecondary: '#CE6886', secondaryRole: 'off', blood: '#960A16', vine: '#1D4C28', wing: '#0B0406', wingMarks: '#9E0F1E' },
             finish: { glow: ['rgba(140,44,96,0.34)', 'rgba(76,20,54,0.15)'], shade: '0,0,0', shadeK: 1 } },
           { id: 'pinkblack', name: 'Pink & black', dot: '#D7809B', ring: '#2A0710',
-            appearance: { bg: '#D9D6D8', text: '#120C0E', rosePrimary: '#CE6886', roseSecondary: '#3A0810', secondaryRole: 'focal', blood: '#CC1222', vine: '#1D4C28', wing: '#0B0406', wingMarks: '#9E0F1E', font: 'playfair' },
+            appearance: { bg: '#D9D6D8', text: '#120C0E', rosePrimary: '#CE6886', roseSecondary: '#3A0810', secondaryRole: 'focal', blood: '#CC1222', vine: '#1D4C28', wing: '#0B0406', wingMarks: '#9E0F1E' },
             finish: { glow: ['rgba(246,244,245,0.8)', 'rgba(240,238,240,0.38)'], shade: '50,40,46', shadeK: 0.45 } }
         ];
         // Curated rose inks, used exactly for their own colour (the body colour, face[1]); any other colour gets a generated ink
@@ -536,7 +561,7 @@
           busy: false
         };
 
-        this.appearance = { ...this.look().appearance }; // what the customized garden is drawn in (see LOOKS, compileTheme)
+        this.appearance = { ...this.look().appearance, font: 'playfair' }; // what the customized garden is drawn in (see LOOKS, compileTheme)
         this.STORE = 'typeGarden.appearance'; // where the visitor's appearance is kept in their browser
         this.restoreAppearance();
 
@@ -648,7 +673,7 @@
 
         // Font readiness check
         if (document.fonts) {
-          document.fonts.load(`700 100px ${this.F}`).then(() => {
+          document.fonts.load(`${this.FW} 100px ${this.F}`).then(() => {
             this.cache = {};
             this.glyphs = {};
             this._inkIdx = {};
@@ -656,6 +681,8 @@
             this.fontsReady = true;
             this.layout(true);
             this.buildPoster();
+            // the visitor's own typefaces are read back first, so a saved choice of one of them can be applied
+            this.restoreUserFonts().then(() => { if (this._savedFont) { const id = this._savedFont; this._savedFont = null; this.setFont(id); } });
           }).catch(() => { this.fontsReady = true; });
           setTimeout(() => { this.fontsReady = true; }, 3000);
         } else {
@@ -869,7 +896,7 @@
         const L = this.LOOKS.find(k => k.id === id);
         if (!L || id === this.state.look) return;
         this.state.look = id;
-        this.appearance = { ...L.appearance };
+        this.appearance = { ...L.appearance, font: this.font().id };
         this._theme = null;
         this._unsaved = true;
         this.restyle();
@@ -879,14 +906,14 @@
         this.paint(performance.now(), true);
         if (!this.apOpen) this.focus();
       }
-      // Change appearance values: colours, and where the secondary rose colour goes (not the typeface). This only
+      // Change appearance values: colours, and where the secondary rose colour goes (the font has its own path). This only
       // ever recolours: the garden, its writing record, bloom clocks, blood and rose placement are never touched. Each cached
       // bitmap knows the colours it holds and repaints itself when they change (rose sprites a few a frame, keeping their old
       // colours meanwhile; plants are drawn live while a vine colour is being changed), so a colour picker can fire as fast as
       // it likes; the theme is compiled once, when next drawn, and the page's chrome follows once a frame. The preset whose
       // values these are is selected again; otherwise the appearance is 'custom'. Returns whether anything changed.
       setAppearance(patch) {
-        const A = this.appearance || { ...this.look().appearance }, next = { ...A };
+        const A = this.appearance || { ...this.look().appearance, font: this.font().id }, next = { ...A };
         for (const k in patch) {
           if (!(k in A) || k === 'font') continue;
           const v = k === 'secondaryRole' ? (['focal', 'scattered', 'off'].includes(patch[k]) ? patch[k] : null) : this.normHex(patch[k]);
@@ -907,7 +934,7 @@
         return L ? L.id : 'custom';
       }
       // ---------- Kept in the browser ----------
-      // The visitor's appearance (the preset or 'custom', the appearance in use, and their custom appearance)
+      // The visitor's appearance (the preset or 'custom', the appearance in use with its typeface, and their custom appearance)
       // is written at most every 300 ms (see paint) and read back on load. Storage can be missing or refuse; then nothing is
       // kept, and the garden behaves exactly the same.
       storeAppearance() {
@@ -921,17 +948,18 @@
         // every value is checked; anything unrecognised keeps its default
         const clean = A => {
           if (!A || typeof A !== 'object') return null;
-          const out = { ...this.LOOKS[0].appearance };
+          const out = { ...this.LOOKS[0].appearance, font: 'playfair' };
           for (const k in out) {
-            if (k === 'font') continue; // (the one typeface)
-            if (k === 'secondaryRole') { if (['focal', 'scattered', 'off'].includes(A[k])) out[k] = A[k]; }
+            if (k === 'font') { if (this.FONTS.some(f => f.id === A.font) || /^user:[0-9a-f]{8}$/.test(A.font)) out.font = A.font; }
+            else if (k === 'secondaryRole') { if (['focal', 'scattered', 'off'].includes(A[k])) out[k] = A[k]; }
             else { const v = this.normHex(A[k]); if (v) out[k] = v; }
           }
           return out;
         };
         const A = clean(saved.appearance), C = clean(saved.custom);
         if (A) {
-          this.appearance = A;
+          this.appearance = { ...A, font: 'playfair' }; // (the typeface follows once it has loaded: see init)
+          this._savedFont = A.font !== 'playfair' ? A.font : null;
           this.state.look = this.matchLook(A);
           this._theme = null;
         }
@@ -993,7 +1021,7 @@
         for (const el of this.apEl.querySelectorAll('[data-ap]')) {
           const v = A[el.dataset.ap];
           if (v == null || el === active) continue;
-          el.value = el.type === 'color' ? v.toLowerCase() : v;
+          el.value = el.type === 'color' ? v.toLowerCase() : el.dataset.ap === 'font' ? this._fontWant || v : v; // (a typeface loading shows)
         }
         for (const b of this.apEl.querySelectorAll('[data-role]')) b.setAttribute('aria-checked', String(b.dataset.role === A.secondaryRole));
         const warn = this.apEl.querySelector('[data-tg="ap-warn"]');
@@ -1004,10 +1032,18 @@
       bindAppearanceUI() {
         const panel = this.apEl;
         if (!panel) return;
+        const menu = panel.querySelector('[data-ap="font"]'), file = panel.querySelector('[data-tg="ap-file"]');
+        this.buildFontMenu();
+        const upload = panel.querySelector('[data-tg="ap-upload"]');
+        if (upload && file) {
+          upload.addEventListener('click', () => file.click());
+          file.addEventListener('change', () => { const f = file.files && file.files[0]; file.value = ''; if (f) this.uploadFont(f); });
+        }
         panel.addEventListener('input', e => {
           const k = e.target.dataset && e.target.dataset.ap;
           if (k && k !== 'font') this.editAppearance({ [k]: e.target.value });
         });
+        panel.addEventListener('change', e => { if (e.target === menu) this.setFont(menu.value); });
         panel.addEventListener('click', e => {
           const b = e.target.closest && e.target.closest('[data-role]');
           if (b) this.editAppearance({ secondaryRole: b.dataset.role });
@@ -1023,6 +1059,236 @@
         if (roses.some(r => c(r, A.bg) < 1.05)) return 'Roses melt into the page';
         if (c(A.vine, A.bg) < 1.05) return 'Vines melt into the page';
         return '';
+      }
+
+      // ---------- Typeface ----------
+      font() { return this.fontsAll().find(f => f.id === (this.appearance && this.appearance.font)) || this.FONTS[0]; }
+      fontsAll() { return [...this.FONTS, ...(this.userFonts || [])]; }
+      // Choose a typeface, curated or the visitor's own. It is loaded first (a curated one's stylesheet, then the face); if that
+      // fails the garden keeps its typeface and the panel says so. A later choice made while one is still loading wins.
+      // Resolves whether it changed.
+      async setFont(id) {
+        const f = this.fontsAll().find(x => x.id === id);
+        if (!f || f === this.font()) { this._fontWant = null; this.fontNote(''); return false; }
+        this._fontWant = id;
+        this.fontNote(`Loading ${f.name}…`);
+        const ok = await this.loadFont(f);
+        if (this._fontWant !== id) return false;
+        this._fontWant = null;
+        this.fontNote(ok ? '' : `Couldn't load ${f.name}`);
+        if (ok) this.useFont(f);
+        else this.syncAppearanceUI();
+        return ok;
+      }
+      loadFont(f) {
+        if (f.user) return this.loadUserFont(f);
+        const done = this._fontsLoaded || (this._fontsLoaded = new Set(['playfair']));
+        if (done.has(f.id)) return Promise.resolve(true);
+        return new Promise(resolve => {
+          let settled = false;
+          const finish = ok => { if (settled) return; settled = true; clearTimeout(timer); if (ok) done.add(f.id); resolve(ok); };
+          const timer = setTimeout(() => finish(false), 8000);
+          const face = () => document.fonts.load(`${f.weight} 100px "${f.family}"`).then(list => finish(list.length > 0), () => finish(false));
+          if (document.querySelector(`link[data-font="${f.id}"]`)) { face(); return; }
+          const link = Object.assign(document.createElement('link'), { rel: 'stylesheet', href: `https://fonts.googleapis.com/css2?family=${f.css}&display=swap` });
+          link.dataset.font = f.id;
+          link.onload = face;
+          link.onerror = () => finish(false);
+          document.head.appendChild(link);
+        });
+      }
+      // ---------- The visitor's own typefaces ----------
+      // A font file the visitor chooses: checked (its size, then whether this browser can use it as a font), named from the
+      // file itself where it can be, kept in their browser with their other uploads (the latest five), and chosen. The same
+      // file uploaded again is the same typeface. Drawn at its own weight: an uploaded face is one weight, not given a false bold.
+      async uploadFont(file) {
+        if (!file) return false;
+        if (file.size > 6 * 1024 * 1024) { this.fontNote(`${file.name} is too large (over 6 MB)`); return false; }
+        let data;
+        try { data = await file.arrayBuffer(); } catch (e) { this.fontNote(`Couldn't read ${file.name}`); return false; }
+        const id = 'user:' + this.hashBytes(data);
+        if (!(this.userFonts || []).some(f => f.id === id)) {
+          const name = this.fontName(data) || file.name.replace(/\.(ttf|otf|woff2?)$/i, '').slice(0, 48) || 'My font';
+          const f = this.userFontEntry(id, name, data, this.fontMime(file.name));
+          this.fontNote(`Reading ${name}…`);
+          if (!(await this.loadUserFont(f))) { this.fontNote(`${file.name} isn't a font this browser can use`); this.syncAppearanceUI(); return false; }
+          this.userFonts = [...(this.userFonts || []), f].slice(-5);
+          this.storeUserFonts();
+          this.buildFontMenu();
+        }
+        return this.setFont(id);
+      }
+      userFontEntry(id, name, data, type) {
+        return { id, name, family: `TG upload ${id.slice(5)}`, weight: 400, fallback: 'Georgia,serif', user: true, data, type: type || 'font/ttf' };
+      }
+      // An uploaded typeface is registered with the page straight from its file (no network)
+      async loadUserFont(f) {
+        const done = this._fontsLoaded || (this._fontsLoaded = new Set(['playfair']));
+        if (done.has(f.id)) return true;
+        try {
+          const face = new FontFace(f.family, f.data);
+          await face.load();
+          document.fonts.add(face);
+          done.add(f.id);
+          return true;
+        } catch (e) { return false; }
+      }
+      fontMime(name) { const ext = (name.match(/\.(\w+)$/) || [])[1]; return ({ otf: 'font/otf', woff: 'font/woff', woff2: 'font/woff2' })[(ext || '').toLowerCase()] || 'font/ttf'; }
+      hashBytes(buf) {
+        const b = new Uint8Array(buf);
+        let h = 2166136261;
+        for (let i = 0; i < b.length; i++) { h ^= b[i]; h = Math.imul(h, 16777619); }
+        return (h >>> 0).toString(16).padStart(8, '0');
+      }
+      // The typeface's own name (its full name, else its family), from the name table of a TrueType or OpenType file; null for
+      // anything else (a compressed WOFF keeps its file name)
+      fontName(buf) {
+        try {
+          const v = new DataView(buf), tag = v.getUint32(0);
+          if (tag !== 0x00010000 && tag !== 0x4F54544F && tag !== 0x74727565) return null; // TrueType, 'OTTO', 'true'
+          for (let i = 0, n = v.getUint16(4); i < n; i++) {
+            const rec = 12 + i * 16;
+            if (v.getUint32(rec) !== 0x6E616D65) continue; // 'name'
+            const at = v.getUint32(rec + 8), count = v.getUint16(at + 2), strings = at + v.getUint16(at + 4);
+            let best = null;
+            for (let j = 0; j < count; j++) {
+              const r = at + 6 + j * 12, platform = v.getUint16(r), id = v.getUint16(r + 6), len = v.getUint16(r + 8), off = strings + v.getUint16(r + 10);
+              if ((id !== 4 && id !== 1) || (platform !== 0 && platform !== 1 && platform !== 3)) continue;
+              let str = '';
+              if (platform === 1) for (let k = 0; k < len; k++) str += String.fromCharCode(v.getUint8(off + k));
+              else for (let k = 0; k + 1 < len; k += 2) str += String.fromCharCode(v.getUint16(off + k));
+              str = str.trim();
+              if (str && (!best || (id === 4 && best.id !== 4))) best = { id, str };
+            }
+            return best ? best.str.slice(0, 48) : null;
+          }
+        } catch (e) { /* not a font whose name can be read */ }
+        return null;
+      }
+      // Uploaded typefaces are kept in the browser's IndexedDB (font files are too large for localStorage); where it is
+      // missing they last for the visit
+      fontDB() {
+        return this._fontDB || (this._fontDB = new Promise(resolve => {
+          try {
+            const req = indexedDB.open('typeGarden', 1);
+            req.onupgradeneeded = () => req.result.createObjectStore('fonts', { keyPath: 'id' });
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => resolve(null);
+          } catch (e) { resolve(null); }
+        }));
+      }
+      async storeUserFonts() {
+        const db = await this.fontDB();
+        if (!db) return;
+        try {
+          const store = db.transaction('fonts', 'readwrite').objectStore('fonts');
+          store.clear();
+          (this.userFonts || []).forEach((f, order) => store.put({ id: f.id, name: f.name, data: f.data, type: f.type, order }));
+        } catch (e) { /* not kept */ }
+      }
+      async restoreUserFonts() {
+        const db = await this.fontDB();
+        const rows = !db ? [] : await new Promise(resolve => {
+          try {
+            const req = db.transaction('fonts').objectStore('fonts').getAll();
+            req.onsuccess = () => resolve(req.result || []);
+            req.onerror = () => resolve([]);
+          } catch (e) { resolve([]); }
+        });
+        const known = new Set((this.userFonts || []).map(f => f.id));
+        const kept = rows.filter(r => r && /^user:[0-9a-f]{8}$/.test(r.id) && Object.prototype.toString.call(r.data) === '[object ArrayBuffer]' && !known.has(r.id))
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)) // (in the order they were uploaded)
+          .map(r => this.userFontEntry(r.id, String(r.name || 'My font').slice(0, 48), r.data, r.type));
+        this.userFonts = [...kept, ...(this.userFonts || [])].slice(-5);
+        this.buildFontMenu();
+      }
+      // The typeface menu: the curated typefaces, then the visitor's own
+      buildFontMenu() {
+        const menu = this.apEl && this.apEl.querySelector('[data-ap="font"]');
+        if (!menu) return;
+        menu.textContent = '';
+        const group = (label, list) => {
+          if (!list.length) return;
+          const g = Object.assign(document.createElement('optgroup'), { label });
+          for (const f of list) g.appendChild(Object.assign(document.createElement('option'), { value: f.id, textContent: f.name }));
+          menu.appendChild(g);
+        };
+        group('Typefaces', this.FONTS);
+        group('Your fonts', this.userFonts || []);
+        menu.value = this._fontWant || this.font().id;
+      }
+      // The SVG export's typeface: the visitor's own is embedded in the file, a curated one imported from Google Fonts
+      svgFontCss(f) {
+        if (f.user && f.data) {
+          const b = new Uint8Array(f.data);
+          let bin = '';
+          for (let i = 0; i < b.length; i += 0x8000) bin += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
+          return `@font-face { font-family: '${f.family}'; src: url(data:${f.type};base64,${btoa(bin)}); }`;
+        }
+        return `@import url('https://fonts.googleapis.com/css2?family=${f.css}&amp;display=swap');`;
+      }
+      fontNote(text) { const el = this.apEl && this.apEl.querySelector('[data-tg="ap-note"]'); if (el) el.textContent = text; }
+      // Draw with a typeface: the letters' shapes change, so the garden is refitted to them (see reshape), in both views
+      useFont(f) {
+        this.appearance = { ...this.appearance, font: f.id };
+        if (this.customAppearance) this.customAppearance = { ...this.customAppearance, font: f.id };
+        this._unsaved = true;
+        this.F = `"${f.family}",${f.fallback}`;
+        this.FW = f.weight;
+        this.reshape();
+        this.layout();
+        if (this.pcv) this.buildPoster();
+        this._chrome = true;
+      }
+      // Refit the garden to new letterforms. The writing record stays exactly as it was (the text, ids, seeds, hesitations,
+      // rewrites, bloom clocks and birth times) and every plant regrows from its own seeds in the new glyph geometry, as far
+      // grown as it was; blood stains move onto the nearest ink of their letter, or go where there is none nearby.
+      reshape() {
+        this.cache = {}; this.glyphs = {}; this._inkIdx = {}; this._inkB = {};
+        this._bentStems = new Map(); this._bentEls = new Set(); this._roseKey = null; // (the rose spacing is worked out afresh)
+        for (const l of this.letters) {
+          this.freeLetterBitmaps(l);
+          if (l.ch === ' ' || !l.els) continue;
+          const bloom = (l.bloomEls || []).find(e => e.t === 'rose' && e.bloom && !e.cluster);
+          l._regrown = bloom ? bloom._cluster || 0 : 0;
+          const end = l.endEls && l.endDead == null;
+          this.gen(l);
+          if (end) this.genEnd(l, l.endRel || 0);
+          l.wrapEls = l.clusterEls = l.markEls = undefined; // (grown again lazily, from the new glyph)
+          if (l.bloom) l.bloomEls = undefined;
+        }
+        const stains = this.stains || [];
+        for (let i = stains.length - 1; i >= 0; i--) {
+          const st = stains[i], at = st.l.ch === ' ' ? null : this.nearestInk(st.l.ch, st.lx, st.ly, 0.18);
+          if (!at) { stains.splice(i, 1); continue; }
+          [st.lx, st.ly] = at;
+          st.runs = st.runs.filter(run => {
+            run.y1 = this.inkEnd(st.l.ch, st.lx + run.dx, st.ly);
+            run.len = Math.min(run.len, Math.max(0, run.y1 - st.ly));
+            return run.y1 - st.ly > 0.02;
+          });
+        }
+      }
+      // The nearest point of a letter's ink to (lx, ly), within reach (em), or null
+      nearestInk(ch, lx, ly, reach) {
+        if (this.inkAt(ch, lx, ly)) return [lx, ly];
+        const idx = this.inkIndex(ch), k0 = Math.floor(ly * 80);
+        let best = null, bd = reach;
+        for (let k = k0 - Math.ceil(reach * 80); k <= k0 + Math.ceil(reach * 80); k++) {
+          for (const r of idx.get(k) || []) {
+            const x = Math.max(r[0], Math.min(r[1], lx)), y = (k + 0.5) / 80, d = Math.hypot(x - lx, y - ly);
+            if (d <= bd) { bd = d; best = [x, y]; }
+          }
+        }
+        return best;
+      }
+      // A letter's cached bitmaps (stamped plants, its settled stains, its roses' sprites)
+      freeLetterBitmaps(l) {
+        if (l._plantCache) { for (const k in l._plantCache) this.freeBitmap(l._plantCache[k].cv); l._plantCache = null; }
+        if (l._stainCache) { this.freeBitmap(l._stainCache.cv); l._stainCache = null; }
+        for (const list of this.letterLists(l, true)) for (const e of list) if (e._spr) {
+          this.freeBitmap(e._spr.cv); this.freeBitmap(e._spr.next); this.freeBitmap(e._spr.mix); e._spr = null;
+        }
       }
 
       // '#rrggbb' or '#rgb' (any case) as '#RRGGBB', or null
@@ -1363,7 +1629,7 @@
           },
           stroke: (p, col, w) => { g.beginPath(); this.path(g, p, false); g.strokeStyle = col; g.lineWidth = w; g.lineCap = 'round'; g.lineJoin = 'round'; g.stroke(); },
           rect: (x, y, w, h, col) => { g.fillStyle = col; g.fillRect(x, y, w, h); },
-          text: (ch, x, y, S, col) => { g.font = `700 ${S}px ${this.F}`; g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.fillStyle = col; g.fillText(ch, x, y); }
+          text: (ch, x, y, S, col) => { g.font = `${this.FW} ${S}px ${this.F}`; g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.fillStyle = col; g.fillText(ch, x, y); }
         };
       }
       vine(base, dir, len, amp, waves, ph, bend, n = 40) {
@@ -1572,7 +1838,7 @@
       mw(ch) {
         if (this.cache[ch] != null) return this.cache[ch];
         if (this.g) {
-          this.g.font = `700 100px ${this.F}`;
+          this.g.font = `${this.FW} 100px ${this.F}`;
           let w = this.g.measureText(ch).width / 100;
           if (ch === ' ') w *= 1.4;
           return (this.cache[ch] = w);
@@ -1690,7 +1956,11 @@
       // A letter id from its content seed, kept unique among the letters on the page (ids also key element hashes and caches)
       freshId(seed) { let id = seed % 999983 + 1; while (this.letters.some(l => l.id === id)) id++; return id; }
       // Per-letter random seeds: from the typed text in type mode, else from the poster's generator (in the same call order as before)
-      seedOf(l, k) { return l.seed != null ? Math.imul(l.seed ^ Math.imul(k, 0x9E3779B1), 2246822519) >>> 12 : Math.floor(this.rand() * 1e6); }
+      seedOf(l, k) {
+        const seeds = l._seeds || (l._seeds = {}); // (kept, so the letter's plants regrow the same when refitted to a new typeface)
+        if (seeds[k] == null) seeds[k] = l.seed != null ? Math.imul(l.seed ^ Math.imul(k, 0x9E3779B1), 2246822519) >>> 12 : Math.floor(this.rand() * 1e6);
+        return seeds[k];
+      }
 
       // Backspace prunes the newest letter: its plant wilts and draws back over REC.wither, and the position is remembered so a
       // letter retyped there grows as a revision. The letter before it lets go of its end-of-word growth the same way.
@@ -1739,10 +2009,11 @@
           const r = this.rng(Math.floor(e.id * 10) + k * 7919), side = k % 2 ? -1 : 1, hu = [0.62, 0.78, 0.5, 0.88, 0.35][k], [base, a] = this.at(P, hu);
           const stage = ['bud', 'half', 'bud', 'half', 'full'][k], half = stage === 'half';
           const pts = this.vine(base, a + side * (0.75 + r() * 0.3), e.R * (2.2 + r() * 0.5), 0.22, 1 + r(), r() * 6.28, -side * 0.35, 12), tip = pts[pts.length - 1];
-          const stalk = { t: 'stem', id: l.id * 100 + 99.4 + k * 0.1, pts, segs: [{ u0: 0, u1: 1, layer: 1 }], d0: age, dur: 360, w: 0.6, thorns: [], fixedThorns: true, par: null, keep: true, host: e.stem, hu }; // (host: it follows the shoot if that bends)
+          const d0 = k < (l._regrown || 0) ? 0 : age; // (a stalk that had grown before the letter was refitted is grown again)
+          const stalk = { t: 'stem', id: l.id * 100 + 99.4 + k * 0.1, pts, segs: [{ u0: 0, u1: 1, layer: 1 }], d0, dur: 360, w: 0.6, thorns: [], fixedThorns: true, par: null, keep: true, host: e.stem, hu }; // (host: it follows the shoot if that bends)
           const rose = {
             t: 'rose', id: l.id * 100 + 99.45 + k * 0.1, x: tip[0], y: tip[1], R: e.R * (stage === 'full' ? 0.55 + r() * 0.08 : half ? 0.72 + r() * 0.1 : 0.62 + r() * 0.12), rot: (r() - 0.5) * 0.4,
-            ph1: r() * 6.28, ph2: r() * 6.28, turns: 2, layer: 1, d0: age, stem: stalk, su: 1, bloom: e.bloom, stage, cluster: true
+            ph1: r() * 6.28, ph2: r() * 6.28, turns: 2, layer: 1, d0, stem: stalk, su: 1, bloom: e.bloom, stage, cluster: true
           };
           l.bloomEls.push(stalk, rose);
         }
@@ -2021,7 +2292,7 @@
         const id = opening ? this.letters.length + 1 : this.freshId(seed), cut = this._cuts[A.length];
         delete this._cuts[A.length];
         if (ch === ' ') {
-          if (last && last.ch !== ' ') { last.cut = now; this.genEnd(last, now - last.birth); }
+          if (last && last.ch !== ' ') { last.cut = now; last.endRel = now - last.birth; this.genEnd(last, last.endRel); }
           this.letters.push({ ch: ' ', id, seed, birth: now, els: [] });
           this.layout(); return;
         }
@@ -2774,7 +3045,7 @@
         const FS = 160, W = FS * 2, H = FS * 2, base = FS * 1.3;
         const c = document.createElement('canvas'); c.width = W; c.height = H;
         const g = c.getContext('2d', { willReadFrequently: true });
-        g.font = `700 ${FS}px ${this.F}`; g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.fillStyle = '#000';
+        g.font = `${this.FW} ${FS}px ${this.F}`; g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.fillStyle = '#000';
         g.fillText(ch, W / 2, base);
         const d = g.getImageData(0, 0, W, H).data, rows = [];
         for (let py = H - 1; py >= 0; py -= 2) {
@@ -3442,7 +3713,7 @@
         for (const st of list) this.paintStain(g, at0, st, c.S, now);
         g.save();
         g.globalCompositeOperation = 'destination-in';
-        g.font = `700 ${c.S}px ${this.F}`; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+        g.font = `${this.FW} ${c.S}px ${this.F}`; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
         g.fillStyle = '#000'; g.fillText(ch, 0, 0);
         g.restore();
         if (beads) for (const st of list) this.paintStainBeads(g, at0, st, c.S, now);
@@ -4037,7 +4308,7 @@
         const isPoster = this.state.mode === 'poster';
         const W = isPoster ? 1080 : this.W;
         const H = isPoster ? 1080 : this.H;
-        const pal = this.pal();
+        const pal = this.pal(), svgFont = this.font();
         const treatment = this.state.treatment || 'customized';
         const st = isPoster
           ? { letters: this.posterLetters, S: this.posterS, C: pal.C, boil: false, recoil: 20, speed: 1, wither: 260, face: false }
@@ -4082,7 +4353,7 @@
           },
           text: (ch, x, y, S, col) => {
             const esc = ch === '&' ? '&amp;' : ch === '<' ? '&lt;' : ch === '>' ? '&gt;' : ch;
-            svgElements.push(`<text x="${x.toFixed(2)}" y="${y.toFixed(2)}" font-family="Playfair Display, Georgia, serif" font-weight="700" font-size="${S.toFixed(2)}" text-anchor="middle" dominant-baseline="alphabetic" fill="${col}">${esc}</text>`);
+            svgElements.push(`<text x="${x.toFixed(2)}" y="${y.toFixed(2)}" font-family="${svgFont.family}, ${svgFont.fallback}" font-weight="${svgFont.weight}" font-size="${S.toFixed(2)}" text-anchor="middle" dominant-baseline="alphabetic" fill="${col}">${esc}</text>`);
           }
         };
 
@@ -4097,8 +4368,8 @@
 
         const svgDoc = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&amp;display=swap');
-  text { font-family: 'Playfair Display', Georgia, serif; font-weight: 700; }
+  ${this.svgFontCss(svgFont)}
+  text { font-family: '${svgFont.family}', ${svgFont.fallback}; font-weight: ${svgFont.weight}; }
 </style>
 ${svgElements.join('\n')}
 </svg>`;

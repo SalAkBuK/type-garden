@@ -29,7 +29,7 @@ function constructorTable(name: string) {
   }
   return runInNewContext(`(${classSource.slice(open, end + 1)})`);
 }
-const TABLES = { ...Object.fromEntries(['LOOKS', 'INK', 'ICHOR', 'WINGS', 'DOF', 'VINES', 'GROUNDS'].map(name => [name, constructorTable(name)])), FW: 700 };
+const TABLES = { ...Object.fromEntries(['LOOKS', 'INK', 'ICHOR', 'WINGS', 'DOF', 'VINES', 'GROUNDS', 'FONTS'].map(name => [name, constructorTable(name)])), FW: 700 };
 
 function app() {
   return Object.assign(Object.create(StandaloneApp.prototype), {
@@ -1391,7 +1391,7 @@ describe('Standalone TypeGardenApp looks and appearance', () => {
   it('offers seven presets, each setting every colour, falling back to crimson gothic', () => {
     const garden = app();
     expect(garden.LOOKS.map((look: any) => look.id)).toEqual(['crimson', 'ivory', 'silver', 'blackrose', 'mourning', 'oldrose', 'pinkblack']);
-    const fields = ['bg', 'text', 'rosePrimary', 'roseSecondary', 'secondaryRole', 'blood', 'vine', 'wing', 'wingMarks', 'font'];
+    const fields = ['bg', 'text', 'rosePrimary', 'roseSecondary', 'secondaryRole', 'blood', 'vine', 'wing', 'wingMarks']; // (not the font: that stays the visitor's)
     for (const look of garden.LOOKS) {
       expect(Object.keys(look.appearance).sort()).toEqual([...fields].sort());
       expect(['focal', 'scattered', 'off']).toContain(look.appearance.secondaryRole);
@@ -1470,7 +1470,7 @@ describe('Standalone TypeGardenApp looks and appearance', () => {
     garden.setLook('blackrose');
     const preset = garden.LOOKS.find((look: any) => look.id === 'blackrose');
     expect(garden.state.look).toBe('blackrose');
-    expect(garden.appearance).toEqual(preset.appearance);
+    expect(garden.appearance).toEqual({ ...preset.appearance, font: 'playfair' }); // (the typeface stays as it was)
     expect(garden.appearance).not.toBe(preset.appearance); // a copy: editing it never edits the preset
     expect(garden.theme()).not.toBe(crimson);
     expect(garden.theme().bg).toBe('#150C0F');
@@ -1654,7 +1654,7 @@ describe('Standalone TypeGardenApp looks and appearance', () => {
     expect(garden.theme().glow[0]).not.toBe(ivory.finish.glow[0]); // a new page: derived from it instead
   });
 
-  it('ignores values that are not colours, and leaves the typeface as it is', () => {
+  it('ignores values that are not colours and leaves the font to its own path', () => {
     const garden = app(), before = { ...garden.look().appearance };
     expect(garden.setAppearance({ bg: 'red', text: '#12', secondaryRole: 'everywhere', font: 'cinzel', petals: '#fff' })).toBe(false);
     expect(garden.appearance ?? before).toEqual(before);
@@ -1770,6 +1770,88 @@ describe('Standalone TypeGardenApp looks and appearance', () => {
     press('s');
     expect(live(garden).map((l: any) => l.ch).join('')).toBe('ins'); // outside the panel, typing grows the garden again
   });
+  it('remembers each letter\'s seeds, so its plants can regrow the same', () => {
+    const garden = writer(), rand = vi.fn(() => 0.25);
+    garden.rand = rand;
+    const opening: any = { ch: 'a', id: 1, seed: null }; // the opening text draws its seeds from a stream
+    const first = [garden.seedOf(opening, 1), garden.seedOf(opening, 2)];
+    expect([garden.seedOf(opening, 1), garden.seedOf(opening, 2)]).toEqual(first);
+    expect(rand).toHaveBeenCalledTimes(2);
+  });
+
+  it('refits the garden to a new typeface keeping the writing record, and regrows it exactly on returning', () => {
+    const garden = writer();
+    let half = 0.2; // half the stroke width of every letter in the typeface in use (a stand-in for real letterforms)
+    garden.glyph = () => Array.from({ length: 57 }, (_, i) => ({ y: -0.7 + i / 80, runs: [[-half, half]] }));
+    garden.mw = (ch: string) => (ch === ' ' ? 0.45 : half * 3);
+    let t = typeInto(garden, 'roses', 0, (i: number) => (i === 2 ? 1400 : 120)); // a hesitation inside the word
+    garden.keyEvent(t += 150); garden.prune(t);
+    garden.add('s', t += 300, garden.keyEvent(t)); // a rewritten letter
+    for (const ch of ' bleed') garden.add(ch, t += 120, garden.keyEvent(t));
+    garden.checkSprout(t + 1000); // a pause bloom
+    const letters = live(garden);
+    const run = () => ({ dx: 0, w: 0.02, y1: 0, len: 0.2, v: 0.04, wob: 0, bead: 0, dropped: false });
+    garden.stains = [
+      { l: letters[0], lx: 0.1, ly: -0.5, r: 0.04, born: 0, seed: 1, runs: [run()] },
+      { l: letters[1], lx: 0.25, ly: -0.5, r: 0.04, born: 0, seed: 2, runs: [run()] }, // only the wider typeface has ink here
+    ];
+    expect([letters.some((l: any) => l.hes), letters.some((l: any) => l.rev), letters.some((l: any) => l.bloom)]).toEqual([true, true, true]);
+    const record = () => JSON.stringify(garden.letters.map((l: any) => [l.ch, l.id, l.seed, l.ws, l.wi, l.hes, l.rev, l.birth, l.bloom, l.dead ?? null, l.endRel ?? null]));
+    const plants = () => JSON.stringify(garden.letters.map((l: any) => [l.els, l.endEls, l.tend]));
+    const ids = () => JSON.stringify(garden.letters.map((l: any) => (l.els || []).map((e: any) => e.id)));
+    const rec0 = record(), plants0 = plants(), ids0 = ids();
+
+    half = 0.3; // a wider typeface
+    garden.reshape();
+    expect(record()).toBe(rec0);
+    expect(ids()).toBe(ids0); // the same plants, from the same seeds...
+    expect(plants()).not.toBe(plants0); // ...fitted to the new letterforms
+    expect(garden.stains.map((s: any) => [s.lx, garden.inkAt(s.l.ch, s.lx, s.ly)])).toEqual([[0.1, true], [0.25, true]]);
+
+    half = 0.2; // and back
+    garden.reshape();
+    expect(record()).toBe(rec0);
+    expect(plants()).toBe(plants0);
+    // the stain that only the wider letters had ink under moves to the nearest ink; a trail keeps to the letter
+    expect(garden.stains).toHaveLength(2);
+    expect(garden.stains[1].lx).toBeCloseTo(0.2, 9);
+    for (const s of garden.stains) {
+      expect(garden.inkAt(s.l.ch, s.lx, s.ly)).toBe(true);
+      for (const r of s.runs) expect(r.len).toBeLessThanOrEqual(r.y1 - s.ly + 1e-9);
+    }
+    // a stain with no ink anywhere near is let go
+    garden.stains.push({ l: letters[2], lx: 0.9, ly: -0.5, r: 0.04, born: 0, seed: 3, runs: [run()] });
+    garden.reshape();
+    expect(garden.stains).toHaveLength(2);
+  });
+
+  it('switches typeface only once it has loaded, the latest choice winning, and keeps it across presets', async () => {
+    const garden = Object.assign(writer(), { updateTheme: vi.fn(), buildPalettesUI: vi.fn(), paint: vi.fn(), focus: vi.fn(), reshape: vi.fn(),
+      F: '"Playfair Display",Georgia,serif' }); // (as the constructor sets it)
+    garden.state.look = 'crimson';
+    garden.appearance = { ...garden.look().appearance, font: 'playfair' };
+    const loads: Record<string, (ok: boolean) => void> = {};
+    garden.loadFont = (f: any) => new Promise(resolve => { loads[f.id] = resolve; });
+    expect(await garden.setFont('comic')).toBe(false); // not one of the curated typefaces
+    // a typeface that fails to load changes nothing
+    const failing = garden.setFont('cinzel');
+    loads.cinzel(false);
+    expect(await failing).toBe(false);
+    expect([garden.appearance.font, garden.F, garden.reshape.mock.calls.length]).toEqual(['playfair', '"Playfair Display",Georgia,serif', 0]);
+    // two choices in quick succession: the later one is the one shown, even if the earlier finishes loading last
+    const first = garden.setFont('bodoni'), second = garden.setFont('unifraktur');
+    loads.unifraktur(true);
+    expect(await second).toBe(true);
+    loads.bodoni(true);
+    expect(await first).toBe(false);
+    expect([garden.appearance.font, garden.F, garden.FW]).toEqual(['unifraktur', '"UnifrakturMaguntia",Georgia,serif', 400]);
+    expect(garden.reshape).toHaveBeenCalledOnce();
+    // the presets are colour looks: the typeface stays as chosen
+    garden.setLook('mourning');
+    expect([garden.state.look, garden.appearance.font]).toEqual(['mourning', 'unifraktur']);
+    expect(garden.setAppearance({ blood: '#C9A227', font: 'playfair' })).toBe(true);
+    expect(garden.appearance.font).toBe('unifraktur'); // (a typeface is only ever chosen through setFont)
+  });
   // the app with a stand-in for the browser's storage (initially holding `stored`; `refuse` makes every access throw)
   const storeHarness = (stored: string | null = null, refuse = false) => {
     const data: Record<string, string> = {};
@@ -1780,7 +1862,7 @@ describe('Standalone TypeGardenApp looks and appearance', () => {
     };
     const StoreApp = runInNewContext(classSource, { localStorage, performance: { now: () => 10000 } });
     const garden = Object.assign(Object.create(StoreApp.prototype), { state: { look: 'crimson' }, STORE: 'typeGarden.appearance', ...structuredClone(TABLES) });
-    garden.appearance = { ...garden.look().appearance };
+    garden.appearance = { ...garden.look().appearance, font: 'playfair' };
     return { garden, data };
   };
 
@@ -1788,6 +1870,7 @@ describe('Standalone TypeGardenApp looks and appearance', () => {
     const first = storeHarness();
     first.garden.setAppearance({ bg: '#0B1430', text: '#F2EEE4', rosePrimary: '#3A5BD9', secondaryRole: 'scattered' });
     first.garden.customAppearance = { ...first.garden.appearance };
+    first.garden.appearance = { ...first.garden.appearance, font: 'cinzel' }; // (as setFont leaves it)
     first.garden.storeAppearance();
     const saved = JSON.parse(first.data['typeGarden.appearance']);
     expect(saved.look).toBe('custom');
@@ -1796,31 +1879,118 @@ describe('Standalone TypeGardenApp looks and appearance', () => {
     const next = storeHarness(first.data['typeGarden.appearance']);
     next.garden.restoreAppearance();
     expect(next.garden.state.look).toBe('custom');
-    expect(next.garden.appearance).toEqual(first.garden.appearance);
+    expect(next.garden.appearance).toEqual({ ...first.garden.appearance, font: 'playfair' }); // the typeface follows once loaded...
+    expect(next.garden._savedFont).toBe('cinzel'); // ...as queued here
     expect(next.garden.customAppearance).toEqual(first.garden.customAppearance);
     expect(next.garden.theme().bg).toBe('#0B1430');
 
     // a preset comes back as that preset
-    const ivory = storeHarness(JSON.stringify({ look: 'ivory', appearance: first.garden.LOOKS[1].appearance, custom: null }));
+    const ivory = storeHarness(JSON.stringify({ look: 'ivory', appearance: { ...first.garden.LOOKS[1].appearance, font: 'playfair' }, custom: null }));
     ivory.garden.restoreAppearance();
-    expect([ivory.garden.state.look, ivory.garden.customAppearance]).toEqual(['ivory', undefined]);
+    expect([ivory.garden.state.look, ivory.garden._savedFont, ivory.garden.customAppearance]).toEqual(['ivory', null, undefined]);
   });
 
   it('ignores anything in storage it does not recognise, and never fails when storage refuses', () => {
     const odd = storeHarness(JSON.stringify({ look: 'nonsense', appearance: { bg: 'red', text: '#123456', secondaryRole: 'everywhere', font: 'comic', blood: 12 }, custom: 7 }));
     odd.garden.restoreAppearance();
     const crimson = odd.garden.LOOKS[0].appearance;
-    expect(odd.garden.appearance).toEqual({ ...crimson, text: '#123456' });
-    expect([odd.garden.customAppearance, odd.garden.state.look]).toEqual([undefined, 'custom']);
+    expect(odd.garden.appearance).toEqual({ ...crimson, text: '#123456', font: 'playfair' });
+    expect([odd.garden._savedFont, odd.garden.customAppearance, odd.garden.state.look]).toEqual([null, undefined, 'custom']);
     for (const stored of ['not json', '"a string"', 'null']) {
       const { garden } = storeHarness(stored);
       garden.restoreAppearance();
-      expect([garden.appearance, garden.state.look]).toEqual([crimson, 'crimson']);
+      expect([garden.appearance, garden.state.look]).toEqual([{ ...crimson, font: 'playfair' }, 'crimson']);
     }
     const refused = storeHarness(null, true);
     expect(() => { refused.garden.restoreAppearance(); refused.garden.storeAppearance(); }).not.toThrow();
   });
 
+  // a minimal TrueType file whose name table holds a full name (nameID 4) and a family name (nameID 1), in UTF-16
+  const fontFile = (full: string, family = 'Fam') => {
+    const names = [[4, full], [1, family]] as const, strings = names.map(([, s]) => s);
+    const strBytes = strings.reduce((n, s) => n + s.length * 2, 0), nameLen = 6 + names.length * 12 + strBytes, at = 12 + 16;
+    const v = new DataView(new ArrayBuffer(at + nameLen));
+    v.setUint32(0, 0x00010000); v.setUint16(4, 1); // one table
+    v.setUint32(12, 0x6E616D65); v.setUint32(20, at); v.setUint32(24, nameLen); // 'name' at `at`
+    v.setUint16(at, 0); v.setUint16(at + 2, names.length); v.setUint16(at + 4, 6 + names.length * 12);
+    let off = 0;
+    names.forEach(([id, s], j) => {
+      const r = at + 6 + j * 12;
+      v.setUint16(r, 3); v.setUint16(r + 2, 1); v.setUint16(r + 4, 0x409); v.setUint16(r + 6, id); v.setUint16(r + 8, s.length * 2); v.setUint16(r + 10, off);
+      for (let k = 0; k < s.length; k++) v.setUint16(at + 6 + names.length * 12 + off + k * 2, s.charCodeAt(k));
+      off += s.length * 2;
+    });
+    return v.buffer;
+  };
+  const fakeFile = (name: string, data: ArrayBuffer, size = data.byteLength) => ({ name, size, arrayBuffer: async () => data });
+
+  it('reads an uploaded typeface\'s own name, and knows the same file again', () => {
+    const garden = app();
+    expect(garden.fontName(fontFile('Old English Text MT', 'Old English'))).toBe('Old English Text MT');
+    expect(garden.fontName(new TextEncoder().encode('wOF2 compressed, no readable name').buffer)).toBeNull();
+    expect(garden.fontName(new ArrayBuffer(3))).toBeNull();
+    const a = fontFile('A'), b = fontFile('B');
+    expect(garden.hashBytes(a)).toBe(garden.hashBytes(fontFile('A')));
+    expect(garden.hashBytes(a)).not.toBe(garden.hashBytes(b));
+    expect(garden.fontMime('x.WOFF2')).toBe('font/woff2');
+  });
+
+  it('uses a visitor\'s own font file like a curated typeface, refusing what it cannot use', async () => {
+    const garden = Object.assign(writer(), { reshape: vi.fn(), storeUserFonts: vi.fn(), buildFontMenu: vi.fn(),
+      F: '"Playfair Display",Georgia,serif' });
+    garden.appearance = { ...garden.look().appearance, font: 'playfair' };
+    let usable = true;
+    garden.loadUserFont = vi.fn(async () => usable);
+    // too large, or not a font: nothing changes
+    expect(await garden.uploadFont(fakeFile('huge.ttf', fontFile('Huge'), 7 * 1024 * 1024))).toBe(false);
+    usable = false;
+    expect(await garden.uploadFont(fakeFile('notes.ttf', new ArrayBuffer(64)))).toBe(false);
+    expect([garden.appearance.font, garden.userFonts, garden.reshape.mock.calls.length]).toEqual(['playfair', undefined, 0]);
+    // a font: kept, named from the file, and chosen (drawn at its own weight)
+    usable = true;
+    expect(await garden.uploadFont(fakeFile('OLDENGL.TTF', fontFile('Old English Text MT')))).toBe(true);
+    const mine = garden.font();
+    expect(mine).toMatchObject({ user: true, name: 'Old English Text MT', weight: 400 });
+    expect([garden.appearance.font, garden.F, garden.FW]).toEqual([mine.id, `"${mine.family}",Georgia,serif`, 400]);
+    expect(garden.storeUserFonts).toHaveBeenCalledOnce();
+    expect(garden.reshape).toHaveBeenCalledOnce();
+    // the same file again is the same typeface; a sixth upload lets the oldest go
+    await garden.uploadFont(fakeFile('copy.ttf', fontFile('Old English Text MT')));
+    expect(garden.userFonts).toHaveLength(1);
+    for (const n of ['B', 'C', 'D', 'E', 'F']) await garden.uploadFont(fakeFile(`${n}.ttf`, fontFile(n)));
+    expect(garden.userFonts.map((f: any) => f.name)).toEqual(['B', 'C', 'D', 'E', 'F']);
+    expect(garden.font().name).toBe('F');
+  });
+
+  it('restores a saved choice of the visitor\'s own typeface once their fonts are read back, in upload order', async () => {
+    const saved = storeHarness(JSON.stringify({ look: 'crimson', appearance: { ...writer().LOOKS[0].appearance, font: 'user:0a1b2c3d' }, custom: null }));
+    saved.garden.restoreAppearance();
+    expect([saved.garden.appearance.font, saved.garden._savedFont]).toEqual(['playfair', 'user:0a1b2c3d']);
+    const garden = Object.assign(app(), { buildFontMenu: vi.fn() });
+    const rows = [
+      { id: 'user:0000000b', name: 'Second', data: new ArrayBuffer(8), order: 1 },
+      { id: 'user:0000000a', name: 'First', data: new ArrayBuffer(8), order: 0 },
+      { id: 'not-an-id', name: 'Junk', data: new ArrayBuffer(8) },
+      { id: 'user:0000000c', name: 'No data', data: 'oops' },
+    ];
+    garden.fontDB = async () => ({
+      transaction: () => ({ objectStore: () => ({ getAll: () => { const req: any = {}; Promise.resolve().then(() => { req.result = rows; req.onsuccess(); }); return req; } }) }),
+    });
+    await garden.restoreUserFonts();
+    expect(garden.userFonts.map((f: any) => [f.id, f.name, f.user])).toEqual([['user:0000000a', 'First', true], ['user:0000000b', 'Second', true]]);
+    expect(garden.buildFontMenu).toHaveBeenCalled();
+  });
+
+  it('embeds the visitor\'s own typeface in an SVG export, and imports a curated one', () => {
+    const SvgApp = runInNewContext(classSource, { btoa });
+    const garden = Object.assign(Object.create(SvgApp.prototype), { ...structuredClone(TABLES) });
+    const data = fontFile('Mine'), mine = garden.userFontEntry('user:12345678', 'Mine', data, 'font/ttf');
+    const css = garden.svgFontCss(mine);
+    expect(css.startsWith("@font-face { font-family: 'TG upload 12345678'; src: url(data:font/ttf;base64,")).toBe(true);
+    const embedded = atob(css.match(/base64,([^)]+)\)/)[1]);
+    expect(Array.from(embedded, (c: string) => c.charCodeAt(0))).toEqual(Array.from(new Uint8Array(data))); // the file itself
+    expect(garden.svgFontCss(garden.FONTS[5])).toBe("@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700&amp;display=swap');");
+  });
 });
 
 describe('Standalone entry point parity', () => {
