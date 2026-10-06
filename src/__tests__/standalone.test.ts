@@ -17,9 +17,24 @@ if (classStart < 0 || bootstrapStart < classStart) throw new Error('Cannot find 
 const classSource = `${inlineScript.slice(classStart, bootstrapStart)}\nTypeGardenApp;`;
 const StandaloneApp = runInNewContext(classSource, { performance: { now: () => 10000 } });
 
+// The constructor's tables (the looks; the curated rose inks, blood, butterfly markings and velvet, petals and vines; the
+// typefaces), read from the shipped source, and the weight the default typeface is drawn in
+function constructorTable(name: string) {
+  const head = `this.${name} = `, open = classSource.indexOf(head) + head.length;
+  let depth = 0, end = open;
+  for (; end < classSource.length; end++) {
+    const c = classSource[end];
+    if (c === '[' || c === '{') depth++;
+    else if ((c === ']' || c === '}') && --depth === 0) break;
+  }
+  return runInNewContext(`(${classSource.slice(open, end + 1)})`);
+}
+const TABLES = { ...Object.fromEntries(['LOOKS', 'INK', 'ICHOR', 'WINGS', 'DOF', 'VINES', 'GROUNDS'].map(name => [name, constructorTable(name)])), FW: 700 };
+
 function app() {
   return Object.assign(Object.create(StandaloneApp.prototype), {
     props: {}, _vine: true, _G: 1.6, _now: 10000, _plantBudget: 2,
+    state: { look: 'crimson' }, ...structuredClone(TABLES),
   });
 }
 
@@ -49,7 +64,7 @@ function spriteHarness() {
   }
   const SpriteApp = runInNewContext(classSource, { OffscreenCanvas: TestCanvas });
   const garden = Object.assign(Object.create(SpriteApp.prototype), {
-    _vine: true, _throttle: true, _sprBudget: 8,
+    _vine: true, _throttle: true, _sprBudget: 8, state: { look: 'crimson' }, ...structuredClone(TABLES),
     backend: (context: unknown) => ({ ctx: context }),
     roseCustomized: vi.fn(),
   });
@@ -95,7 +110,7 @@ function stainHarness(scale = 1) {
   }
   const StainApp = runInNewContext(classSource, { OffscreenCanvas: TestCanvas });
   const garden = Object.assign(Object.create(StainApp.prototype), {
-    F: "'Playfair Display',serif", dpr: scale,
+    F: "'Playfair Display',serif", dpr: scale, state: { look: 'crimson' }, ...structuredClone(TABLES),
     inkBounds: () => ({ x0: -0.3, x1: 0.3, y0: -0.75, y1: 0.02 }),
     paintStain: vi.fn((g: any, _letter: any, stain: any) => g.operations.push({ kind: 'stain', stain, operation: g.globalCompositeOperation })),
     paintStainBeads: vi.fn((g: any, _letter: any, stain: any) => g.operations.push({ kind: 'bead', stain, operation: g.globalCompositeOperation })),
@@ -151,7 +166,7 @@ function roseLayerHarness() {
   });
   const garden: any = Object.assign(Object.create(LayerApp.prototype), {
     props: {}, F: '"Playfair Display",serif', dpr: 2, W: 600, H: 400,
-    state: { busy: true }, fontsReady: false, backend,
+    state: { busy: true }, fontsReady: false, backend, ...structuredClone(TABLES),
     vineShown: (element: any) => element,
     vineCross: () => 0,
     plantSettled: () => true,
@@ -295,7 +310,7 @@ describe('Standalone TypeGardenApp unobstructed rose layering', () => {
       document: { createElement: () => anchor },
     });
     const garden: any = Object.assign(Object.create(SVGApp.prototype), {
-      state: { mode: 'type', treatment: 'customized' }, W: 600, H: 400,
+      state: { mode: 'type', treatment: 'customized' }, W: 600, H: 400, ...structuredClone(TABLES),
       pal: () => ({ bg: '#000', C: {} }), mainState: () => ({ letters: [], S: 100 }),
       renderCustomized(this: any, B: any) {
         const rear = this.drawRearRoses(B, (target: any) => target.fill([[10, 10], [60, 10], [40, 50]], '#C41A30'));
@@ -428,7 +443,7 @@ describe('Standalone TypeGardenApp flower attachment', () => {
       x: 30, y: 40, lean: [0.8, 0.4], _settleN: 0,
       _plantCache: { 1: {
         cv: {}, x0: 0, y0: 0, w: 60, h: 80, S: 100, scale: 1,
-        key: 0, lx: 30, ly: 40, lean: [0, 0],
+        key: 0, vine: garden.theme().vine, lx: 30, ly: 40, lean: [0, 0], // (painted in the current vine colours)
       } },
     };
     const state = { S: 100, face: true };
@@ -442,6 +457,15 @@ describe('Standalone TypeGardenApp flower attachment', () => {
     Object.assign(letter, { _leanChanged: garden._now });
     expect(garden.stampPlants({ ctx: context }, letter, 1, [], 10000, state)).toBe(false);
     expect(drawImage).toHaveBeenCalledOnce();
+
+    // a bitmap holding an older vine colour stays up until its turn to be repainted, then repaints in the new colours
+    delete (letter as any)._leanChanged;
+    garden.setAppearance({ vine: '#4B2A5E' });
+    expect(garden.stampPlants({ ctx: context }, letter, 1, [], 10000, state)).toBe(true);
+    expect(drawImage).toHaveBeenCalledTimes(2);
+    garden._plantBudget = 1;
+    expect(garden.stampPlants({ ctx: context }, letter, 1, [], 10000, state)).toBe(true);
+    expect(letter._plantCache[1].vine).toBe(garden.theme().vine);
   });
 });
 
@@ -1346,6 +1370,457 @@ describe('Standalone TypeGardenApp retained blood splatter', () => {
     expect(bite.max).toBeGreaterThanOrEqual(4);
     expect(bite.max).toBeLessThanOrEqual(6);
   });
+});
+
+describe('Standalone TypeGardenApp looks and appearance', () => {
+  // a hero, an earned bloom, then buds, partly open roses and cluster roses
+  const roses = () => [
+    { t: 'rose', id: 101, stage: 'full' },
+    { t: 'rose', id: 4299.2, stage: 'full', bloom: { at: 0, end: null, kind: 'word' } },
+    ...Array.from({ length: 300 }, (_, i) => ({ t: 'rose', id: 1000 + i * 1.37, stage: i % 2 ? 'half' : 'bud', cluster: i % 5 === 0 })),
+  ];
+  // show a preset as setLook does (without the page around it)
+  const use = (garden: any, id: string) => {
+    garden.state.look = id;
+    garden.appearance = { ...garden.look().appearance };
+    garden._theme = null;
+    return garden.theme();
+  };
+  const lightness = (garden: any, rgb: number[]) => garden.toLch(rgb)[0];
+
+  it('offers seven presets, each setting every colour, falling back to crimson gothic', () => {
+    const garden = app();
+    expect(garden.LOOKS.map((look: any) => look.id)).toEqual(['crimson', 'ivory', 'silver', 'blackrose', 'mourning', 'oldrose', 'pinkblack']);
+    const fields = ['bg', 'text', 'rosePrimary', 'roseSecondary', 'secondaryRole', 'blood', 'vine', 'wing', 'wingMarks', 'font'];
+    for (const look of garden.LOOKS) {
+      expect(Object.keys(look.appearance).sort()).toEqual([...fields].sort());
+      expect(['focal', 'scattered', 'off']).toContain(look.appearance.secondaryRole);
+      expect(look.appearance.text).not.toBe(look.appearance.bg); // letters always stand off their page
+    }
+    garden.state.look = 'sepia';
+    expect(garden.look().id).toBe('crimson');
+  });
+
+  it('keeps the crimson gothic colours exactly as they were', () => {
+    const garden = app(), theme = garden.theme();
+    expect([theme.bg, theme.text, theme.light, ...theme.glow, theme.shade, theme.shadeK])
+      .toEqual(['#000000', '#FFFFFF', false, 'rgba(92,8,22,0.26)', 'rgba(48,3,12,0.12)', 'rgba(0,0,0,0)', '0,0,0', 1]);
+    expect(garden.INK.crimson).toMatchObject({
+      face: [[66, 0, 8], [172, 8, 24], [226, 38, 50]], back: [[86, 6, 14], [178, 22, 34], [230, 70, 78]],
+      base: '30,0,4', baseA: 0.75, edge: '30,0,5', edgeA: 1, rim: '240,80,92', rimA: 1, cast: '4,0,1', castA: 1,
+    });
+    expect(theme.blood).toBe(garden.ICHOR.blood);
+    expect(garden.ICHOR.blood).toMatchObject({ wet: [150, 10, 22], dry: [88, 8, 14], drop: '110,4,14' });
+    expect(theme.dof).toBe(garden.DOF.crimson);
+    expect(theme.wing).toBe(garden.WINGS.crimson);
+    for (const rose of roses()) expect(garden.roseInk(rose)).toBe(garden.INK.crimson);
+  });
+
+  it('compiles every preset to its own hand-tuned colours', () => {
+    const garden = app(), inks = Object.values(garden.INK), bloods = Object.values(garden.ICHOR);
+    for (const look of garden.LOOKS) {
+      const theme = use(garden, look.id);
+      expect(inks).toContain(theme.ink.primary);
+      expect(inks).toContain(theme.ink.secondary);
+      expect(bloods).toContain(theme.blood);
+      expect(Object.values(garden.DOF)).toContain(theme.dof);
+      expect(Object.values(garden.WINGS)).toContain(theme.wing);
+      expect([theme.glow[0], theme.glow[1], theme.shade, theme.shadeK]).toEqual([...look.finish.glow, look.finish.shade, look.finish.shadeK]);
+    }
+    expect(use(garden, 'silver')).toMatchObject({ light: true, ink: { primary: garden.INK.pearl }, blood: garden.ICHOR.ichor, wing: garden.WINGS.silver });
+    expect(use(garden, 'ivory')).toMatchObject({ light: true, secondaryRole: 'scattered', ink: { secondary: garden.INK.ivory }, blood: garden.ICHOR.gloss });
+  });
+
+  it('colours roses by their part in the composition, the same way every time', () => {
+    const garden = app(), list = roses(), focal = list.slice(0, 2), rest = list.slice(2);
+    // ivory: crimson heroes and earned blooms, with some ivory roses scattered among the rest
+    use(garden, 'ivory');
+    for (const rose of focal) expect(garden.roseRole(rose)).toBe('primary');
+    const pale = rest.filter(rose => garden.roseRole(rose) === 'secondary');
+    expect(pale.length / rest.length).toBeGreaterThan(0.3);
+    expect(pale.length / rest.length).toBeLessThan(0.5);
+    expect(garden.roseInk(pale[0])).toBe(garden.INK.ivory);
+    expect(rest.filter(rose => garden.roseRole(rose) === 'secondary')).toEqual(pale);
+    // silver: every rose cool pearl
+    use(garden, 'silver');
+    for (const rose of list) expect(garden.roseInk(rose)).toBe(garden.INK.pearl);
+    // black rose: the focal blooms are black, the rest of the garden crimson
+    use(garden, 'blackrose');
+    for (const rose of focal) expect(garden.roseInk(rose)).toBe(garden.INK.black);
+    for (const rose of rest) expect(garden.roseInk(rose)).toBe(garden.INK.crimson);
+    // mourning: a garden of black roses; old rose: all dusty pink; pink & black: a pink garden around black focal roses
+    use(garden, 'mourning');
+    for (const rose of list) expect(garden.roseInk(rose)).toBe(garden.INK.black);
+    use(garden, 'oldrose');
+    for (const rose of list) expect(garden.roseInk(rose)).toBe(garden.INK.pink);
+    use(garden, 'pinkblack');
+    for (const rose of focal) expect(garden.roseInk(rose)).toBe(garden.INK.black);
+    for (const rose of rest) expect(garden.roseInk(rose)).toBe(garden.INK.pink);
+  });
+
+  it('switches presets by copying their appearance and redrawing coloured bitmaps, leaving the garden untouched', () => {
+    const garden = Object.assign(writer(), { updateTheme: vi.fn(), buildPalettesUI: vi.fn(), paint: vi.fn(), focus: vi.fn(), buildPoster: vi.fn() });
+    garden.state.look = 'crimson';
+    typeInto(garden, 'rose', 0, 120);
+    const letter = live(garden)[0], rose = letter.els.find((element: any) => element.t === 'rose');
+    const canvases = [{ width: 4, height: 4 }, { width: 4, height: 4 }];
+    rose._spr = { cv: canvases[0] }; letter._stainCache = { cv: canvases[1] }; garden._dofSpr = { fg: {} };
+    const snapshot = () => JSON.stringify(live(garden).map((l: any) => [l.ch, l.id, l.seed, l.hes, l.rev, l.els.map((e: any) => [e.t, e.id, e.x, e.y])]));
+    const garden0 = snapshot(), crimson = garden.theme();
+    garden.setLook('blackrose');
+    const preset = garden.LOOKS.find((look: any) => look.id === 'blackrose');
+    expect(garden.state.look).toBe('blackrose');
+    expect(garden.appearance).toEqual(preset.appearance);
+    expect(garden.appearance).not.toBe(preset.appearance); // a copy: editing it never edits the preset
+    expect(garden.theme()).not.toBe(crimson);
+    expect(garden.theme().bg).toBe('#150C0F');
+    expect([rose._spr, letter._stainCache, garden._dofSpr]).toEqual([null, null, null]);
+    expect(canvases).toEqual([{ width: 0, height: 0 }, { width: 0, height: 0 }]); // freed, not left for collection
+    expect(snapshot()).toBe(garden0);
+    expect(garden.updateTheme).toHaveBeenCalled();
+    expect(garden.buildPalettesUI).toHaveBeenCalled();
+    expect(garden.paint).toHaveBeenCalled();
+    garden.paint.mockClear();
+    garden.setLook('blackrose'); // already showing
+    garden.setLook('sepia'); // no such look
+    expect(garden.paint).not.toHaveBeenCalled();
+    expect(garden.state.look).toBe('blackrose');
+  });
+
+  it('bleeds red blood in the crimson preset and luminous silver ichor in the silver preset', () => {
+    const garden = app(), fills: string[] = [];
+    const g: any = {
+      set fillStyle(value: string) { fills.push(value); }, get fillStyle() { return fills[fills.length - 1]; },
+      strokeStyle: '', lineWidth: 1, lineCap: '', shadowBlur: 0, shadowColor: '', getTransform: () => ({ a: 1 }),
+      beginPath() {}, moveTo() {}, lineTo() {}, closePath() {}, fill() {}, arc() {}, ellipse() {}, stroke() {},
+    };
+    const stain = { lx: 0, ly: -0.5, r: 0.05, born: 0, seed: 1, runs: [] };
+    garden.paintStain(g, { x: 0, y: 0 }, stain, 100, 0);
+    expect(fills[0]).toBe('rgba(150,10,22,0.95)');
+    expect(g.shadowColor).toBe('');
+    use(garden, 'silver');
+    fills.length = 0;
+    garden.paintStain(g, { x: 0, y: 0 }, stain, 100, 0);
+    expect(fills[0]).toBe('rgba(240,244,252,0.95)');
+    expect(g.shadowColor).toBe(garden.ICHOR.ichor.glow);
+    expect(g.shadowBlur).toBe(0); // the glow is switched off again for whatever is painted next
+  });
+
+  it('generates a full rose ink for any colour, its body that colour and its ramps running dark to light', () => {
+    const garden = app();
+    for (const hex of ['#3A5BD9', '#E2A21A', '#F4F1EA', '#120208', '#2F8F7F', '#7E1BAA']) {
+      const ink = garden.inkFor(hex);
+      expect(Object.values(garden.INK)).not.toContain(ink);
+      expect(garden.rgbHex(ink.face[1])).toBe(hex.toLowerCase());
+      for (const ramp of [ink.face, ink.back]) {
+        expect(ramp.every((c: number[]) => c.length === 3 && c.every(v => Number.isInteger(v) && v >= 0 && v <= 255))).toBe(true);
+        expect(lightness(garden, ramp[0])).toBeLessThan(lightness(garden, ramp[1]));
+        expect(lightness(garden, ramp[1])).toBeLessThanOrEqual(lightness(garden, ramp[2]) + 1e-9);
+      }
+      for (const key of ['base', 'edge', 'rim', 'cast', 'petalRim']) expect(ink[key]).toMatch(/^\d{1,3},\d{1,3},\d{1,3}$/);
+      for (const key of ['baseA', 'edgeA', 'rimA', 'castA']) { expect(ink[key]).toBeGreaterThan(0); expect(ink[key]).toBeLessThanOrEqual(1); }
+      expect(garden.inkFor(hex)).toEqual(ink); // the same colour always gives the same ink
+    }
+    expect(garden.inkFor('#ac0818')).toBe(garden.INK.crimson); // curated inks are matched whatever the case
+  });
+
+  it('derives the glow and cast shadow from the page once a preset finish no longer applies', () => {
+    const garden = app(), crimson = garden.LOOKS[0];
+    // the preset's own page and rose keep its art-directed finish; another page drops it
+    garden.appearance = { ...crimson.appearance, text: '#E8E0D0' };
+    garden._theme = null;
+    expect(garden.theme().glow[0]).toBe(crimson.finish.glow[0]);
+    garden.appearance = { ...crimson.appearance, bg: '#F2EEE6', text: '#111111' };
+    garden._theme = null;
+    const light = garden.theme();
+    expect(light.light).toBe(true);
+    expect(light.glow[0]).toMatch(/^rgba\(\d+,\d+,\d+,0\.8\)$/);
+    expect(light.glow[2]).toMatch(/,0\)$/); // fades into the page
+    expect(light.shadeK).toBe(0.45);
+    garden.appearance = { ...crimson.appearance, bg: '#0B1430', rosePrimary: '#3A5BD9' };
+    garden._theme = null;
+    const dark = garden.theme();
+    expect([dark.light, dark.glow[2], dark.shade, dark.shadeK]).toEqual([false, 'rgba(0,0,0,0)', '0,0,0', 1]);
+    expect(dark.glow[0]).not.toBe(crimson.finish.glow[0]); // tinted by the blue roses instead
+  });
+
+  it('makes a pale blood colour glow like ichor and lets every blood dry darker', () => {
+    const garden = app();
+    expect(garden.bloodFor('#960A16')).toBe(garden.ICHOR.blood);
+    const teal = garden.bloodFor('#3FE0C0'), wine = garden.bloodFor('#4A0A10');
+    expect(teal.glow).toMatch(/^rgba\(/);
+    expect(teal.rim).toMatch(/^\d{1,3},\d{1,3},\d{1,3}$/);
+    expect(wine.glow).toBeUndefined();
+    for (const blood of [teal, wine]) expect(lightness(garden, blood.dry)).toBeLessThan(lightness(garden, blood.wet));
+  });
+
+  it('measures contrast as WCAG does and converts colours to and from OKLCH', () => {
+    const garden = app();
+    expect(garden.contrast('#000000', '#FFFFFF')).toBeCloseTo(21, 5);
+    expect(garden.contrast('#777777', '#777777')).toBe(1);
+    for (const hex of ['#AC0818', '#3A5BD9', '#F4F1EA', '#120208', '#2F8F7F']) {
+      const rgb = garden.hexRgb(hex), back = garden.fromLch(garden.toLch(rgb));
+      back.forEach((v: number, i: number) => expect(Math.abs(v - rgb[i])).toBeLessThanOrEqual(1));
+    }
+  });
+  it('draws the vines and the butterfly in the theme, the original greens and velvet black by default', () => {
+    const garden = app(), theme = garden.theme();
+    expect(theme.vine).toEqual({
+      stem: '#163a20', stemLit: '#4f8f5b', stemMid: [36, 89, 47], stalk: '#183d22', leafLit: '#36763f', leafMid: '#1d4c28', leafDark: '#11301a',
+      leafRim: 'rgba(150,200,150,0.35)', sepal: [[12, 30, 16], [28, 66, 36], [58, 112, 64]], prickle: '#2b3a20', thornRoot: '#1f2914',
+    });
+    expect(theme.ground).toBe(garden.GROUNDS.black);
+    for (const look of garden.LOOKS) expect(use(garden, look.id).vine).toEqual(theme.vine); // every preset keeps the green vines
+  });
+
+  it('grows any vine colour into a family shaped like the green one', () => {
+    const garden = app(), L = (hex: string) => lightness(garden, garden.hexRgb(hex));
+    for (const hex of ['#4B2A5E', '#6E4A22', '#9AA79E', '#1E1C1C']) {
+      const vine = garden.vineFor(hex);
+      expect(vine.leafMid).toBe(hex.toLowerCase());
+      expect(L(vine.leafDark)).toBeLessThan(L(vine.leafMid));
+      expect(L(vine.leafMid)).toBeLessThan(L(vine.leafLit));
+      expect(L(vine.stem)).toBeLessThan(L(vine.stemLit));
+      expect(lightness(garden, vine.sepal[0])).toBeLessThan(lightness(garden, vine.sepal[1]));
+      expect(lightness(garden, vine.sepal[1])).toBeLessThan(lightness(garden, vine.sepal[2]));
+      expect(vine.leafRim).toMatch(/^rgba\(\d+,\d+,\d+,0\.35\)$/);
+      expect(garden.vineFor(hex)).toEqual(vine);
+    }
+    const ground = garden.groundFor('#3A0D4A');
+    expect(ground.velvet[1]).toBe('#3a0d4a');
+    expect(lightness(garden, garden.hexRgb(ground.velvet[0]))).toBeGreaterThan(lightness(garden, garden.hexRgb(ground.velvet[2]))); // lit at the root, dark at the edge
+  });
+
+  it('paints leaves in the chosen vine colours, and a rewritten letter\'s regrowth still starts bronze', () => {
+    const garden = app(), strokes: string[] = [], stops: string[] = [];
+    const B = { stroke: (_: any, colour: string) => strokes.push(colour), fill: (_: any, style: any) => style.stops && stops.push(...style.stops.map((s: any[]) => s[1])) };
+    garden.appearance = { ...garden.look().appearance, vine: '#4B2A5E' };
+    garden._theme = null;
+    const vine = garden.theme().vine;
+    garden.leafCustomized(B, 0, 0, 0, 40, 0);
+    expect(strokes[0]).toBe(vine.stalk);
+    expect(new Set(stops)).toEqual(new Set([vine.leafLit, vine.leafMid, vine.leafDark]));
+    expect(strokes).toContain(vine.leafRim);
+    garden._tint = 1; // a rewritten letter, just regrown
+    expect(garden.tc(vine.stem, '#5c2a17')).toBe('rgb(92,42,23)');
+    garden._tint = 0;
+    expect(garden.tc(vine.stem, '#5c2a17')).toBe(vine.stem);
+  });
+
+  it('redraws stamped plants along with the other coloured bitmaps', () => {
+    const garden = app(), foliage = { width: 50, height: 50 };
+    const letter: any = { ch: 'a', els: [], _plantCache: { 1: { cv: foliage } } };
+    garden.letters = [letter];
+    garden.restyle();
+    expect(letter._plantCache).toBeNull();
+    expect(foliage).toEqual({ width: 0, height: 0 });
+  });
+  it('recolours without touching the garden, its writing record, bloom clocks, blood or rose placement', () => {
+    const garden = writer();
+    const last = typeInto(garden, 'roses', 0, (i: number) => (i === 3 ? 1400 : 120)); // a hesitation before the second s
+    garden.checkSprout(last + 1000); // a pause sprouts a bloom on the last letter
+    const letters = live(garden);
+    garden.stains = [{ l: letters[1], lx: 0.02, ly: -0.6, r: 0.04, born: 500, seed: 3, runs: [{ dx: 0, w: 0.02, y1: 0, len: 0.1, v: 0.04, wob: 0, bead: 0, dropped: false }] }];
+    garden.drops = [{ st: 'fall', x: 10, y: 20, vx: 0, vy: 30, r: 3, t: 0.2 }];
+    garden.biteRose(letters[0].els.find((e: any) => e.t === 'rose').id, 1000);
+    const record = () => JSON.stringify({
+      letters: garden.letters.map((l: any) => ({ ch: l.ch, id: l.id, seed: l.seed, ws: l.ws, wi: l.wi, hes: l.hes, rev: l.rev, birth: l.birth, bloom: l.bloom, els: l.els })),
+      stains: garden.stains.map((s: any) => ({ ...s, l: s.l.id })), drops: garden.drops, bites: garden.bites, pace: garden._pace,
+    });
+    expect(letters.some((l: any) => l.hes > 0) && letters.some((l: any) => l.bloom)).toBe(true);
+    const before = record();
+    expect(garden.setAppearance({
+      bg: '#0B1430', text: '#F2EEE4', rosePrimary: '#3A5BD9', roseSecondary: '#F2EEE4', secondaryRole: 'scattered',
+      blood: '#C9A227', vine: '#4B2A5E', wing: '#3A0D4A', wingMarks: '#E0B040',
+    })).toBe(true);
+    expect(record()).toBe(before);
+    expect(garden.state.look).toBe('custom');
+    const theme = garden.theme();
+    expect([theme.bg, theme.text, theme.ink.primary.face[1], theme.vine.leafMid, theme.secondaryRole]).toEqual(['#0B1430', '#F2EEE4', [58, 91, 217], '#4b2a5e', 'scattered']);
+  });
+
+  it('selects a preset again when the values match it, and keeps its finish while its page and primary rose stay', () => {
+    const garden = app(), crimson = garden.LOOKS[0], ivory = garden.LOOKS[1];
+    garden.setAppearance({ blood: '#cc1222' });
+    expect(garden.state.look).toBe('custom');
+    expect(garden.theme().glow[0]).toBe(crimson.finish.glow[0]); // the same page and roses keep the art-directed glow
+    garden.setAppearance({ blood: '#960a16' });
+    expect(garden.state.look).toBe('crimson');
+    garden.setAppearance({ ...ivory.appearance, bg: ivory.appearance.bg.toLowerCase() });
+    expect(garden.state.look).toBe('ivory');
+    expect(garden.theme().glow.slice(0, 2)).toEqual(ivory.finish.glow);
+    garden.setAppearance({ bg: '#101010', text: '#F0F0F0' });
+    expect(garden.state.look).toBe('custom');
+    expect(garden.theme().glow[0]).not.toBe(ivory.finish.glow[0]); // a new page: derived from it instead
+  });
+
+  it('ignores values that are not colours, and leaves the typeface as it is', () => {
+    const garden = app(), before = { ...garden.look().appearance };
+    expect(garden.setAppearance({ bg: 'red', text: '#12', secondaryRole: 'everywhere', font: 'cinzel', petals: '#fff' })).toBe(false);
+    expect(garden.appearance ?? before).toEqual(before);
+    expect(garden.state.look).toBe('crimson');
+    expect([garden.normHex('#abc'), garden.normHex('3a5bd9'), garden.normHex(' #3A5BD9 ')]).toEqual(['#AABBCC', '#3A5BD9', '#3A5BD9']);
+  });
+
+  it('compiles the theme once however many changes arrive before the next frame', () => {
+    const garden = app(), compile = vi.spyOn(garden, 'compileTheme');
+    for (let i = 0; i < 30; i++) garden.setAppearance({ rosePrimary: garden.rgbHex([100 + i, 20, 40]) });
+    expect(compile).not.toHaveBeenCalled();
+    garden.theme(); garden.theme();
+    expect(compile).toHaveBeenCalledOnce();
+    expect(garden._chrome).toBe(true); // the page's chrome follows on the next frame
+    // generated colours are kept per colour, so a cache can tell an unchanged colour by identity
+    expect(garden.inkFor(garden.appearance.rosePrimary)).toBe(garden.theme().ink.primary);
+  });
+
+  it('repaints a rose sprite only when its own colours change, waiting its turn with the old colours meanwhile', () => {
+    const { garden, flower, frame } = spriteHarness();
+    const paints = () => garden.roseCustomized.mock.calls.length;
+    frame(6000, 8, false);
+    const painted = paints();
+    frame(6100, 8, false);
+    expect(paints()).toBe(painted); // settled: drawn from its bitmap
+    garden.setAppearance({ roseSecondary: '#3A5BD9' }); // no rose takes the secondary colour yet
+    frame(6200, 8, false);
+    expect(paints()).toBe(painted);
+    const key = flower._spr.key;
+    garden.setAppearance({ secondaryRole: 'focal' }); // this hero bloom now takes it
+    frame(6300, 0, false); // no turn this frame: it stays up in its old colours
+    expect([paints(), flower._spr.key]).toEqual([painted, key]);
+    frame(6400, 8, false);
+    expect(paints()).toBe(painted + 1);
+    expect(flower._spr.key).toBe(garden.spriteKey(flower));
+  });
+
+  it('repaints settled stains only when the blood colour changes', () => {
+    const { garden, context } = stainHarness();
+    const letter: any = { ch: 'O', x: 20, y: 100 }, stain = { l: letter, done: true, born: 0 };
+    garden.stampStains(context, letter, [stain], 100, 30000);
+    garden.stampStains(context, letter, [stain], 100, 30100);
+    expect(garden.paintStain).toHaveBeenCalledTimes(1);
+    garden.setAppearance({ text: '#EFE6D4', rosePrimary: '#CE6886' }); // blood unchanged
+    garden.stampStains(context, letter, [stain], 100, 30200);
+    expect(garden.paintStain).toHaveBeenCalledTimes(1);
+    garden.setAppearance({ blood: '#C9A227' });
+    garden.stampStains(context, letter, [stain], 100, 30300);
+    expect(garden.paintStain).toHaveBeenCalledTimes(2);
+    expect(letter._stainCache.blood).toBe(garden.theme().blood);
+  });
+  // the Custom panel's page elements, faked: a panel that can contain things, and the bar it floats above
+  const withPanel = (garden: any) => {
+    const inside = { id: 'control-in-panel' };
+    garden.apEl = { hidden: true, style: {}, contains: (el: any) => el === inside, querySelectorAll: () => [], querySelector: () => null };
+    garden.barEl = { getBoundingClientRect: () => ({ height: 0, top: 0 }) };
+    garden.buildPalettesUI = vi.fn();
+    return inside;
+  };
+
+  it('warns quietly about the one combination that reads worst, and never about a preset', () => {
+    const garden = app(), crimson = garden.LOOKS[0].appearance;
+    for (const look of garden.LOOKS) expect(garden.contrastWarning(look.appearance)).toBe('');
+    expect(garden.contrastWarning({ ...crimson, text: '#1A1A1A' })).toBe('Letters are hard to read on this page');
+    expect(garden.contrastWarning({ ...crimson, blood: '#F2F2F2' })).toBe('Blood will barely show on these letters');
+    expect(garden.contrastWarning({ ...crimson, rosePrimary: '#000000' })).toBe('Roses melt into the page');
+    expect(garden.contrastWarning({ ...crimson, roseSecondary: '#000000' })).toBe(''); // the second colour is off
+    expect(garden.contrastWarning({ ...crimson, roseSecondary: '#000000', secondaryRole: 'focal' })).toBe('Roses melt into the page');
+    expect(garden.contrastWarning({ ...crimson, vine: '#020202' })).toBe('Vines melt into the page');
+    // the most important worry first
+    expect(garden.contrastWarning({ ...crimson, text: '#111111', blood: '#111111', vine: '#000000' })).toBe('Letters are hard to read on this page');
+  });
+
+  it('keeps what the visitor builds, opens the panel without changing colours, and brings Custom back after a preset', () => {
+    const garden = Object.assign(writer(), { updateTheme: vi.fn(), paint: vi.fn(), focus: vi.fn() });
+    withPanel(garden);
+    garden.state.look = 'crimson';
+    garden.pickCustom(); // nothing built yet: the panel opens on the look showing
+    expect([garden.state.look, garden.apOpen, garden.apEl.hidden]).toEqual(['crimson', true, false]);
+    garden.editAppearance({ bg: '#0B1430', rosePrimary: '#3A5BD9' });
+    const built = { ...garden.appearance };
+    expect(garden.customAppearance).toEqual(built);
+    expect(garden.state.look).toBe('custom');
+    garden.pickLook('ivory'); // trying a preset with the panel open
+    expect([garden.state.look, garden.apOpen]).toEqual(['ivory', true]);
+    expect(garden.customAppearance).toEqual(built); // the custom appearance is kept
+    // the swatch of the look showing closes and opens the panel, and opening it never changes the colours
+    const ivory = { ...garden.appearance };
+    garden.pickLook('ivory');
+    expect([garden.state.look, garden.apOpen]).toEqual(['ivory', false]);
+    garden.pickLook('ivory');
+    expect([garden.state.look, garden.apOpen, garden.appearance]).toEqual(['ivory', true, ivory]);
+    garden.pickCustom(); // Custom, with a preset showing: back to the custom appearance
+    expect([garden.state.look, garden.apOpen]).toEqual(['custom', true]);
+    expect(garden.appearance).toEqual(built);
+    garden.pickCustom(); // Custom again, now showing: closes the panel
+    expect([garden.apOpen, garden.apEl.hidden]).toEqual([false, true]);
+  });
+
+  it('keeps keys pressed in the panel away from the garden, and closes it on Escape', () => {
+    const garden = Object.assign(writer(), { updateTheme: vi.fn(), paint: vi.fn(), focus: vi.fn(), mark: vi.fn() });
+    const inside = withPanel(garden);
+    garden.state.look = 'crimson';
+    typeInto(garden, 'in', 0, 120);
+    garden.openAppearance();
+    const press = (key: string, target: any = {}) => garden.key({ key, target, timeStamp: 5000, preventDefault: vi.fn() });
+    for (const key of ['a', 'Backspace', 'Enter', 'Tab', ' ']) press(key, inside);
+    expect(live(garden).map((l: any) => l.ch).join('')).toBe('in');
+    expect(garden.state.treatment).toBe('customized'); // Tab moved between the panel's controls, not to Baseline
+    expect(garden.apOpen).toBe(true);
+    press('Escape');
+    expect(garden.apOpen).toBe(false);
+    press('s');
+    expect(live(garden).map((l: any) => l.ch).join('')).toBe('ins'); // outside the panel, typing grows the garden again
+  });
+  // the app with a stand-in for the browser's storage (initially holding `stored`; `refuse` makes every access throw)
+  const storeHarness = (stored: string | null = null, refuse = false) => {
+    const data: Record<string, string> = {};
+    if (stored != null) data['typeGarden.appearance'] = stored;
+    const localStorage = {
+      getItem: (k: string) => { if (refuse) throw new Error('denied'); return data[k] ?? null; },
+      setItem: (k: string, v: string) => { if (refuse) throw new Error('denied'); data[k] = v; },
+    };
+    const StoreApp = runInNewContext(classSource, { localStorage, performance: { now: () => 10000 } });
+    const garden = Object.assign(Object.create(StoreApp.prototype), { state: { look: 'crimson' }, STORE: 'typeGarden.appearance', ...structuredClone(TABLES) });
+    garden.appearance = { ...garden.look().appearance };
+    return { garden, data };
+  };
+
+  it('keeps the visitor\'s appearance in their browser and brings it back on the next visit', () => {
+    const first = storeHarness();
+    first.garden.setAppearance({ bg: '#0B1430', text: '#F2EEE4', rosePrimary: '#3A5BD9', secondaryRole: 'scattered' });
+    first.garden.customAppearance = { ...first.garden.appearance };
+    first.garden.storeAppearance();
+    const saved = JSON.parse(first.data['typeGarden.appearance']);
+    expect(saved.look).toBe('custom');
+    expect(saved.appearance).toEqual(first.garden.appearance);
+
+    const next = storeHarness(first.data['typeGarden.appearance']);
+    next.garden.restoreAppearance();
+    expect(next.garden.state.look).toBe('custom');
+    expect(next.garden.appearance).toEqual(first.garden.appearance);
+    expect(next.garden.customAppearance).toEqual(first.garden.customAppearance);
+    expect(next.garden.theme().bg).toBe('#0B1430');
+
+    // a preset comes back as that preset
+    const ivory = storeHarness(JSON.stringify({ look: 'ivory', appearance: first.garden.LOOKS[1].appearance, custom: null }));
+    ivory.garden.restoreAppearance();
+    expect([ivory.garden.state.look, ivory.garden.customAppearance]).toEqual(['ivory', undefined]);
+  });
+
+  it('ignores anything in storage it does not recognise, and never fails when storage refuses', () => {
+    const odd = storeHarness(JSON.stringify({ look: 'nonsense', appearance: { bg: 'red', text: '#123456', secondaryRole: 'everywhere', font: 'comic', blood: 12 }, custom: 7 }));
+    odd.garden.restoreAppearance();
+    const crimson = odd.garden.LOOKS[0].appearance;
+    expect(odd.garden.appearance).toEqual({ ...crimson, text: '#123456' });
+    expect([odd.garden.customAppearance, odd.garden.state.look]).toEqual([undefined, 'custom']);
+    for (const stored of ['not json', '"a string"', 'null']) {
+      const { garden } = storeHarness(stored);
+      garden.restoreAppearance();
+      expect([garden.appearance, garden.state.look]).toEqual([crimson, 'crimson']);
+    }
+    const refused = storeHarness(null, true);
+    expect(() => { refused.garden.restoreAppearance(); refused.garden.storeAppearance(); }).not.toThrow();
+  });
+
 });
 
 describe('Standalone entry point parity', () => {

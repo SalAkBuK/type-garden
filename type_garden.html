@@ -155,6 +155,53 @@
       border-color: #FFFFFF;
       color: #FFFFFF;
     }
+    /* the Custom appearance panel: small, dark like the other chrome, floating just above the bar */
+    [data-tg="appearance"] {
+      position: absolute;
+      right: calc(24px + env(safe-area-inset-right));
+      bottom: calc(66px + env(safe-area-inset-bottom));
+      z-index: 30;
+      width: 272px;
+      box-sizing: border-box;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+      background: rgba(0, 0, 0, 0.86);
+      border: 1px solid #2A2A2A;
+      border-radius: 14px;
+      color: #BDBDBD;
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      cursor: default;
+    }
+    [data-tg="appearance"][hidden] { display: none; }
+    [data-tg="ap-row"] { display: flex; align-items: center; gap: 7px; min-height: 22px; }
+    [data-tg="ap-row"] > span:not([data-tg]) { width: 64px; flex: none; }
+    [data-tg="ap-row"] > span:not([data-tg]) + input + span { width: auto; margin-left: auto; }
+    [data-tg="appearance"] input[type="color"] {
+      -webkit-appearance: none; appearance: none;
+      width: 20px; height: 20px; flex: none; padding: 0;
+      border: 1px solid #3A3A3A; border-radius: 999px; background: none; cursor: pointer;
+    }
+    [data-tg="appearance"] input[type="color"]:hover, [data-tg="appearance"] input[type="color"]:focus-visible { border-color: #FFFFFF; }
+    [data-tg="appearance"] input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+    [data-tg="appearance"] input[type="color"]::-webkit-color-swatch { border: none; border-radius: 999px; }
+    [data-tg="appearance"] input[type="color"]::-moz-color-swatch { border: none; border-radius: 999px; }
+    [data-tg="ap-seg"] { display: flex; border: 1px solid #2A2A2A; border-radius: 999px; overflow: hidden; }
+    [data-tg="ap-seg"] button { background: transparent; border: 0; color: #8C8C8C; font: inherit; font-size: 10px; padding: 3px 6px; cursor: pointer; white-space: nowrap; }
+    [data-tg="ap-seg"] button:hover { color: #FFFFFF; }
+    [data-tg="ap-seg"] button[aria-checked="true"] { background: #FFFFFF; color: #000000; }
+    [data-tg="ap-warn"] { color: #D9B26A; font-size: 10.5px; line-height: 1.4; }
+    [data-tg="ap-warn"]::before { content: '\25CF'; margin-right: 6px; font-size: 8px; vertical-align: 1px; }
+    [data-tg="ap-warn"]:empty { display: none; }
+    @media (max-width: 600px) {
+      [data-tg="appearance"] { left: calc(16px + env(safe-area-inset-left)); right: calc(16px + env(safe-area-inset-right)); width: auto; }
+    }
+    [data-light] [data-tg="bar"] { text-shadow: none; }
+    [data-light] [data-tg="btn"] { color: #3A3530; border-color: #B4AC9C; }
+    [data-light] [data-tg="btn"]:hover { color: #000000; border-color: #000000; }
+    [data-light] [data-tg="pal"] { border-color: #B4AC9C; }
     [data-tg="coarse"] { display: none; }
     @media (pointer: coarse) {
       [data-tg="fine"] { display: none; }
@@ -201,7 +248,7 @@
       [data-tg="btn"] { padding: 7px 11px !important; font-size: 11px; }
     }
     @media (max-width: 720px) {
-      [data-tg="poster"] {
+      [data-tg="poster"][data-open] { /* (only while poster mode is open) */
         display: flex !important;
         flex-direction: column;
         overflow-y: auto;
@@ -272,6 +319,16 @@
       </div>
     </div>
 
+    <!-- Custom appearance (customized view), opened from the Custom swatch: the same values the presets fill in -->
+    <div id="tg-appearance" data-tg="appearance" role="dialog" aria-label="Custom appearance" hidden>
+      <div data-tg="ap-row"><span>Page</span><input type="color" data-ap="bg" aria-label="Page colour"><span>Letters</span><input type="color" data-ap="text" aria-label="Letter colour"></div>
+      <div data-tg="ap-row"><span>Roses</span><input type="color" data-ap="rosePrimary" aria-label="Main rose colour"><input type="color" data-ap="roseSecondary" aria-label="Second rose colour"></div>
+      <div data-tg="ap-row"><span>Second</span><span data-tg="ap-seg" role="radiogroup" aria-label="Where the second rose colour goes"><button type="button" role="radio" data-role="focal" title="The hero and earned blooms">focal</button><button type="button" role="radio" data-role="scattered" title="Scattered among the smaller roses">scattered</button><button type="button" role="radio" data-role="off" title="Not used">off</button></span></div>
+      <div data-tg="ap-row"><span>Blood</span><input type="color" data-ap="blood" aria-label="Blood colour"><span>Vines</span><input type="color" data-ap="vine" aria-label="Vine and leaf colour"></div>
+      <div data-tg="ap-row"><span>Butterfly</span><input type="color" data-ap="wing" aria-label="Butterfly wing colour"><input type="color" data-ap="wingMarks" aria-label="Butterfly marking colour"></div>
+      <div data-tg="ap-warn" aria-live="polite"></div>
+    </div>
+
     <!-- Poster View -->
     <div id="tg-poster" data-tg="poster" style="position:absolute;inset:0;display:none;grid-template-columns:minmax(280px,340px) minmax(0,1fr);background:#000;cursor:default;color:#EDEDED;font-size:12px;letter-spacing:0.03em;z-index:10">
       <div data-tg="panel" style="border-right:1px solid #1E1E1E;overflow-y:auto;overflow-x:hidden;padding:24px 22px 32px;display:flex;flex-direction:column;gap:26px;background:#0A0A0A">
@@ -331,6 +388,7 @@
         this.posterEl = document.getElementById('tg-poster');
         this.barEl = document.getElementById('tg-bar');
         this.palBarEl = document.getElementById('tg-pal-bar');
+        this.apEl = document.getElementById('tg-appearance');
         this.btnType = document.getElementById('btn-mode-type');
         this.btnPoster = document.getElementById('btn-mode-poster');
         this.pTextInput = document.getElementById('poster-text-input');
@@ -370,6 +428,99 @@
           ['Mono', '#000000', '#F2F2F2', '#6E6E6E', '#000000', '#FFFFFF']
         ];
 
+        // Appearance: what sets the customized garden's colours and type. Every colour the garden is drawn in is derived from
+        // these by compileTheme; none of them changes how the garden grows.
+        //   bg, text: the page and the letters
+        //   rosePrimary, roseSecondary: the roses' body colour; secondaryRole: where the secondary colour goes ('focal': the
+        //   hero and earned blooms, 'scattered': about 40% of the smaller roses, 'off')
+        //   blood: what a bitten rose bleeds (a pale colour glows, like ichor)
+        //   vine: the leaves (canes, sepals and thorn bases follow it); wing, wingMarks: the butterfly's velvet and markings
+        //   font: the typeface (Playfair Display, for now)
+        // The looks are presets: a complete appearance, the swatch (dot/ring), and a finish (art-directed glow and cast shadow)
+        // that holds while the preset's page and primary rose colour are unchanged.
+        this.LOOKS = [
+          { id: 'crimson', name: 'Crimson gothic', dot: '#C41A30',
+            appearance: { bg: '#000000', text: '#FFFFFF', rosePrimary: '#AC0818', roseSecondary: '#AC0818', secondaryRole: 'off', blood: '#960A16', vine: '#1D4C28', wing: '#0B0406', wingMarks: '#9E0F1E', font: 'playfair' },
+            finish: { glow: ['rgba(92,8,22,0.26)', 'rgba(48,3,12,0.12)'], shade: '0,0,0', shadeK: 1 } },
+          { id: 'ivory', name: 'Ivory', dot: '#C41A30', ring: '#FBF6EA',
+            appearance: { bg: '#EEE6D5', text: '#120E0B', rosePrimary: '#AC0818', roseSecondary: '#E4DAC4', secondaryRole: 'scattered', blood: '#CC1222', vine: '#1D4C28', wing: '#0B0406', wingMarks: '#9E0F1E', font: 'playfair' },
+            finish: { glow: ['rgba(255,252,242,0.8)', 'rgba(255,250,238,0.38)'], shade: '70,52,32', shadeK: 0.45 } },
+          { id: 'silver', name: 'Silver ichor', dot: '#F7F8FB', ring: '#9EA4B2',
+            appearance: { bg: '#DEDFE5', text: '#0D0D11', rosePrimary: '#D6D8E2', roseSecondary: '#D6D8E2', secondaryRole: 'off', blood: '#F0F4FC', vine: '#1D4C28', wing: '#0B0406', wingMarks: '#8F95A3', font: 'playfair' },
+            finish: { glow: ['rgba(252,253,255,0.85)', 'rgba(247,249,254,0.4)'], shade: '44,48,66', shadeK: 0.45 } },
+          { id: 'blackrose', name: 'Black rose', dot: '#0A0405', ring: '#C41A30',
+            appearance: { bg: '#150C0F', text: '#EFE6D4', rosePrimary: '#AC0818', roseSecondary: '#3A0810', secondaryRole: 'focal', blood: '#960A16', vine: '#1D4C28', wing: '#0B0406', wingMarks: '#9E0F1E', font: 'playfair' },
+            finish: { glow: ['rgba(150,18,40,0.42)', 'rgba(80,6,20,0.2)'], shade: '0,0,0', shadeK: 1 } },
+          // black roses need a light page to read as silhouettes; pink needs a dark one to glow, unless black roses and letters
+          // carry the contrast, when a cool neutral grey suits it best
+          { id: 'mourning', name: 'Mourning', dot: '#2A0710',
+            appearance: { bg: '#ECE5D8', text: '#0E0B0A', rosePrimary: '#3A0810', roseSecondary: '#3A0810', secondaryRole: 'off', blood: '#CC1222', vine: '#1D4C28', wing: '#0B0406', wingMarks: '#9E0F1E', font: 'playfair' },
+            finish: { glow: ['rgba(255,252,246,0.8)', 'rgba(255,250,242,0.38)'], shade: '60,44,30', shadeK: 0.45 } },
+          { id: 'oldrose', name: 'Old rose', dot: '#D7809B',
+            appearance: { bg: '#1B0B18', text: '#F4EAE0', rosePrimary: '#CE6886', roseSecondary: '#CE6886', secondaryRole: 'off', blood: '#960A16', vine: '#1D4C28', wing: '#0B0406', wingMarks: '#9E0F1E', font: 'playfair' },
+            finish: { glow: ['rgba(140,44,96,0.34)', 'rgba(76,20,54,0.15)'], shade: '0,0,0', shadeK: 1 } },
+          { id: 'pinkblack', name: 'Pink & black', dot: '#D7809B', ring: '#2A0710',
+            appearance: { bg: '#D9D6D8', text: '#120C0E', rosePrimary: '#CE6886', roseSecondary: '#3A0810', secondaryRole: 'focal', blood: '#CC1222', vine: '#1D4C28', wing: '#0B0406', wingMarks: '#9E0F1E', font: 'playfair' },
+            finish: { glow: ['rgba(246,244,245,0.8)', 'rgba(240,238,240,0.38)'], shade: '50,40,46', shadeK: 0.45 } }
+        ];
+        // Curated rose inks, used exactly for their own colour (the body colour, face[1]); any other colour gets a generated ink
+        // (see inkFor). Colour ramps [shadow, body, lit] for the face and the paler reverse of the petals, the shadow pooling at
+        // a petal's base, its edge line, the light on its rolled rim (each with a strength), the shadow a bloom casts, and the
+        // colours of a fallen petal (front, reverse, rim)
+        this.INK = {
+          crimson: { face: [[66, 0, 8], [172, 8, 24], [226, 38, 50]], back: [[86, 6, 14], [178, 22, 34], [230, 70, 78]],
+            base: '30,0,4', baseA: 0.75, edge: '30,0,5', edgeA: 1, rim: '240,80,92', rimA: 1, cast: '4,0,1', castA: 1,
+            petal: [[172, 8, 24], [190, 40, 52]], petalRim: '255,120,130' },
+          ivory: { face: [[150, 136, 112], [228, 218, 196], [253, 250, 240]], back: [[162, 148, 124], [236, 228, 208], [255, 253, 246]],
+            base: '92,70,40', baseA: 0.4, edge: '110,90,64', edgeA: 0.6, rim: '255,255,250', rimA: 0.8, cast: '50,38,24', castA: 0.8,
+            petal: [[228, 218, 196], [242, 236, 222]], petalRim: '255,255,250' },
+          pearl: { face: [[124, 128, 142], [214, 216, 226], [250, 251, 255]], back: [[136, 140, 154], [224, 226, 234], [253, 254, 255]],
+            base: '60,64,86', baseA: 0.4, edge: '80,84,104', edgeA: 0.6, rim: '255,255,255', rimA: 0.9, cast: '28,30,44', castA: 0.8,
+            petal: [[214, 216, 226], [236, 238, 244]], petalRim: '255,255,255' },
+          // (a dusty old-rose pink: deep rose in the shadows, soft blush where the light falls)
+          pink: { face: [[96, 30, 52], [206, 104, 134], [246, 184, 202]], back: [[110, 40, 62], [218, 124, 150], [250, 202, 216]],
+            base: '70,14,34', baseA: 0.6, edge: '80,20,40', edgeA: 0.8, rim: '255,214,226', rimA: 0.8, cast: '20,4,10', castA: 1,
+            petal: [[206, 104, 134], [226, 140, 164]], petalRim: '255,214,226' },
+          // (black velvet that shows deep crimson only where the light falls, like a 'Black Baccara')
+          black: { face: [[6, 1, 3], [58, 8, 16], [150, 30, 48]], back: [[12, 3, 6], [70, 16, 24], [160, 52, 64]],
+            base: '0,0,0', baseA: 0.85, edge: '0,0,0', edgeA: 1, rim: '190,70,90', rimA: 0.45, cast: '0,0,0', castA: 1,
+            petal: [[58, 8, 16], [76, 18, 26]], petalRim: '190,70,90' }
+        };
+        // Curated blood, used exactly for its own fresh colour (wet); see bloodFor. Fresh and dried colours of a stain, falling
+        // drops, and the light on them. Gloss is a brighter red that reads on black letters; ichor is silver-white and faintly
+        // luminous (glow, with a rim so it reads on a pale page).
+        this.ICHOR = {
+          blood: { wet: [150, 10, 22], dry: [88, 8, 14], drop: '110,4,14', shine: '255,255,255', bead: '255,190,200', dropShine: '255,170,180' },
+          gloss: { wet: [204, 18, 34], dry: [132, 10, 22], drop: '160,8,24', shine: '255,255,255', bead: '255,200,208', dropShine: '255,196,204' },
+          ichor: { wet: [240, 244, 252], dry: [186, 194, 208], drop: '232,238,248', shine: '255,255,255', bead: '255,255,255', dropShine: '255,255,255',
+            glow: 'rgba(222,236,255,0.95)', rim: '92,100,120' }
+        };
+        // Curated vine colours, used exactly for their own leaf colour (leafMid); see vineFor. The cane's body, lit edge and the
+        // middle tone of its shading; the leaf stalk, the leaf's lit, middle and dark tones and the light along its midrib; the
+        // sepal and hip ramp (shadow, body, lit); and where thorns grow from the cane (the small prickle's base, the hooked
+        // thorn's root). A rewritten letter's regrowth still starts bronze and greens over to these.
+        this.VINES = {
+          green: { stem: '#163a20', stemLit: '#4f8f5b', stemMid: '#24592f', stalk: '#183d22', leafLit: '#36763f', leafMid: '#1d4c28',
+            leafDark: '#11301a', leafRim: '#96c896', sepal: ['#0c1e10', '#1c4224', '#3a7040'], prickle: '#2b3a20', thornRoot: '#1f2914' }
+        };
+        // Curated butterfly grounds, used exactly for their own velvet colour (velvet[1]); see groundFor. The wing's velvet
+        // (root, middle, edge), its body and its antennae.
+        this.GROUNDS = {
+          black: { velvet: ['#21090f', '#0b0406', '#040203'], body: '#140709', antenna: '#1e0b10' }
+        };
+        // Curated butterfly markings, used exactly for their own margin colour; see wingFor
+        this.WINGS = {
+          crimson: { margin: '#9e0f1e', vein: 'rgba(150,14,30,0.55)', spot: '#c4172b', tip: '#3a0a12' },
+          silver: { margin: '#8f95a3', vein: 'rgba(206,212,224,0.6)', spot: '#eef1f6', tip: '#5c606b' }
+        };
+        // Curated out-of-focus petals for the curated rose inks ([shadow, body, lit] stops, for the big near petals and the
+        // small far ones); see dofFor
+        this.DOF = {
+          crimson: { fg: ['rgb(70,0,10)', 'rgb(150,8,24)', 'rgb(190,30,44)'], bg: ['rgb(60,0,10)', 'rgb(120,6,20)', 'rgb(150,16,30)'] },
+          pearl: { fg: ['rgb(150,154,168)', 'rgb(206,209,220)', 'rgb(238,240,247)'], bg: ['rgb(160,163,176)', 'rgb(196,199,210)', 'rgb(222,224,232)'] },
+          pink: { fg: ['rgb(110,34,60)', 'rgb(200,100,132)', 'rgb(238,166,188)'], bg: ['rgb(96,30,52)', 'rgb(170,80,110)', 'rgb(214,136,160)'] },
+          black: { fg: ['rgb(8,2,4)', 'rgb(40,10,16)', 'rgb(84,26,36)'], bg: ['rgb(20,6,10)', 'rgb(52,16,24)', 'rgb(90,36,46)'] }
+        };
         this.props = { boil: true, recoil: 20, density: 1, showHint: true };
         // A pause sprouts a bloom; its opening clock stops on the next writing key.
         this.REC = { pause: 900, punct: 350, hes: 450, emerge: 1300, open: 1, stop: 1.5, bang: 2.4, wither: 650, cluster: 5 };
@@ -378,11 +529,16 @@
           treatment: 'customized', // 'customized' | 'baseline'
           preset: 'breathe',
           palette: 0,
+          look: 'crimson', // the customized view's preset (see LOOKS)
           text: 'in bloom',
           seed: 7,
           status: '',
           busy: false
         };
+
+        this.appearance = { ...this.look().appearance }; // what the customized garden is drawn in (see LOOKS, compileTheme)
+        this.STORE = 'typeGarden.appearance'; // where the visitor's appearance is kept in their browser
+        this.restoreAppearance();
 
         this.init();
       }
@@ -467,6 +623,7 @@
 
         // Tap on app focuses hidden input
         this.appEl.addEventListener('pointerdown', e => {
+          if (this.apOpen && e.target === this.cv) { this.closeAppearance(); return; } // a click on the artwork closes the panel
           if (e.target && (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT')) return;
           this.focus();
           // Customized view: a click on the garden calls a visitor to the nearest rose
@@ -545,51 +702,62 @@
 
       // ---------- UI builders & events ----------
       buildPalettesUI() {
-        // Bottom bar palettes
+        // The customized view offers its looks; the baseline its palettes
+        const custom = this.state.treatment === 'customized';
+        const items = custom
+          ? this.LOOKS.map(k => ({ name: k.name, bg: k.appearance.bg, dot: k.dot, ring: k.ring, dot2: k.ring || k.dot, text: k.appearance.text, sel: k.id === this.state.look, title: k.id === this.state.look ? `${k.name} · click again to adjust` : k.name, pick: () => this.pickLook(k.id) }))
+          : this.PAL.map((p, idx) => ({ name: p[0], bg: p[1], dot: p[2], dot2: p[3], text: p[5], sel: idx === this.state.palette, pick: () => this.setPalette(idx) }));
+        const mark = custom && this.theme().light ? '#111111' : '#FFFFFF'; // the selected swatch's outline, against the bar
+        const own = custom ? this.customItem() : null;
+
+        // Bottom bar swatches
         this.palBarEl.innerHTML = '';
-        this.PAL.forEach((p, idx) => {
+        this.customSwatchEl = null;
+        (own ? [...items, own] : items).forEach(p => {
           const btn = document.createElement('button');
           btn.className = 'pal-btn';
           btn.setAttribute('data-tg', 'sw');
-          btn.setAttribute('aria-label', p[0]);
-          btn.setAttribute('title', p[0]);
-          btn.style.background = p[1];
-          btn.style.border = `1.5px solid ${idx === this.state.palette ? '#FFFFFF' : '#3A3A3A'}`;
-          btn.style.transform = idx === this.state.palette ? 'scale(1.15)' : 'scale(1)';
+          btn.setAttribute('aria-label', p.name);
+          btn.setAttribute('title', p.title || p.name);
+          if (p.id) { btn.id = p.id; this.customSwatchEl = btn; }
+          btn.style.background = p.bg;
+          btn.style.border = `1.5px solid ${p.sel ? mark : '#3A3A3A'}`;
+          btn.style.transform = p.sel ? 'scale(1.15)' : 'scale(1)';
 
           const dot = document.createElement('span');
           dot.setAttribute('data-tg', 'dot');
-          dot.style.background = p[2];
+          dot.style.background = p.dot;
+          if (p.ring) dot.style.boxShadow = `0 0 0 1.5px ${p.ring}`;
           btn.appendChild(dot);
 
           btn.addEventListener('click', e => {
             e.stopPropagation();
-            this.setPalette(idx);
+            p.pick();
           });
           this.palBarEl.appendChild(btn);
         });
 
-        // Poster panel palettes
+        // Poster panel swatches
         this.palettesGrid.innerHTML = '';
-        this.PAL.forEach((p, idx) => {
-          const isSel = idx === this.state.palette;
+        (own && this.customAppearance ? [...items, own] : items).forEach(p => {
+          const isSel = p.sel;
           const btn = document.createElement('button');
           btn.style.cssText = `display:flex;flex-direction:column;gap:8px;align-items:stretch;background:transparent;border:1px solid ${isSel ? '#FFFFFF' : '#2A2A2A'};color:#EDEDED;font:inherit;padding:6px 6px 8px;border-radius:12px;cursor:pointer;text-align:left;transition:border-color 0.15s ease`;
-          btn.onmouseenter = () => { if (idx !== this.state.palette) btn.style.borderColor = '#8C8C8C'; };
-          btn.onmouseleave = () => { if (idx !== this.state.palette) btn.style.borderColor = '#2A2A2A'; };
+          btn.onmouseenter = () => { if (!isSel) btn.style.borderColor = '#8C8C8C'; };
+          btn.onmouseleave = () => { if (!isSel) btn.style.borderColor = '#2A2A2A'; };
 
           btn.innerHTML = `
-            <span style="display:flex;align-items:center;justify-content:center;height:44px;border-radius:8px;background:${p[1]}">
-              <span style="width:18px;height:18px;border-radius:50%;background:${p[2]}"></span>
-              <span style="width:12px;height:12px;border-radius:50%;background:${p[3]};margin-left:-4px"></span>
-              <span style="font-family:'Playfair Display',serif;font-weight:700;font-size:18px;color:${p[5]};margin-left:8px">Aa</span>
+            <span style="display:flex;align-items:center;justify-content:center;height:44px;border-radius:8px;background:${p.bg}">
+              <span style="width:18px;height:18px;border-radius:50%;background:${p.dot}"></span>
+              <span style="width:12px;height:12px;border-radius:50%;background:${p.dot2};margin-left:-4px"></span>
+              <span style="font-family:'Playfair Display',serif;font-weight:700;font-size:18px;color:${p.text};margin-left:8px">Aa</span>
             </span>
-            <span style="padding:0 4px">${p[0]}</span>
+            <span style="padding:0 4px">${p.name}</span>
           `;
 
           btn.addEventListener('click', e => {
             e.stopPropagation();
-            this.setPalette(idx);
+            p.pick();
           });
           this.palettesGrid.appendChild(btn);
         });
@@ -643,11 +811,14 @@
         });
 
         this.btnExportVideo.addEventListener('click', () => this.exportVideo());
+        this.bindAppearanceUI();
         this.btnExportFrames.addEventListener('click', () => this.exportFrames());
       }
 
       setMode(mode) {
+        if (mode !== 'type') this.closeAppearance();
         this.state.mode = mode;
+        this.posterEl.toggleAttribute('data-open', mode === 'poster');
         if (mode === 'type') {
           this.btnType.style.background = '#FFFFFF';
           this.btnType.style.color = '#000000';
@@ -684,6 +855,357 @@
         this.paint(performance.now(), true);
       }
 
+      // The customized view's preset (see LOOKS) and the theme its appearance compiles to; the garden itself stays as it is
+      look() { return this.LOOKS.find(k => k.id === this.state.look) || this.LOOKS[0]; }
+      // (a preset's art-directed finish goes with its page and primary rose colour, so it holds while those two are unchanged)
+      theme() {
+        if (this._theme) return this._theme;
+        const A = this.appearance || this.look().appearance, same = (a, b) => a.toLowerCase() === b.toLowerCase();
+        const P = [this.look(), ...this.LOOKS].find(k => same(k.appearance.bg, A.bg) && same(k.appearance.rosePrimary, A.rosePrimary));
+        return (this._theme = this.compileTheme(A, P ? P.finish : null));
+      }
+      // A preset fills in the whole appearance at once, and shows straight away (every coloured bitmap is redrawn this frame)
+      setLook(id) {
+        const L = this.LOOKS.find(k => k.id === id);
+        if (!L || id === this.state.look) return;
+        this.state.look = id;
+        this.appearance = { ...L.appearance };
+        this._theme = null;
+        this._unsaved = true;
+        this.restyle();
+        this.updateTheme();
+        this.buildPalettesUI();
+        if (this.apOpen) this.syncAppearanceUI(); // the open panel shows the preset's values
+        this.paint(performance.now(), true);
+        if (!this.apOpen) this.focus();
+      }
+      // Change appearance values: colours, and where the secondary rose colour goes (not the typeface). This only
+      // ever recolours: the garden, its writing record, bloom clocks, blood and rose placement are never touched. Each cached
+      // bitmap knows the colours it holds and repaints itself when they change (rose sprites a few a frame, keeping their old
+      // colours meanwhile; plants are drawn live while a vine colour is being changed), so a colour picker can fire as fast as
+      // it likes; the theme is compiled once, when next drawn, and the page's chrome follows once a frame. The preset whose
+      // values these are is selected again; otherwise the appearance is 'custom'. Returns whether anything changed.
+      setAppearance(patch) {
+        const A = this.appearance || { ...this.look().appearance }, next = { ...A };
+        for (const k in patch) {
+          if (!(k in A) || k === 'font') continue;
+          const v = k === 'secondaryRole' ? (['focal', 'scattered', 'off'].includes(patch[k]) ? patch[k] : null) : this.normHex(patch[k]);
+          if (v != null) next[k] = v;
+        }
+        const changed = Object.keys(A).filter(k => A[k] !== next[k]);
+        if (!changed.length) return false;
+        this.appearance = next;
+        this.state.look = this.matchLook(next);
+        this._theme = null;
+        this._chrome = true;
+        this._unsaved = true;
+        return true;
+      }
+      // The preset whose colours these are, or 'custom'
+      matchLook(A) {
+        const L = this.LOOKS.find(k => Object.keys(k.appearance).every(f => String(k.appearance[f]).toLowerCase() === String(A[f]).toLowerCase()));
+        return L ? L.id : 'custom';
+      }
+      // ---------- Kept in the browser ----------
+      // The visitor's appearance (the preset or 'custom', the appearance in use, and their custom appearance)
+      // is written at most every 300 ms (see paint) and read back on load. Storage can be missing or refuse; then nothing is
+      // kept, and the garden behaves exactly the same.
+      storeAppearance() {
+        this._unsaved = false;
+        try { localStorage.setItem(this.STORE, JSON.stringify({ look: this.state.look, appearance: this.appearance, custom: this.customAppearance || null })); } catch (e) { /* not kept */ }
+      }
+      restoreAppearance() {
+        let saved = null;
+        try { saved = JSON.parse(localStorage.getItem(this.STORE) || 'null'); } catch (e) { saved = null; }
+        if (!saved || typeof saved !== 'object') return;
+        // every value is checked; anything unrecognised keeps its default
+        const clean = A => {
+          if (!A || typeof A !== 'object') return null;
+          const out = { ...this.LOOKS[0].appearance };
+          for (const k in out) {
+            if (k === 'font') continue; // (the one typeface)
+            if (k === 'secondaryRole') { if (['focal', 'scattered', 'off'].includes(A[k])) out[k] = A[k]; }
+            else { const v = this.normHex(A[k]); if (v) out[k] = v; }
+          }
+          return out;
+        };
+        const A = clean(saved.appearance), C = clean(saved.custom);
+        if (A) {
+          this.appearance = A;
+          this.state.look = this.matchLook(A);
+          this._theme = null;
+        }
+        if (C) this.customAppearance = C;
+      }
+      // ---------- Custom appearance ----------
+      // A small panel over the artwork whose controls show, and set, the appearance in use, whichever look it started from
+      // (see pickLook). What the visitor builds is kept as their custom appearance, which the Custom swatch brings back after
+      // they have tried the presets.
+      customItem() {
+        const A = this.customAppearance || this.appearance || this.look().appearance;
+        return {
+          id: 'tg-sw-custom', name: 'Custom', bg: this.customSwatch(A), dot: A.rosePrimary, text: A.text,
+          dot2: A.secondaryRole === 'off' ? A.rosePrimary : A.roseSecondary,
+          sel: this.state.look === 'custom',
+          title: !this.customAppearance ? 'Custom · build your own' : this.state.look === 'custom' ? 'Custom · click again to adjust' : 'Custom',
+          pick: () => this.state.mode === 'poster' ? this.applyCustom() : this.pickCustom()
+        };
+      }
+      // (the Custom swatch: the page and the letters, split on the diagonal)
+      customSwatch(A) { return `linear-gradient(135deg, ${A.bg} 0 50%, ${A.text} 50% 100%)`; }
+      // A swatch picks its look; the swatch of the look already showing opens the panel to adjust it (or closes it again), so
+      // the panel never changes the colours by opening. The Custom swatch brings the visitor's custom appearance back, or, before
+      // they have one, opens the panel to start it from the look showing.
+      pickLook(id) { if (id === this.state.look) this.toggleAppearance(); else this.setLook(id); }
+      pickCustom() { if (this.state.look === 'custom' || !this.customAppearance) this.toggleAppearance(); else this.applyCustom(); }
+      toggleAppearance() { if (this.apOpen) this.closeAppearance(); else this.openAppearance(); }
+      openAppearance() {
+        if (!this.apEl || this.state.treatment !== 'customized' || this.state.mode !== 'type') return;
+        this.apOpen = true;
+        this.apEl.hidden = false;
+        // just above the bar, however tall it has wrapped
+        const bar = this.barEl.getBoundingClientRect();
+        if (bar.height) this.apEl.style.bottom = `${Math.max(56, window.innerHeight - bar.top + 10)}px`;
+        this.syncAppearanceUI();
+        this.buildPalettesUI();
+      }
+      closeAppearance() {
+        if (!this.apOpen) return;
+        this.apOpen = false;
+        if (this.apEl) this.apEl.hidden = true;
+        this.buildPalettesUI();
+        this.focus();
+      }
+      // Bring back the visitor's custom appearance (after trying a preset)
+      applyCustom() { if (this.customAppearance && this.setAppearance(this.customAppearance)) this.restyle(); } // (instant, like a preset)
+      // An edit in the panel: applied, and kept as the custom appearance
+      editAppearance(patch) {
+        if (!this.setAppearance(patch)) return;
+        this.customAppearance = { ...this.appearance };
+        this._unsaved = true;
+        this.syncAppearanceUI();
+      }
+      // The panel's controls follow the appearance in use (a control being dragged is left alone), the Custom swatch shows
+      // its colours, and the warning line names any contrast worry
+      syncAppearanceUI() {
+        if (!this.apEl) return;
+        const A = this.appearance || this.look().appearance, doc = this.apEl.ownerDocument, active = doc && doc.activeElement;
+        for (const el of this.apEl.querySelectorAll('[data-ap]')) {
+          const v = A[el.dataset.ap];
+          if (v == null || el === active) continue;
+          el.value = el.type === 'color' ? v.toLowerCase() : v;
+        }
+        for (const b of this.apEl.querySelectorAll('[data-role]')) b.setAttribute('aria-checked', String(b.dataset.role === A.secondaryRole));
+        const warn = this.apEl.querySelector('[data-tg="ap-warn"]');
+        if (warn) warn.textContent = this.contrastWarning(A);
+        const sw = this.customSwatchEl, C = this.customAppearance || A;
+        if (sw) { sw.style.background = this.customSwatch(C); if (sw.firstChild) sw.firstChild.style.background = C.rosePrimary; }
+      }
+      bindAppearanceUI() {
+        const panel = this.apEl;
+        if (!panel) return;
+        panel.addEventListener('input', e => {
+          const k = e.target.dataset && e.target.dataset.ap;
+          if (k && k !== 'font') this.editAppearance({ [k]: e.target.value });
+        });
+        panel.addEventListener('click', e => {
+          const b = e.target.closest && e.target.closest('[data-role]');
+          if (b) this.editAppearance({ secondaryRole: b.dataset.role });
+        });
+        panel.addEventListener('pointerdown', e => e.stopPropagation()); // a click in the panel never reaches the garden
+      }
+      // The one contrast worry worth mentioning (the most important first), or ''; nothing is ever prevented
+      contrastWarning(A) {
+        const c = (a, b) => this.contrast(a, b);
+        if (c(A.text, A.bg) < 3) return 'Letters are hard to read on this page';
+        if (c(A.blood, A.text) < 1.5) return 'Blood will barely show on these letters';
+        const roses = A.secondaryRole === 'off' ? [A.rosePrimary] : [A.rosePrimary, A.roseSecondary];
+        if (roses.some(r => c(r, A.bg) < 1.05)) return 'Roses melt into the page';
+        if (c(A.vine, A.bg) < 1.05) return 'Vines melt into the page';
+        return '';
+      }
+
+      // '#rrggbb' or '#rgb' (any case) as '#RRGGBB', or null
+      normHex(v) {
+        if (typeof v !== 'string' || !/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.test(v.trim())) return null;
+        let h = v.trim().replace('#', '');
+        if (h.length === 3) h = h.replace(/./g, c => c + c);
+        return '#' + h.toUpperCase();
+      }
+      // Bitmaps that hold the old colours are redrawn: rose sprites, stamped plants, settled stains and the out-of-focus petals
+      restyle() {
+        for (const l of [...(this.letters || []), ...(this.posterLetters || [])]) {
+          if (l._plantCache) { for (const k in l._plantCache) this.freeBitmap(l._plantCache[k].cv); l._plantCache = null; }
+          for (const list of this.letterLists(l, true)) for (const e of list) if (e._spr) {
+            this.freeBitmap(e._spr.cv); this.freeBitmap(e._spr.next); this.freeBitmap(e._spr.mix); e._spr = null;
+          }
+          if (l._stainCache) { this.freeBitmap(l._stainCache.cv); l._stainCache = null; }
+        }
+        this._sprPending?.clear(); this._sprTurns?.clear();
+        this._dofSpr = null;
+      }
+      // Which of the theme's two rose colours a rose takes: the secondary goes to the hero and earned blooms ('focal'), or to a
+      // stable 40% of the smaller roses ('scattered'); everything else is primary
+      roseRole(e) {
+        const role = this.theme().secondaryRole, focal = e.stage === 'full' && !e.cluster;
+        if (role === 'focal') return focal ? 'secondary' : 'primary';
+        if (role === 'scattered' && !focal && this.h(e.id * 9.31 + 0.17) < 0.4) return 'secondary';
+        return 'primary';
+      }
+      // ...and the ink it is painted in
+      roseInk(e) { return this.theme().ink[this.roseRole(e)]; }
+      // The colours a rose's sprite holds (see roseSprite), so it repaints only when they change
+      spriteKey(e) { return this.theme().paintKey[this.roseRole(e)]; }
+
+      // ---------- Theme ----------
+      // Everything the renderers draw in, from an appearance: the page (light or dark, the glow behind the words, the tint
+      // and strength of the shadow a bloom casts), the letters, the two rose inks and where the secondary goes, the blood, the
+      // out-of-focus petals, the vines, and the butterfly's velvet and markings. A preset's finish supplies its art-directed glow and shadow; without
+      // one they are derived from the page and the primary rose. Pure: it reads only the curated tables.
+      compileTheme(A, finish = null) {
+        const light = this.luminance(A.bg) > 0.35, primary = this.inkFor(A.rosePrimary), secondary = this.inkFor(A.roseSecondary);
+        const bg = this.hexRgb(A.bg), mix = (c, k, to) => c.map(v => Math.round(v + (to - v) * k)).join(',');
+        const glow = finish ? finish.glow : light ? [`rgba(${mix(bg, 0.75, 255)},0.8)`, `rgba(${mix(bg, 0.6, 255)},0.38)`]
+          : [`rgba(${mix(primary.face[1], 0.46, 0)},0.26)`, `rgba(${mix(primary.face[1], 0.72, 0)},0.12)`];
+        const shade = finish ? finish.shade : light ? mix(bg, 0.73, 0) : '0,0,0', shadeK = finish ? finish.shadeK : light ? 0.45 : 1;
+        return {
+          bg: A.bg, text: A.text, light,
+          glow: [glow[0], glow[1], light ? glow[1].replace(/[\d.]+\)$/, '0)') : 'rgba(0,0,0,0)'],
+          shade, shadeK,
+          ink: { primary, secondary }, secondaryRole: A.secondaryRole,
+          blood: this.bloodFor(A.blood), dof: this.dofFor(A.rosePrimary), wing: this.wingFor(A.wingMarks), ground: this.groundFor(A.wing),
+          vine: this.vineFor(A.vine),
+          // what a rose sprite holds besides the rose itself: its ink, its sepals (the vine) and, in front, the shadow it casts
+          paintKey: Object.fromEntries([['primary', A.rosePrimary], ['secondary', A.roseSecondary]].map(([role, hex]) =>
+            [role, [hex, A.vine, shade, shadeK].join('|').toLowerCase()]))
+        };
+      }
+      // Generated colours are kept per colour, so a theme compiled again with the same colours hands the caches the very
+      // same objects (the caches compare by identity)
+      memoColour(kind, hex, make) {
+        const memo = this._gen || (this._gen = new Map()), key = kind + hex.toLowerCase();
+        if (!memo.has(key)) { if (memo.size > 400) memo.clear(); memo.set(key, make()); }
+        return memo.get(key);
+      }
+      // The curated entry of a table whose colour (read by `colour`) is this hex, if any
+      curated(table, hex, colour) {
+        const key = hex.toLowerCase();
+        for (const name in table) { const c = colour(table[name]); if ((typeof c === 'string' ? c : this.rgbHex(c)).toLowerCase() === key) return name; }
+        return null;
+      }
+      // A rose ink for a body colour: the curated ink of that colour, or one generated in OKLCH so any hue keeps its character
+      // (shadow and lit ends shifted in lightness; a pale rose gets soft shadows, a very dark one a restrained sheen)
+      inkFor(hex) {
+        const name = this.curated(this.INK, hex, k => k.face[1]);
+        if (name) return this.INK[name];
+        return this.memoColour('ink', hex, () => this.makeInk(hex));
+      }
+      makeInk(hex) {
+        const body = this.hexRgb(hex), [L, C, h] = this.toLch(body), at = (l, c) => this.fromLch([Math.max(0, Math.min(1, l)), c, h]);
+        const str = c => c.join(','), smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+        const pale = smooth(0.7, 0.9, L), lift = 0.28 + 0.14 * smooth(0.15, 0.45, L);
+        const face = [at(L * (0.42 + 0.26 * pale), C * 0.95), body, at(L + (1 - L) * lift, C * 0.8)];
+        const back = [at(L * (0.5 + 0.22 * pale), C * 0.9), at(L + (1 - L) * 0.08, C * 0.92), at(L + (1 - L) * (lift + 0.1), C * 0.7)];
+        return {
+          face, back,
+          base: str(at(L * (0.2 + 0.45 * pale), C * 0.8)), baseA: 0.75 - 0.35 * pale, edge: str(at(L * (0.22 + 0.5 * pale), C * 0.8)), edgeA: 1 - 0.4 * pale,
+          rim: str(at(L + (1 - L) * 0.6, C * 0.7)), rimA: 1 - 0.2 * pale, cast: str(at(L * 0.1 + 0.2 * pale * L, C * 0.4)), castA: 1 - 0.2 * pale,
+          petal: [face[1], back[1]], petalRim: str(at(L + (1 - L) * 0.7, C * 0.6))
+        };
+      }
+      // Blood for a fresh colour: the curated blood of that colour, or one generated from it (it dries darker); a very pale
+      // colour glows faintly like ichor and gets a darker rim so it reads on a pale page
+      bloodFor(hex) {
+        const name = this.curated(this.ICHOR, hex, k => k.wet);
+        if (name) return this.ICHOR[name];
+        return this.memoColour('blood', hex, () => this.makeBlood(hex));
+      }
+      makeBlood(hex) {
+        const wet = this.hexRgb(hex), [L, C, h] = this.toLch(wet), at = (l, c) => this.fromLch([Math.max(0, Math.min(1, l)), c, h]).join(',');
+        const out = { wet, dry: this.fromLch([L * 0.72, C * 0.85, h]), drop: at(L * 0.86, C), shine: '255,255,255', bead: at(L + (1 - L) * 0.6, C * 0.5), dropShine: at(L + (1 - L) * 0.55, C * 0.5) };
+        if (L > 0.8) Object.assign(out, { glow: `rgba(${at(Math.min(1, L + 0.05), C * 0.6)},0.95)`, rim: at(L * 0.45, C * 0.6) });
+        return out;
+      }
+      // The butterfly's markings for a margin colour: curated, or a margin with lighter spots and darker antenna tips
+      wingFor(hex) {
+        const name = this.curated(this.WINGS, hex, k => k.margin);
+        if (name) return this.WINGS[name];
+        return this.memoColour('wing', hex, () => {
+          const [L, C, h] = this.toLch(this.hexRgb(hex)), at = (l, c) => this.rgbHex(this.fromLch([Math.max(0, Math.min(1, l)), c, h]));
+          return { margin: hex.toLowerCase(), vein: `rgba(${this.fromLch([L * 0.95, C, h]).join(',')},0.55)`, spot: at(L + (1 - L) * 0.25, C), tip: at(L * 0.4, C * 0.8) };
+        });
+      }
+      // The vine colours for a leaf colour, ready to draw with: curated, or a family shaped like the curated green
+      vineFor(hex) {
+        return this.memoColour('vine', hex, () => {
+          const name = this.curated(this.VINES, hex, k => k.leafMid), V = name ? this.VINES[name] : this.family(hex, this.VINES.green, 'leafMid');
+          return { ...V, stemMid: this.hexRgb(V.stemMid), leafRim: `rgba(${this.hexRgb(V.leafRim).join(',')},0.35)`, sepal: V.sepal.map(c => this.hexRgb(c)) };
+        });
+      }
+      // The butterfly's velvet, body and antennae for a velvet colour: curated, or a family shaped like the curated black
+      groundFor(hex) {
+        const name = this.curated(this.GROUNDS, hex, k => k.velvet[1]);
+        return name ? this.GROUNDS[name] : this.memoColour('ground', hex, () => this.family(hex, this.GROUNDS.black, 'velvet', 1));
+      }
+      // A family of colours around a new base colour, shaped like a curated family around its own base: each member keeps its
+      // place in lightness (proportionally darker, or proportionally into the headroom above), its relative chroma and its hue
+      // offset, so a blue vine gets darker canes and paler lit edges just as the green one does. (ref, i: where the curated
+      // base is in the family.)
+      family(hex, curated, ref, i = null) {
+        const base = i == null ? curated[ref] : curated[ref][i], [L0, C0, h0] = this.toLch(this.hexRgb(base)), [L, C, h] = this.toLch(this.hexRgb(hex));
+        const map = v => {
+          if (Array.isArray(v)) return v.map(map);
+          if (v.toLowerCase() === base.toLowerCase()) return hex.toLowerCase();
+          const [l, c, hh] = this.toLch(this.hexRgb(v));
+          const nl = l <= L0 ? L * l / Math.max(1e-6, L0) : L + (1 - L) * (l - L0) / Math.max(1e-6, 1 - L0);
+          const nc = C0 > 0.03 ? C * c / C0 : C + (c - C0);
+          return this.rgbHex(this.fromLch([Math.max(0, Math.min(1, nl)), Math.max(0, nc), h + hh - h0]));
+        };
+        const out = {};
+        for (const k in curated) out[k] = map(curated[k]);
+        return out;
+      }
+      // The out-of-focus petals in the primary rose's colour: curated for the curated inks, else from its generated ink
+      dofFor(hex) {
+        const name = this.curated(this.INK, hex, k => k.face[1]);
+        if (name && this.DOF[name]) return this.DOF[name];
+        const ink = this.inkFor(hex), rgb = (c, k) => `rgb(${c.map(v => Math.round(v * k)).join(',')})`;
+        return this.memoColour('dof', hex, () => ({ fg: [rgb(ink.face[0], 1), rgb(ink.face[1], 0.87), rgb(ink.face[2], 0.84)], bg: [rgb(ink.face[0], 0.9), rgb(ink.face[1], 0.7), rgb(ink.face[2], 0.66)] }));
+      }
+
+      // ---------- Colour ----------
+      hexRgb(hex) {
+        let h = hex.replace('#', '');
+        if (h.length === 3) h = h.replace(/./g, c => c + c);
+        const n = parseInt(h, 16);
+        return [n >> 16 & 255, n >> 8 & 255, n & 255];
+      }
+      rgbHex(c) { return '#' + c.map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join(''); }
+      // WCAG relative luminance (0 black .. 1 white) and the contrast ratio of two colours (1 .. 21)
+      luminance(hex) {
+        const [r, g, b] = this.hexRgb(hex).map(v => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      }
+      contrast(a, b) { const x = this.luminance(a), y = this.luminance(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+      // sRGB (0..255) to OKLCH [lightness 0..1, chroma, hue] and back (Björn Ottosson's OKLab); out-of-gamut colours are clipped
+      toLch(rgb) {
+        const [r, g, b] = rgb.map(v => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+        const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+        const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+        const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+        const L = 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s;
+        const A = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s, B = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s;
+        return [L, Math.hypot(A, B), Math.atan2(B, A)];
+      }
+      fromLch([L, C, h]) {
+        const A = C * Math.cos(h), B = C * Math.sin(h);
+        const l = Math.pow(L + 0.3963377774 * A + 0.2158037573 * B, 3);
+        const m = Math.pow(L - 0.1055613458 * A - 0.0638541728 * B, 3);
+        const s = Math.pow(L - 0.0894841775 * A - 1.2914855480 * B, 3);
+        const lin = [4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s, -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s, -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s];
+        return lin.map(v => { v = Math.max(0, Math.min(1, v)); return Math.round(255 * (v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - 0.055)); });
+      }
+
       setPreset(id) {
         this.state.preset = id;
         this.pt0 = performance.now();
@@ -694,6 +1216,7 @@
 
       setTreatment(treatment) {
         if (treatment !== 'customized' && treatment !== 'baseline') return;
+        if (treatment !== 'customized') this.closeAppearance();
         this.state.treatment = treatment;
         const btnCustom = document.getElementById('btn-treat-custom');
         const btnBaseline = document.getElementById('btn-treat-baseline');
@@ -723,16 +1246,19 @@
         });
 
         this.updateTheme();
+        this.buildPalettesUI(); // (the customized view offers its looks, the baseline its palettes)
         this.paint(performance.now(), true);
         if (this.state.mode === 'poster') this.buildPoster();
         this.focus();
       }
 
       updateTheme() {
-        const pal = this.pal();
+        const pal = this.pal(), theme = this.theme();
         const isCustomized = this.state.treatment === 'customized';
-        const bg = isCustomized ? '#000000' : pal.bg;
-        const textColor = isCustomized ? '#FFFFFF' : pal.C.text;
+        const bg = isCustomized ? theme.bg : pal.bg;
+        const textColor = isCustomized ? theme.text : pal.C.text;
+        // a light page turns the hints and buttons dark so they stay readable
+        if (isCustomized && theme.light) this.appEl.setAttribute('data-light', ''); else this.appEl.removeAttribute('data-light');
         this.appEl.style.backgroundColor = bg;
         this.palBarEl.style.backgroundColor = bg;
         this.barEl.style.color = textColor;
@@ -973,8 +1499,10 @@
         if (update) this.updateFlies(now);
         for (const f of this.flies) this.butterflyNoir(B, f.x, f.y, f.sz * 1.35, f.ang, f.open, f.st === 'sit');
       }
-      // A velvet-black butterfly with crimson veins, margins and spots; the wings foreshorten as they beat
+      // A velvet butterfly (black by default) with veins, margins and spots in the theme's markings (crimson by default);
+      // the wings foreshorten as they beat
       butterflyNoir(B, x, y, s, ang, o, perched) {
+        const W = this.theme().wing, G = this.theme().ground;
         const ca = Math.cos(ang), sa = Math.sin(ang), flap = 0.12 + 0.88 * o;
         const T = (px, py) => [x + (px * ca - py * sa) * s, y + (px * sa + py * ca) * s];
         const side = (pts, sd) => pts.map(([px, py]) => T(sd * px * flap, py));
@@ -988,22 +1516,22 @@
         if (perched) B.fill(ellT(0.1, 0.25, 0.15 + 0.7 * flap, 0.32).map(([px, py]) => [px + s * 0.08, py + s * 0.1]), 'rgba(0,0,0,0.25)'); // soft shadow on the petals
         for (const sd of [-1, 1]) {
           for (const [shape, gx, gy] of [[hind, 0.45, 0.5], [fore, 0.85, -0.55]]) {
-            B.fill(side(shape, sd), '#9e0f1e'); // crimson margin
+            B.fill(side(shape, sd), W.margin); // coloured margin
             const g0 = T(0, 0), g1 = T(sd * gx * flap, gy);
-            B.fill(side(shrink(shape), sd), { x0: g0[0], y0: g0[1], x1: g1[0], y1: g1[1], stops: [[0, '#21090f'], [0.55, '#0b0406'], [1, '#040203']] }); // velvet black
+            B.fill(side(shrink(shape), sd), { x0: g0[0], y0: g0[1], x1: g1[0], y1: g1[1], stops: [[0, G.velvet[0]], [0.55, G.velvet[1]], [1, G.velvet[2]]] }); // velvet (black by default)
           }
           const lw = Math.max(0.5, s * 0.022);
           for (const [vx, vy] of [[0.88, -0.6], [0.78, -0.34], [0.55, -0.1], [0.56, 0.3], [0.36, 0.64]]) {
-            B.stroke([T(sd * 0.06 * flap, 0), T(sd * vx * 0.5 * flap, vy * 0.5), T(sd * vx * 0.88 * flap, vy * 0.88)], 'rgba(150,14,30,0.55)', lw);
+            B.stroke([T(sd * 0.06 * flap, 0), T(sd * vx * 0.5 * flap, vy * 0.5), T(sd * vx * 0.88 * flap, vy * 0.88)], W.vein, lw);
           }
-          for (const [px, py, r] of [[0.8, -0.5, 0.05], [0.67, -0.56, 0.035], [0.45, 0.4, 0.045]]) B.fill(ell(px, py, r, r, sd, 10), '#c4172b');
+          for (const [px, py, r] of [[0.8, -0.5, 0.05], [0.67, -0.56, 0.035], [0.45, 0.4, 0.045]]) B.fill(ell(px, py, r, r, sd, 10), W.spot);
         }
-        B.fill(ellT(0, 0, 0.075, 0.46), '#140709'); // body
-        B.fill(ellT(0, -0.5, 0.065, 0.06), '#140709'); // head
+        B.fill(ellT(0, 0, 0.075, 0.46), G.body); // body
+        B.fill(ellT(0, -0.5, 0.065, 0.06), G.body); // head
         const lw = Math.max(0.5, s * 0.03);
         for (const sd of [-1, 1]) {
-          B.stroke([T(0, -0.52), T(sd * 0.1, -0.72), T(sd * 0.2, -0.88)], '#1e0b10', lw);
-          B.fill(ellT(sd * 0.2, -0.9, 0.035, 0.035), '#3a0a12');
+          B.stroke([T(0, -0.52), T(sd * 0.1, -0.72), T(sd * 0.2, -0.88)], G.antenna, lw);
+          B.fill(ellT(sd * 0.2, -0.9, 0.035, 0.035), W.tip);
         }
       }
       // When the garden is quiet, a visitor comes by every so often (customized view)
@@ -1455,6 +1983,8 @@
 
       // Keydown interaction
       key(e) {
+        if (this.apOpen && e.key === 'Escape') { e.preventDefault(); this.closeAppearance(); return; }
+        if (this.apEl && e.target && this.apEl.contains(e.target)) return; // the panel's own keys (Tab moves between its controls)
         if (e.key === 'Tab' && e.target !== this.pTextInput) {
           e.preventDefault();
           const treatments = ['customized', 'baseline'];
@@ -1724,6 +2254,14 @@
         g.setTransform(d, 0, 0, d, 0, 0);
 
         const treatment = this.state.treatment || 'customized';
+        if (this._chrome) { // (appearance changed since the last frame: the page colour, hints and swatches follow)
+          this._chrome = false;
+          this.updateTheme();
+          const sig = `${this.state.look}|${this.theme().light}`;
+          if (sig !== this._swatchSig) { this._swatchSig = sig; this.buildPalettesUI(); }
+          if (this.apOpen) this.syncAppearanceUI();
+        }
+        if (this._unsaved && now - (this._storedAt || -Infinity) > 300) { this._storedAt = now; this.storeAppearance(); }
         const stBaseline = this.mainState();
         const stCustomized = {
           letters: this.letters,
@@ -1746,12 +2284,12 @@
           this.drawFlies(B, now, stBaseline.C);
           if (caret) this.drawCaret(B, now, stBaseline.C.text);
         } else {
-          g.fillStyle = '#000000';
+          g.fillStyle = this.theme().bg;
           g.fillRect(0, 0, this.W, this.H);
           this.renderCustomized(B, now, stCustomized);
           this.maybeVisit(now);
           this.drawFliesNoir(B, now);
-          if (caret) this.drawCaret(B, now, '#FFFFFF');
+          if (caret) this.drawCaret(B, now, this.theme().text);
         }
       }
 
@@ -1928,8 +2466,8 @@
           pBaseRear
         ];
 
-        // Olive base blending into the stem
-        B.fill(thornPoly, '#2b3a20');
+        // Base blending into the cane (olive on the green vine)
+        B.fill(thornPoly, this.theme().vine.prickle);
 
         // Reddish-brown body
         if (sc > 0.25) {
@@ -1972,7 +2510,7 @@
           hook1.push([pt[0] + ox * hw * 0.9, pt[1] + oy * hw * 0.9]);
         }
         const poly = [...back1, T, T, ...hook1.reverse()]; // T twice keeps the point sharp
-        B.fill(poly, { x0: C0[0], y0: C0[1], x1: T[0], y1: T[1], stops: [[0, '#1f2914'], [0.3, '#36150e'], [0.72, '#62291c'], [0.9, '#b08660'], [1, '#f0e6cc']] });
+        B.fill(poly, { x0: C0[0], y0: C0[1], x1: T[0], y1: T[1], stops: [[0, this.theme().vine.thornRoot], [0.3, '#36150e'], [0.72, '#62291c'], [0.9, '#b08660'], [1, '#f0e6cc']] });
         if (sc > 0.5 && H > 3) {
           B.stroke(back1.slice(1, 7), 'rgba(200,150,110,0.4)', Math.max(0.5, H * 0.045)); // light catching the back
           B.stroke(hook1.slice(1, 7), 'rgba(8,2,1,0.55)', Math.max(0.5, H * 0.05)); // shadow in the hook
@@ -1991,8 +2529,9 @@
         const dirAt = u => { const p0 = ax(Math.max(0, u - 0.05)), p1 = ax(u + 0.05); return Math.atan2(p1[1] - p0[1], p1[0] - p0[0]); };
         const stalk = [];
         for (let i = 0; i <= 8; i++) stalk.push(ax(0.62 * i / 8));
-        B.stroke(stalk, this.tc('#183d22', '#5a2a1a'), Math.max(0.6, L * 0.028));
-        const cLit = this.tc('#36763f', '#a35a3a'), cMid = this.tc('#1d4c28', '#6e3420'), cDark = this.tc('#11301a', '#3e1a10');
+        const V = this.theme().vine; // (a rewritten letter's regrowth starts bronze)
+        B.stroke(stalk, this.tc(V.stalk, '#5a2a1a'), Math.max(0.6, L * 0.028));
+        const cLit = this.tc(V.leafLit, '#a35a3a'), cMid = this.tc(V.leafMid, '#6e3420'), cDark = this.tc(V.leafDark, '#3e1a10');
 
         const leaflet = (p, ang, len, wid) => {
           const c = Math.cos(ang), s = Math.sin(ang), nx = -s, ny = c, N = L > 24 ? 30 : 14, A = [], Z = [];
@@ -2007,7 +2546,7 @@
             x0: A[m][0], y0: A[m][1], x1: Z[N - m][0], y1: Z[N - m][1],
             stops: [[0, litA ? cLit : cDark], [0.5, cMid], [1, litA ? cDark : cLit]]
           });
-          if (L > 12) B.stroke([p, [p[0] + c * len * 0.85, p[1] + s * len * 0.85]], 'rgba(150,200,150,0.35)', Math.max(0.4, len * 0.025));
+          if (L > 12) B.stroke([p, [p[0] + c * len * 0.85, p[1] + s * len * 0.85]], V.leafRim, Math.max(0.4, len * 0.025));
         };
 
         const pairs = L > 30 ? 2 : 1;
@@ -2069,12 +2608,14 @@
         const toRose = (x, y) => [x * clr + y * slr, -x * slr + y * clr];
         const [LX, LY] = toRose(-0.48, -0.68), LZ = 0.55;
 
-        // Colour ramps [shadow, body, lit] sampled from a crimson long-stem rose (rich face, slightly paler reverse)
-        // (a texture bud is a darker crimson, so it reads as quiet texture beside the earned blooms)
+        // Colour ramps [shadow, body, lit] from the rose's ink in the current look: by default sampled from a crimson long-stem
+        // rose (rich face, slightly paler reverse); a pale rose is ivory or pearl, a focal one may be black
+        // (a texture bud is a darker shade, so it reads as quiet texture beside the earned blooms)
+        const ink = this.roseInk(e);
         const dk = e.dark === true ? 0.8 : e.dark || 1, dark = ramp3 => ramp3.map(c => c.map(v => v * dk));
-        const FACE = dark([[66, 0, 8], [172, 8, 24], [226, 38, 50]]);
-        const BACK = dark([[86, 6, 14], [178, 22, 34], [230, 70, 78]]);
-        const GREEN = [[12, 30, 16], [28, 66, 36], [58, 112, 64]];
+        const FACE = dark(ink.face);
+        const BACK = dark(ink.back);
+        const GREEN = this.theme().vine.sepal; // the sepals and hip, in the vine's colours
         const lerp3 = (c1, c2, t) => [c1[0] + (c2[0] - c1[0]) * t, c1[1] + (c2[1] - c1[1]) * t, c1[2] + (c2[2] - c1[2]) * t];
         const ramp = (stops, l) => l < 0.5 ? lerp3(stops[0], stops[1], l * 2) : lerp3(stops[1], stops[2], l * 2 - 1);
         const rgb = (c, m = 1) => `rgb(${(c[0] * m) | 0},${(c[1] * m) | 0},${(c[2] * m) | 0})`;
@@ -2096,20 +2637,21 @@
             vx: (Math.random() - 0.5) * 12 * k, vy: 0, term: (16 + Math.random() * 10) * k,
             sw: 0.9 + Math.random() * 0.7, ph: Math.random() * 6.28, amp: (14 + Math.random() * 16) * k,
             rot: Math.random() * 6.28, spin: (Math.random() - 0.5) * 1.6, flip: Math.random() * 6.28, fs: 1.4 + Math.random() * 1.4,
-            life: 9 + Math.random() * 4
+            life: 9 + Math.random() * 4, rose: e // (it takes the rose's colour in whatever look is showing)
           });
         }
         // On canvas every rose is stamped from its own bitmap (SVG export stays vector): see roseSprite
         if (B.ctx && !this._noSprite) { this.roseSprite(B, cx, cy, R, rot, e, a, grow, opening && !e._held); return; }
 
-        // Soft shadow the bloom casts onto the letter behind it (light from the upper left)
+        // Soft shadow the bloom casts onto the letter behind it (light from the upper left; fainter on a pale page)
         if ((e.cLayer != null ? e.cLayer : e.layer) === 1) {
+          const lk = this.theme();
           const c0 = S2(V(0, 0, Rg * (0.5 - 0.2 * full))), rad = Rg * (0.5 + 0.2 * full) * Math.min(1, 0.4 + open);
           const so = this._lightRot != null ? toRose(0.2, 0.28) : [0.2, 0.28]; // drawn into a sprite: offset in the rose's frame
           for (const [sc, alpha] of [[1.0, 0.1 - 0.03 * full], [0.7, 0.14 - 0.05 * full]]) {
             const sh = [];
             for (let s = 0; s < 18; s++) { const th = s / 18 * Math.PI * 2; sh.push([c0[0] + Rg * so[0] + Math.cos(th) * rad * sc, c0[1] + Rg * so[1] + Math.sin(th) * rad * 0.9 * sc]); }
-            B.fill(sh, `rgba(0,0,0,${alpha})`);
+            B.fill(sh, `rgba(${lk.shade},${alpha * lk.shadeK})`);
           }
         }
 
@@ -2201,7 +2743,7 @@
         // Painter's order: far petals first, near petals last
         petals.sort((p1, p2) => p1.key - p2.key);
         const [shX, shY] = toRose(Rg * 0.035 * (1 - 0.35 * full), Rg * 0.05 * (1 - 0.35 * full));
-        const shadowCol = `rgba(4,0,1,${(0.35 - 0.13 * full).toFixed(3)})`;
+        const shadowCol = `rgba(${ink.cast},${((0.35 - 0.13 * full) * ink.castA).toFixed(3)})`;
         for (const p of petals) {
           const outline = p.region(0, M);
           if (detail) B.fill(outline.map(v => S2([v[0] + shX, v[1] + shY, v[2]])), shadowCol);
@@ -2210,14 +2752,14 @@
           B.fill(fullS, { x0: gL[0], y0: gL[1], x1: gR[0], y1: gR[1], stops: [[0, rgb(p.cL, p.dim)], [0.5, rgb(p.cM, p.dim)], [1, rgb(p.cR, p.dim)]] });
           // Shadow pooling toward the petal base, fading out by mid-petal
           const g0 = S2(p.pt(0, 0)), g1 = S2(p.pt(5, 0));
-          B.fill(p.region(0, 5).map(S2), { x0: g0[0], y0: g0[1], x1: g1[0], y1: g1[1], stops: [[0, 'rgba(30,0,4,0.75)'], [1, 'rgba(30,0,4,0)']] });
-          if (R >= 6) B.stroke([...fullS, fullS[0]], `rgba(30,0,5,${(0.4 - 0.28 * full).toFixed(3)})`, lw * 0.4);
+          B.fill(p.region(0, 5).map(S2), { x0: g0[0], y0: g0[1], x1: g1[0], y1: g1[1], stops: [[0, `rgba(${ink.base},${ink.baseA})`], [1, `rgba(${ink.base},0)`]] });
+          if (R >= 6) B.stroke([...fullS, fullS[0]], `rgba(${ink.edge},${((0.4 - 0.28 * full) * ink.edgeA).toFixed(3)})`, lw * 0.4);
           // Light catching the rolled-back margin
           if (R >= 10) {
             const rim = [];
             for (let j = 6; j <= M; j++) rim.push(S2(p.pt(j, -1)));
             for (let j = M - 1; j >= 6; j--) rim.push(S2(p.pt(j, 1)));
-            B.stroke(rim, `rgba(240,80,92,${(0.05 + 0.4 * p.lTip * (1 - 0.75 * p.k * (1 - full)) + 0.12 * full).toFixed(3)})`, lw * (0.5 + 0.2 * full));
+            B.stroke(rim, `rgba(${ink.rim},${Math.min(1, (0.05 + 0.4 * p.lTip * (1 - 0.75 * p.k * (1 - full)) + 0.12 * full) * ink.rimA).toFixed(3)})`, lw * (0.5 + 0.2 * full));
           }
         }
 
@@ -2414,30 +2956,35 @@
         if (st.face && this._now - (l._leanChanged ?? -Infinity) < 140) return false;
         const lean = st.face && l.lean ? l.lean : [0, 0];
         const key = this._tint ? `${l._settleN}|${this._tint}` : l._settleN, cache = l._plantCache || (l._plantCache = {});
+        const vine = this.theme().vine; // (the colours the bitmap holds)
         let sp = cache[layer];
         const leanChanged = sp && Math.hypot(lean[0] - (sp.lean?.[0] || 0), lean[1] - (sp.lean?.[1] || 0)) * S > 0.1;
-        if (!sp || leanChanged || sp.key !== key || S > sp.S * 1.06 || S < sp.S * 0.6 || Math.abs(scale - sp.scale) > 0.01) {
-          if (this._plantBudget-- <= 0) return false; // rebuild on a later frame; draw live for now
-          if (sp) this.freeBitmap(sp.cv);
-          const draw = Bk => {
-            for (const list of lists) list.forEach((e0, i, arr) => {
-              const e = this.vineShown(e0, arr);
-              if (!e || e.t === 'rose') return; // roses are drawn live
-              if (e.t === 'stem') this.drawStemCustomized(Bk, e, l, age, 1, st, 0, 0, layer);
-              else if ((e.cLayer != null ? e.cLayer : e.layer) === layer) this.drawElCustomized(Bk, e, l, age, 1, st, 0, 0);
-            });
-          };
-          let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-          const grow = (p, pad) => { for (const q of p) { if (q[0] - pad < x0) x0 = q[0] - pad; if (q[1] - pad < y0) y0 = q[1] - pad; if (q[0] + pad > x1) x1 = q[0] + pad; if (q[1] + pad > y1) y1 = q[1] + pad; } };
-          draw({ fill: p => grow(p, 1), stroke: (p, c, w) => grow(p, w / 2 + 1) });
-          if (x1 < x0) { cache[layer] = { empty: true, key, S, scale, lean: [...lean] }; return true; }
-          const w = x1 - x0, h = y1 - y0, cw = Math.max(1, Math.ceil(w * scale)), ch = Math.max(1, Math.ceil(h * scale));
-          const off = typeof OffscreenCanvas !== 'undefined', cv = off ? new OffscreenCanvas(cw, ch) : document.createElement('canvas');
-          if (!off) { cv.width = cw; cv.height = ch; }
-          const cg = cv.getContext('2d');
-          cg.setTransform(scale, 0, 0, scale, -x0 * scale, -y0 * scale);
-          draw(this.backend(cg));
-          sp = cache[layer] = { cv: off && cv.transferToImageBitmap ? cv.transferToImageBitmap() : cv, x0, y0, w, h, S, scale, key, lx: l.x, ly: l.y, lean: [...lean] };
+        const stale = !sp || leanChanged || sp.key !== key || S > sp.S * 1.06 || S < sp.S * 0.6 || Math.abs(scale - sp.scale) > 0.01;
+        if (stale || sp.vine !== vine) {
+          // (a bitmap that only holds an older vine colour stays up until its turn to be repainted, as rose sprites do)
+          if (this._plantBudget-- <= 0) { if (stale) return false; } // rebuild on a later frame; draw live for now
+          else {
+            if (sp) this.freeBitmap(sp.cv);
+            const draw = Bk => {
+              for (const list of lists) list.forEach((e0, i, arr) => {
+                const e = this.vineShown(e0, arr);
+                if (!e || e.t === 'rose') return; // roses are drawn live
+                if (e.t === 'stem') this.drawStemCustomized(Bk, e, l, age, 1, st, 0, 0, layer);
+                else if ((e.cLayer != null ? e.cLayer : e.layer) === layer) this.drawElCustomized(Bk, e, l, age, 1, st, 0, 0);
+              });
+            };
+            let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+            const grow = (p, pad) => { for (const q of p) { if (q[0] - pad < x0) x0 = q[0] - pad; if (q[1] - pad < y0) y0 = q[1] - pad; if (q[0] + pad > x1) x1 = q[0] + pad; if (q[1] + pad > y1) y1 = q[1] + pad; } };
+            draw({ fill: p => grow(p, 1), stroke: (p, c, w) => grow(p, w / 2 + 1) });
+            if (x1 < x0) { cache[layer] = { empty: true, key, vine, S, scale, lean: [...lean] }; return true; }
+            const w = x1 - x0, h = y1 - y0, cw = Math.max(1, Math.ceil(w * scale)), ch = Math.max(1, Math.ceil(h * scale));
+            const off = typeof OffscreenCanvas !== 'undefined', cv = off ? new OffscreenCanvas(cw, ch) : document.createElement('canvas');
+            if (!off) { cv.width = cw; cv.height = ch; }
+            const cg = cv.getContext('2d');
+            cg.setTransform(scale, 0, 0, scale, -x0 * scale, -y0 * scale);
+            draw(this.backend(cg));
+            sp = cache[layer] = { cv: off && cv.transferToImageBitmap ? cv.transferToImageBitmap() : cv, x0, y0, w, h, S, scale, key, vine, lx: l.x, ly: l.y, lean: [...lean] };
+          }
         }
         if (sp.empty) return true;
         const k = S / sp.S;
@@ -2479,9 +3026,9 @@
         const stemW = S * 0.019 * (e.w || 1);
         // shadows and the mid tone fade in once the vine has finished growing (a growing vine is drawn cheaper)
         const done = frO != null || !this._vine ? 1 : Math.min(1, Math.max(0, (age - this.vineStart(e) - e.dur) * this._G / 400));
-        // dark green canes; a revised letter's regrowth is bronze, a scar is cut wood
-        const body = e.scar ? '#4d3c2d' : this.tc('#163a20', '#5c2a17'), lit = e.scar ? '#a8896a' : this.tc('#4f8f5b', '#c47f52');
-        const t = this._tint || 0, mid = e.scar ? [110, 88, 66] : [36 + 106 * t, 89 - 20 * t, 47 - 6 * t].map(Math.round);
+        // canes in the theme's vine colours (dark green by default); a revised letter's regrowth is bronze, a scar is cut wood
+        const V = this.theme().vine, body = e.scar ? '#4d3c2d' : this.tc(V.stem, '#5c2a17'), lit = e.scar ? '#a8896a' : this.tc(V.stemLit, '#c47f52');
+        const t = this._tint || 0, mid = e.scar ? [110, 88, 66] : V.stemMid.map((v, i) => Math.round(v + ([142, 69, 41][i] - v) * t));
         const shA = `rgba(0,0,0,${(0.1 * done).toFixed(3)})`, shB = `rgba(0,0,0,${(0.24 * done).toFixed(3)})`, midC = `rgba(${mid.join(',')},${done.toFixed(3)})`;
 
         for (const sg of e.segs) {
@@ -2616,8 +3163,9 @@
           finally { [this._noSprite, this._lightRot, this._growOne, this._now] = prev; }
         };
         let sp = e._spr;
+        const key = this.spriteKey(e); // (a sprite whose colours have changed waits its turn, showing the old colours meanwhile)
         const due = !sp || R > sp.R * 1.06 || Math.abs(scale - sp.scale) > 0.01 || Math.abs(rot - sp.lr) > 0.3 ||
-          a < sp.lastA || (opening && !sp.opening) || !live;
+          a < sp.lastA || (opening && !sp.opening) || !live || sp.key !== key;
         if (due && (!sp || !live || sampleTurn())) {
           const Rm = R * 1.2, x0 = -1.05 * Rm, y0 = -1.42 * Rm, w = 2.1 * Rm, h = 2.15 * Rm; // every stage fits with ~15% to spare
           const cw = Math.max(1, Math.ceil(w * scale)), ch = Math.max(1, Math.ceil(h * scale));
@@ -2627,7 +3175,7 @@
             cv = makeCanvas(cw, ch);
           }
           if (sp) { this.freeBitmap(sp.next); this.freeBitmap(sp.mix); }
-          sp = e._spr = { cv, R, scale, x0, y0, w, h, lr: rot, t: now, a, lastA: a, opening: live && opening };
+          sp = e._spr = { cv, R, scale, x0, y0, w, h, lr: rot, t: now, a, lastA: a, opening: live && opening, key };
           paint(cv, sp, a);
         }
         let stamp = sp.cv;
@@ -2820,11 +3368,13 @@
         if (Math.random() < 0.45) trail((Math.random() < 0.5 ? -1 : 1) * r * (0.9 + Math.random() * 0.5), r * 0.3);
         stains.push({ l: hit.l, lx: hit.lx, ly: hit.ly, r, born: now, seed: Math.random() * 100, runs, done: !runs.length, doneT: now });
       }
-      // One stain: the splash, its satellite droplets and its trails (masked to the glyph by paintLetterStains)
+      // One stain: the splash, its satellite droplets and its trails (masked to the glyph by paintLetterStains), in what the
+      // look's roses bleed (see ICHOR); ichor glows faintly within the letter
       paintStain(g, l, st, S, now) {
-        const dry = Math.min(1, (now - st.born) / 25000), age = now - st.born;
-        const col = m => `rgba(${((150 - 62 * dry) * m) | 0},${((10 - 2 * dry) * m) | 0},${((22 - 8 * dry) * m) | 0},0.95)`;
+        const dry = Math.min(1, (now - st.born) / 25000), age = now - st.born, I = this.theme().blood;
+        const c = I.wet.map((v, i) => v - (v - I.dry[i]) * dry), col = m => `rgba(${(c[0] * m) | 0},${(c[1] * m) | 0},${(c[2] * m) | 0},0.95)`;
         const cx = l.x + st.lx * S, cy = l.y + st.ly * S, R = st.r * S;
+        if (I.glow) { g.shadowColor = I.glow; g.shadowBlur = R * 0.8 * (g.getTransform ? g.getTransform().a : 1); }
         g.fillStyle = col(1);
         g.beginPath();
         for (let k = 0; k < 12; k++) { const th = k / 12 * 6.283, rr = R * (0.8 + 0.35 * this.h(st.seed + k * 1.7)); g[k ? 'lineTo' : 'moveTo'](cx + Math.cos(th) * rr, cy + Math.sin(th) * rr); }
@@ -2851,21 +3401,23 @@
             g.closePath(); g.fill();
           }
           if (age < 6000) {
-            g.strokeStyle = `rgba(255,255,255,${(0.28 * (1 - age / 6000)).toFixed(3)})`; g.lineWidth = Math.max(0.5, w * 0.14);
+            g.strokeStyle = `rgba(${I.shine},${(0.28 * (1 - age / 6000)).toFixed(3)})`; g.lineWidth = Math.max(0.5, w * 0.14);
             g.beginPath(); for (let i = 0; i <= N; i++) { const [x, y, hw] = at(i / N, 1); g[i ? 'lineTo' : 'moveTo'](x - hw * 0.45, y); } g.stroke();
           }
         }
-        if (age < 4000) { g.fillStyle = `rgba(255,255,255,${(0.35 * (1 - age / 4000)).toFixed(3)})`; g.beginPath(); g.ellipse(cx - R * 0.3, cy - R * 0.3, R * 0.22, R * 0.14, -0.6, 0, 6.283); g.fill(); }
+        if (age < 4000) { g.fillStyle = `rgba(${I.shine},${(0.35 * (1 - age / 4000)).toFixed(3)})`; g.beginPath(); g.ellipse(cx - R * 0.3, cy - R * 0.3, R * 0.22, R * 0.14, -0.6, 0, 6.283); g.fill(); }
+        if (I.glow) g.shadowBlur = 0;
       }
       // The bead at the bottom of each finished trail, hanging off the letter's edge (drawn without the clip)
       paintStainBeads(g, l, st, S, now) {
-        const dry = Math.min(1, (now - st.born) / 25000);
+        const dry = Math.min(1, (now - st.born) / 25000), I = this.theme().blood, c = I.wet.map((v, i) => v - (v - I.dry[i]) * dry);
         for (const run of st.runs) {
           if (run.len < run.y1 - st.ly) continue;
           const br = run.w * S * (run.dropped ? 0.45 : 0.45 + 0.4 * run.bead), x = l.x + (st.lx + run.dx + run.wob) * S, y = l.y + run.y1 * S;
-          g.fillStyle = `rgba(${(150 - 62 * dry) | 0},${(10 - 2 * dry) | 0},${(22 - 8 * dry) | 0},0.95)`;
+          g.fillStyle = `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},0.95)`;
           g.beginPath(); g.ellipse(x, y + br * 0.35, br * 0.85, br, 0, 0, 6.283); g.fill();
-          g.fillStyle = 'rgba(255,190,200,0.3)'; g.beginPath(); g.arc(x - br * 0.3, y + br * 0.1, br * 0.25, 0, 6.283); g.fill();
+          if (I.rim) { g.strokeStyle = `rgba(${I.rim},0.55)`; g.lineWidth = Math.max(0.5, br * 0.12); g.stroke(); } // (pale ichor needs an edge on a pale page)
+          g.fillStyle = `rgba(${I.bead},0.3)`; g.beginPath(); g.arc(x - br * 0.3, y + br * 0.1, br * 0.25, 0, 6.283); g.fill();
         }
       }
       // A reusable layer at the current canvas resolution. The ink scan is for collision detection only.
@@ -2915,11 +3467,12 @@
       stampStains(g, l, settled, S, now) {
         const m = g.getTransform ? g.getTransform() : null, scale = m ? Math.hypot(m.a, m.b) : (this.dpr || 1);
         let c = l._stainCache;
-        if (!c || c.n !== settled.length || c.list.some((st, i) => st !== settled[i]) || S > c.S * 1.06 || S < c.S * 0.6 || Math.abs(scale - c.scale) > 0.01) {
+        const blood = this.theme().blood;
+        if (!c || c.blood !== blood || c.n !== settled.length || c.list.some((st, i) => st !== settled[i]) || S > c.S * 1.06 || S < c.S * 0.6 || Math.abs(scale - c.scale) > 0.01) {
           if (c) this.freeBitmap(c.cv);
           c = this.stainCanvas(l, S, scale);
           this.paintLetterStains(c, l.ch, settled, now, true);
-          c.n = settled.length; c.list = settled.slice();
+          c.n = settled.length; c.list = settled.slice(); c.blood = blood;
           l._stainCache = c;
         }
         const k = S / c.S;
@@ -2928,6 +3481,7 @@
       }
       // The drops themselves: beading on a bloom, falling, or sprayed up by a splash
       drawBloodFront(g, now, S) {
+        const I = this.theme().blood;
         for (const d of this.drops || []) {
           const r = d.r * (d.st === 'bead' ? Math.min(1, d.t / Math.max(0.2, d.hold * 0.8)) : 1);
           if (r < 0.3) continue;
@@ -2935,13 +3489,16 @@
           const a = d.st === 'spray' ? Math.max(0, 1 - d.t / 0.45) : 1;
           g.save();
           g.translate(d.x, d.y); if (d.st === 'fall') g.rotate(Math.atan2(d.vy, d.vx) - Math.PI / 2);
-          g.fillStyle = `rgba(110,4,14,${a.toFixed(3)})`; g.beginPath(); g.ellipse(0, d.st === 'bead' ? r * 0.15 : 0, r, r * stretch, 0, 0, 6.283); g.fill();
-          if (d.st !== 'spray') { g.fillStyle = `rgba(255,170,180,${(0.45 * a).toFixed(3)})`; g.beginPath(); g.arc(-r * 0.3, -r * 0.25 * stretch, r * 0.28, 0, 6.283); g.fill(); }
+          if (I.glow) { g.shadowColor = I.glow; g.shadowBlur = r * 2.5; }
+          g.fillStyle = `rgba(${I.drop},${a.toFixed(3)})`; g.beginPath(); g.ellipse(0, d.st === 'bead' ? r * 0.15 : 0, r, r * stretch, 0, 0, 6.283); g.fill();
+          if (I.rim) { g.shadowBlur = 0; g.strokeStyle = `rgba(${I.rim},${(0.6 * a).toFixed(3)})`; g.lineWidth = Math.max(0.5, r * 0.14); g.stroke(); }
+          if (d.st !== 'spray') { g.fillStyle = `rgba(${I.dropShine},${(0.45 * a).toFixed(3)})`; g.beginPath(); g.arc(-r * 0.3, -r * 0.25 * stretch, r * 0.28, 0, 6.283); g.fill(); }
           g.restore();
         }
       }
 
-      // Petals let go by open roses drift down, swaying and tumbling (front face velvet, reverse paler), and fade out
+      // Petals let go by open roses drift down, swaying and tumbling (front face velvet, reverse paler, in their rose's colour),
+      // and fade out
       drawFallingPetals(B, dt) {
         const F = this.petalFall;
         for (let i = F.length - 1; i >= 0; i--) {
@@ -2967,19 +3524,19 @@
           }
           const tr = q => { const x = q[0] * sx; return [p.x + x * cr - q[1] * sr, p.y + x * sr + q[1] * cr]; };
           const poly = [...left, ...top, ...right.reverse()].map(tr), b0 = tr([0, Lp / 2]), b1 = tr([0, -Lp / 2]);
-          const l = 0.55 + 0.45 * Math.abs(fl), c = fl > 0 ? [172, 8, 24] : [190, 40, 52];
+          const ink = p.rose ? this.roseInk(p.rose) : this.theme().ink.primary, l = 0.55 + 0.45 * Math.abs(fl), c = ink.petal[fl > 0 ? 0 : 1];
           const col = m => `rgba(${(c[0] * l * m) | 0},${(c[1] * l * m) | 0},${(c[2] * l * m) | 0},${fade.toFixed(3)})`;
           B.fill(poly, { x0: b0[0], y0: b0[1], x1: b1[0], y1: b1[1], stops: [[0, col(0.45)], [0.55, col(0.95)], [1, col(1.1)]] });
           // the curled upper rim catching the light
-          B.stroke(top.map(tr), `rgba(255,120,130,${(0.4 * fade * Math.abs(fl)).toFixed(3)})`, Math.max(0.6, Lp * 0.035));
+          B.stroke(top.map(tr), `rgba(${ink.petalRim},${(0.4 * fade * Math.abs(fl)).toFixed(3)})`, Math.max(0.6, Lp * 0.035));
         }
       }
 
       // Depth of field (canvas only): a couple of big out-of-focus petals drift past in front of everything,
       // and a few tiny dim ones far behind. Each kind is a pre-blurred bitmap stamped with a tumble.
       dofSprite(kind, S) {
-        const cache = this._dofSpr || (this._dofSpr = {}), cur = cache[kind];
-        if (cur && Math.abs(cur.S - S) < S * 0.25) return cur;
+        const cache = this._dofSpr || (this._dofSpr = {}), cur = cache[kind], dof = this.theme().dof;
+        if (cur && cur.dof === dof && Math.abs(cur.S - S) < S * 0.25) return cur;
         const fg = kind === 'fg', L = S * (fg ? 0.38 : 0.085), blur = S * (fg ? 0.03 : 0.006), pad = Math.ceil(blur * 3 + 2);
         const w = Math.ceil(L * 1.1 + pad * 2), h = w, cv = document.createElement('canvas');
         cv.width = w; cv.height = h;
@@ -2994,9 +3551,11 @@
           top.push([cx - L * 0.475 * Math.cos(Math.PI * t), cy + L / 2 - 0.78 * L - 0.22 * L * Math.sin(Math.PI * t) + 0.07 * L * Math.exp(-Math.pow((t - 0.5) / 0.09, 2))]);
         }
         const gr = g.createLinearGradient(0, cy + L / 2, 0, cy - L / 2);
-        gr.addColorStop(0, fg ? 'rgb(70,0,10)' : 'rgb(60,0,10)'); gr.addColorStop(0.6, fg ? 'rgb(150,8,24)' : 'rgb(120,6,20)'); gr.addColorStop(1, fg ? 'rgb(190,30,44)' : 'rgb(150,16,30)');
+        // in the theme's petal colour
+        const stops = dof[fg ? 'fg' : 'bg'];
+        gr.addColorStop(0, stops[0]); gr.addColorStop(0.6, stops[1]); gr.addColorStop(1, stops[2]);
         g.fillStyle = gr; g.beginPath(); this.path(g, [...left, ...top, ...right.reverse()], true); g.fill();
-        return (cache[kind] = { cv, w, h, S });
+        return (cache[kind] = { cv, w, h, S, dof });
       }
       dofUpdate(S, dt) {
         const D = this.dof || (this.dof = []), W = this.W || 1400, H = this.H || 900, k = S / 200;
@@ -3167,8 +3726,9 @@
           this._wp = null; this._tint = 0;
         };
 
-        // A faint warm glow behind the words, fading to black (it eases toward the words rather than jumping per keystroke)
-        const vis = L.filter(l => l.ch !== ' ' && !l.dead);
+        // A faint glow behind the words, fading into the page (it eases toward the words rather than jumping per keystroke):
+        // warm crimson on a dark look, a pool of light on a pale one
+        const look = this.theme(), vis = L.filter(l => l.ch !== ' ' && !l.dead);
         this._band = null;
         if (vis.length) {
           let tx = 0, ty = 0, x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
@@ -3179,7 +3739,7 @@
           if (st.vine) { const k = 1 - Math.exp(-(this._dt || 0) * 4); gl.x += (tx - gl.x) * k; gl.y += (ty - gl.y) * k; gl.r += (tr - gl.r) * k; }
           const mx = gl.x, my = gl.y, rad = gl.r, ring = [];
           for (let k = 0; k < 40; k++) { const t = k / 40 * Math.PI * 2; ring.push([mx + Math.cos(t) * rad * 1.02, my + Math.sin(t) * rad * 1.02]); }
-          B.fill(ring, { x0: mx, y0: my, r0: 0, x1: mx, y1: my, r1: rad, stops: [[0, 'rgba(92,8,22,0.26)'], [0.5, 'rgba(48,3,12,0.12)'], [1, 'rgba(0,0,0,0)']] });
+          B.fill(ring, { x0: mx, y0: my, r0: 0, x1: mx, y1: my, r1: rad, stops: [[0, look.glow[0]], [0.5, look.glow[1]], [1, look.glow[2]]] });
         }
         if (st.vine && B.ctx) { this.dofUpdate(S, this._dt); this.dofDraw(B, S, false); }
 
@@ -3187,13 +3747,14 @@
         drawCustom(0, false);
         const rearRoses = this.drawRearRoses(B, target => drawCustom(0, true, target));
 
-        // Text Glyphs: Pure white on black background, 100% readable. A pruned letter fades as its plant starts to wilt.
+        // Text Glyphs: solid in the look's letter colour (white on black by default), 100% readable. A pruned letter fades as
+        // its plant starts to wilt.
         for (const l of L) {
           if (l.ch === ' ') continue;
-          if (st.textAll || !l.dead) B.text(l.ch, l.x, l.y, S, '#FFFFFF');
+          if (st.textAll || !l.dead) B.text(l.ch, l.x, l.y, S, look.text);
           else if (st.vine && B.ctx) { // (it lingers while its vines draw back, so they never stand bare in the air)
             const a = this.pruneFade(l, now, st.wither);
-            if (a > 0.01) { B.ctx.save(); B.ctx.globalAlpha = a; B.text(l.ch, l.x, l.y, S, '#FFFFFF'); B.ctx.restore(); }
+            if (a > 0.01) { B.ctx.save(); B.ctx.globalAlpha = a; B.text(l.ch, l.x, l.y, S, look.text); B.ctx.restore(); }
           }
         }
 
@@ -3269,7 +3830,7 @@
         const pal = this.pal();
         const isCustom = this.state.treatment === 'customized';
         g.setTransform(1, 0, 0, 1, 0, 0);
-        g.fillStyle = isCustom ? '#000000' : pal.bg;
+        g.fillStyle = isCustom ? this.theme().bg : pal.bg;
         g.fillRect(0, 0, 1080, 1080);
 
         const B = this.backend(g);
@@ -3529,7 +4090,7 @@
           svgElements.push(`<rect width="${W}" height="${H}" fill="${pal.bg}" />`);
           this.render(svgBackend, performance.now(), st);
         } else {
-          svgElements.push(`<rect width="${W}" height="${H}" fill="#000000" />`);
+          svgElements.push(`<rect width="${W}" height="${H}" fill="${this.theme().bg}" />`);
           const stCustom = { ...st, vine: !isPoster, C: { red: '#C41A30', blue: '#1C4528', line: '#F07082', text: '#FFFFFF', vein: '#000000' } };
           this.renderCustomized(svgBackend, performance.now(), stCustom);
         }
