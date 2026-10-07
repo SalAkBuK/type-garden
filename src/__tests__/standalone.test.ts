@@ -2934,6 +2934,48 @@ describe('Standalone TypeGardenApp botanicals', () => {
 });
 
 // ---- the poster: a scripted stage on the real renderer
+// A GIF decoded again (header, palette, extensions, frames), to prove the encoder's output is a GIF
+function decodeGif(bytes: Uint8Array) {
+  const w = bytes[6] | bytes[7] << 8, h = bytes[8] | bytes[9] << 8, packed = bytes[10];
+  let p = 13;
+  const palette = bytes.slice(p, p + (packed & 0x80 ? 3 * (2 << (packed & 7)) : 0)); p += palette.length;
+  const frames: number[][] = [], delays: number[] = [];
+  let loops = false;
+  while (bytes[p] !== 0x3B) {
+    if (bytes[p] === 0x21) {
+      const label = bytes[p + 1]; p += 2;
+      if (label === 0xF9) delays.push(bytes[p + 2] | bytes[p + 3] << 8);
+      if (label === 0xFF) loops = true;
+      while (bytes[p]) p += bytes[p] + 1;
+      p++;
+    } else if (bytes[p] === 0x2C) {
+      p += 10;
+      const min = bytes[p++], data: number[] = [];
+      while (bytes[p]) { for (let i = 1; i <= bytes[p]; i++) data.push(bytes[p + i]); p += bytes[p] + 1; }
+      p++;
+      frames.push(lzwDecode(min, data, w * h));
+    } else throw new Error('unknown block ' + bytes[p]);
+  }
+  return { w, h, palette, frames, delays, loops, end: p + 1 === bytes.length };
+}
+function lzwDecode(min: number, data: number[], count: number) {
+  const clear = 1 << min, eoi = clear + 1, out: number[] = [];
+  let dict: number[][] = [], size = min + 1, next = eoi + 1, cur = 0, bits = 0, at = 0, prev: number[] | null = null;
+  const reset = () => { dict = []; for (let i = 0; i < clear; i++) dict[i] = [i]; size = min + 1; next = eoi + 1; };
+  reset();
+  while (out.length < count) {
+    while (bits < size) { cur |= data[at++] << bits; bits += 8; }
+    const code = cur & ((1 << size) - 1);
+    cur >>>= size; bits -= size;
+    if (code === clear) { reset(); prev = null; continue; }
+    if (code === eoi) break;
+    const entry: number[] = code < next ? dict[code] : prev!.concat(prev![0]);
+    for (const v of entry) out.push(v);
+    if (prev) { dict[next++] = prev.concat(entry[0]); if (next === (1 << size) && size < 12) size++; }
+    prev = entry;
+  }
+  return out;
+}
 
 describe('Standalone TypeGardenApp poster', () => {
   // A poster stage without a canvas: the words written into it as the page writes them, the renderer replaced by one that
@@ -3485,6 +3527,26 @@ describe('Standalone TypeGardenApp poster', () => {
     expect(first[0]).not.toBe(fresh()); // (it is left after the numbers the poster's own letters were once grown on)
   });
 
+  it('saves a still of the motion at its moment, drawn exactly, and tells the visitor what it is doing', () => {
+    const link: any = { click: vi.fn() };
+    const PosterApp = runInNewContext(classSource, { performance: { now: () => 10000 }, document: { createElement: () => link } });
+    const ctx = {}, order: string[] = [];
+    const garden: any = Object.assign(Object.create(PosterApp.prototype), {
+      ...structuredClone(TABLES), state: { motion: 'bite', busy: false, look: 'crimson' }, statusEl: { textContent: '' },
+      pcv: { getContext: () => ctx, toDataURL: () => 'data:image/png;base64,AAAA' },
+      stage: { stageWarm: vi.fn(() => order.push('warm')), stageDraw: vi.fn((_g: any, t: number) => { order.push('draw@' + t); garden.busyDuring = garden.state.busy; }) },
+    });
+    garden.exportStill();
+    expect(order).toEqual(['warm', 'draw@' + 14000 * 0.62]);
+    expect(garden.busyDuring).toBe(true); // (nothing is rationed while it is drawn)
+    expect(garden.state.busy).toBe(false);
+    expect([link.download, link.href]).toEqual(['type-garden-bite-still.png', 'data:image/png;base64,AAAA']);
+    expect(link.click).toHaveBeenCalled();
+    garden.state.busy = true; garden.exportStill(); expect(garden.stage.stageDraw).toHaveBeenCalledTimes(1); // (not over another export)
+    garden.posterStatus('Drawing frames: 5%');
+    expect(garden.statusEl.textContent).toBe('Drawing frames: 5%');
+  });
+
   it('frees the poster\'s bitmaps when the look changes, as it does the type view\'s', () => {
     const garden = app(), cv = { width: 4, height: 4 };
     Object.assign(garden, { letters: [], stage: { letters: [{ ch: 'a', els: [], _plantCache: { 1: { cv } } }] } });
@@ -3493,6 +3555,39 @@ describe('Standalone TypeGardenApp poster', () => {
     expect(cv).toEqual({ width: 0, height: 0 });
   });
 
+  it('reduces colours to a palette of at most 256 that keeps the colours it is given, and maps every colour to its nearest', () => {
+    const garden = app(), rgb: number[] = [];
+    for (const c of [[0, 0, 0], [200, 16, 32], [255, 255, 255], [30, 90, 40]]) for (let i = 0; i < 50; i++) rgb.push(...c);
+    const { palette, lut } = garden.gifPalette(new Uint8Array(rgb));
+    expect(palette).toHaveLength(768);
+    const near = (c: number[]) => { const i = lut[(c[0] >> 3) << 10 | (c[1] >> 3) << 5 | c[2] >> 3]; return [0, 1, 2].map(k => Math.abs(palette[i * 3 + k] - c[k])); };
+    for (const c of [[0, 0, 0], [200, 16, 32], [255, 255, 255], [30, 90, 40]]) expect(Math.max(...near(c))).toBeLessThanOrEqual(8);
+    const many: number[] = []; let seed = 5;
+    for (let i = 0; i < 6000; i++) { seed = (seed * 1103515245 + 12345) & 0x7fffffff; many.push(seed >> 3 & 255, seed >> 11 & 255, seed >> 19 & 255); }
+    const big = garden.gifPalette(new Uint8Array(many));
+    expect(big.palette).toHaveLength(768);
+    expect(Math.max(...big.lut)).toBeLessThanOrEqual(255);
+  });
+
+  it('writes a GIF that decodes to the frames it was given: looping, one delay per frame, however much the compressor has to learn', () => {
+    const garden = app(), w = 120, h = 90, palette = new Uint8Array(768);
+    for (let i = 0; i < 256; i++) palette.set([i, 255 - i, (i * 7) & 255], i * 3);
+    let seed = 11; const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed; };
+    const frames = [0, 1, 2].map(f => {
+      const idx = new Uint8Array(w * h);
+      for (let i = 0; i < idx.length; i++) idx[i] = f === 0 ? (i % 40 < 20 ? 0 : 3) : f === 1 ? rnd() % 200 : (rnd() % 7 === 0 ? rnd() % 256 : 9); // flat bands, noise, mostly flat
+      return idx;
+    });
+    const parts = [garden.gifHeader(w, h, palette), ...frames.map(f => garden.gifFrame(f, w, h, 6)), new Uint8Array([0x3B])];
+    const bytes = new Uint8Array(parts.reduce((n, p) => n + p.length, 0)); let at = 0;
+    for (const p of parts) { bytes.set(p, at); at += p.length; }
+    expect(String.fromCharCode(...bytes.slice(0, 6))).toBe('GIF89a');
+    const gif = decodeGif(bytes);
+    expect([gif.w, gif.h, gif.loops, gif.end]).toEqual([w, h, true, true]);
+    expect(gif.delays).toEqual([6, 6, 6]);
+    expect(Array.from(gif.palette)).toEqual(Array.from(palette));
+    gif.frames.forEach((f, i) => expect(f).toEqual(Array.from(frames[i])));
+  });
 });
 
 describe('Standalone entry point parity', () => {
