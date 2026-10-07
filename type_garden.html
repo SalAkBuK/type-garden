@@ -177,8 +177,11 @@
     }
     [data-tg="appearance"][hidden] { display: none; }
     [data-tg="appearance"] { max-height: calc(100vh - 96px); overflow-y: auto; }
-    [data-tg="ap-fx"] { display: flex; flex-direction: column; gap: 5px; margin-top: -2px; }
-    [data-tg="ap-fx"][hidden] { display: none; }
+    [data-tg="ap-fx"], [data-tg="ap-bot"] { display: flex; flex-direction: column; gap: 5px; margin-top: -2px; }
+    [data-tg="ap-fx"][hidden], [data-tg="ap-bot"][hidden] { display: none; }
+    [data-tg="ap-bot"] [data-tg="ap-fxrow"] > span { width: 100px; }
+    [data-tg="ap-bot"] [data-tg="ap-fxrow"]:nth-child(4), [data-tg="ap-bot"] [data-tg="ap-fxrow"]:nth-child(7), [data-tg="ap-bot"] [data-tg="ap-fxrow"]:nth-child(8), [data-tg="ap-bot"] [data-tg="ap-fxrow"]:nth-child(10) { margin-top: 5px; }
+    [data-tg="ap-link"][hidden] { display: none; }
     [data-tg="ap-fxrow"] { display: flex; align-items: center; gap: 7px; min-height: 18px; }
     [data-tg="ap-fxrow"] > span { width: 78px; flex: none; white-space: nowrap; }
     [data-tg="ap-fxrow"] input[type="range"] { flex: 1; min-width: 0; height: 14px; margin: 0; accent-color: #EDEDED; cursor: pointer; }
@@ -203,11 +206,11 @@
       flex: 1; min-width: 0; background: #000000; color: #EDEDED; border: 1px solid #2A2A2A; border-radius: 8px;
       font: inherit; font-size: 11px; padding: 4px 6px;
     }
-    [data-tg="ap-upload"] {
+    [data-tg="ap-upload"], [data-tg="ap-link"] {
       flex: none; background: transparent; border: 1px solid #2A2A2A; border-radius: 8px; color: #BDBDBD;
       font: inherit; font-size: 10.5px; padding: 4px 7px; cursor: pointer;
     }
-    [data-tg="ap-upload"]:hover, [data-tg="ap-upload"]:focus-visible { border-color: #FFFFFF; color: #FFFFFF; }
+    [data-tg="ap-upload"]:hover, [data-tg="ap-upload"]:focus-visible, [data-tg="ap-link"]:hover, [data-tg="ap-link"]:focus-visible { border-color: #FFFFFF; color: #FFFFFF; }
     [data-tg="ap-note"] { color: #8C8C8C; font-size: 10.5px; margin-top: -4px; padding-left: 71px; }
     [data-tg="ap-note"]:empty { display: none; }
     [data-tg="ap-warn"] { color: #D9B26A; font-size: 10.5px; line-height: 1.4; }
@@ -351,6 +354,8 @@
         <div data-tg="ap-row"><span>Based on</span><span data-tg="ap-seg" role="radiogroup" aria-label="Trail style"><button type="button" role="radio" data-fxstyle="legacy" title="Start from the legacy effect's values: splatter, with trails creeping straight down">legacy</button><button type="button" role="radio" data-fxstyle="fluid" title="Start from the fluid effect's values: rivulets traced over the letters">fluid</button></span></div>
       </div>
       <div data-tg="ap-row"><span>Material</span><span data-tg="ap-seg" role="radiogroup" aria-label="What the letters are made of"><button type="button" role="radio" data-material="ink" title="Sealed: the blood stays on the surface">ink</button><button type="button" role="radio" data-material="blotting" title="Drinks the blood: it soaks in, wicks through the letter and feathers">blotting</button><button type="button" role="radio" data-material="linen" title="Soaks it up along the weave">linen</button><button type="button" role="radio" data-material="wax" title="Refuses the blood: it beads up, rolls down and drips off">wax</button></span></div>
+      <div data-tg="ap-row"><span>Garden</span><button type="button" data-tg="ap-link" data-tg-bot="toggle" aria-expanded="false" title="Art-direct the roses, foliage, vines and thorns">Botanicals ▾</button><button type="button" data-tg="ap-link" data-tg-bot="reset" title="Back to the garden as it grows" hidden>Reset</button></div>
+      <div data-tg="ap-bot" hidden></div>
       <div data-tg="ap-warn" aria-live="polite"></div>
     </div>
 
@@ -466,13 +471,15 @@
         ];
 
         // Appearance: what sets the customized garden's colours and type. Every colour the garden is drawn in is derived from
-        // these by compileTheme; none of them changes how the garden grows.
+        // these by compileTheme; none of them changes how the garden grows (the botanicals, below, shape it, but only by
+        // showing, hiding and scaling what the plants already are).
         //   bg, text: the page and the letters
         //   rosePrimary, roseSecondary: the roses' body colour; secondaryRole: where the secondary colour goes ('focal': the
         //   hero and earned blooms, 'scattered': about 40% of the smaller roses, 'off')
         //   blood: what a bitten rose bleeds (a pale colour glows, like ichor)
         //   vine: the leaves (canes, sepals and thorn bases follow it); wing, wingMarks: the butterfly's velvet and markings
         //   font: the typeface (see FONTS); the looks don't set it, so a chosen typeface stays as the presets are tried
+        //   botanical: how the garden grows (see BOTANICAL); likewise not set by the looks, and part of the custom appearance
         // The looks are presets: a complete appearance, the swatch (dot/ring), and a finish (art-directed glow and cast shadow)
         // that holds while the preset's page and primary rose colour are unchanged.
         this.LOOKS = [
@@ -559,6 +566,26 @@
           { k: 'gloss', label: 'Gloss', min: 0, max: 2, step: 0.05, title: 'The wet shine, and the glow of ichor' },
           { k: 'aged', label: 'Dried look', min: 0, max: 2, step: 0.05, title: 'Stays fresh-looking, dries darker and matte, or darkens further and fades' }
         ];
+        // Botanicals: how the garden grows, as art direction, apart from its colours (they are part of the appearance, but the
+        // looks don't set them: like the typeface they stay as the presets are tried). def is each value's neutral setting, the
+        // garden exactly as it has always grown, so the looks and anything saved before these existed are untouched. They are
+        // read as thresholds on hashes the plants already carry and as scales when drawn (see compileBotanical), never by
+        // regrowing: a control keeps every plant's identity and the writing record, and growth eases in and out as it moves.
+        // The three bloom-state weights are shares of one mix (see editBotanical); pct shows a value as a share or a percentage
+        // of its neutral setting.
+        this.BOTANICAL = [
+          { k: 'roses', label: 'Roses', def: 1, min: 0, max: 2, step: 0.05, title: 'How many roses: only the hero blooms, the garden as grown, or every rose it set' },
+          { k: 'roseLo', label: 'Min rose size', def: 1, min: 0.5, max: 1.5, step: 0.05, title: 'How big the smallest roses are' },
+          { k: 'roseHi', label: 'Max rose size', def: 1, min: 0.5, max: 1.6, step: 0.05, title: 'How big the largest roses are' },
+          { k: 'buds', label: 'Buds', def: 0.28, min: 0, max: 1, step: 0.01, mix: true, title: 'The share of the garden\'s roses that are closed buds' },
+          { k: 'half', label: 'Half-open', def: 0.6, min: 0, max: 1, step: 0.01, mix: true, title: 'The share that are half-open goblets' },
+          { k: 'full', label: 'Full', def: 0.12, min: 0, max: 1, step: 0.01, mix: true, title: 'The share that are full blooms (a bloom that has room to open)' },
+          { k: 'clusters', label: 'Bloom clusters', def: 1, min: 0, max: 2, step: 0.05, title: 'How many buds and roses gather around the hero and earned blooms' },
+          { k: 'foliage', label: 'Foliage', def: 1, min: 0, max: 2, step: 0.05, title: 'How many leaves and leafy vines: bare canes, the garden as grown, or every shoot it set' },
+          { k: 'leaf', label: 'Leaf size', def: 1, min: 0.5, max: 1.8, step: 0.05, title: 'How big the leaves are' },
+          { k: 'vine', label: 'Vines', def: 1, min: 0.5, max: 2, step: 0.05, title: 'How thick the canes are' },
+          { k: 'thorns', label: 'Thorns', def: 1, min: 0, max: 2, step: 0.05, title: 'From smooth canes to vicious ones: how many prickles, and how big' }
+        ];
         // What the letters are made of: what happens to the liquid once it touches them (the bleeding effect decides what the
         // liquid does before that). Ink is sealed: the liquid stays on the surface exactly as the effect paints it. The others
         // drink it (see soakStep): how readily the surface film sinks in (absorb, sink: seconds), how much liquid a splash
@@ -619,7 +646,7 @@
           busy: false
         };
 
-        this.appearance = { ...this.look().appearance, font: 'playfair' }; // what the customized garden is drawn in (see LOOKS, compileTheme)
+        this.appearance = { ...this.look().appearance, font: 'playfair', botanical: this.cleanBotanical() }; // what the customized garden is drawn in (see LOOKS, compileTheme, BOTANICAL)
         this.STORE = 'typeGarden.appearance'; // where the visitor's appearance is kept in their browser
         this.bloodFx = this.BLEEDS[0].fx; // how the blood behaves (see setBleed)
         this.restoreAppearance();
@@ -737,6 +764,7 @@
             this.glyphs = {};
             this._inkIdx = {};
             this._inkB = {};
+            this._inkA = {};
             this.fontsReady = true;
             this.layout(true);
             this.buildPoster();
@@ -955,7 +983,7 @@
         const L = this.LOOKS.find(k => k.id === id);
         if (!L || id === this.state.look) return;
         this.state.look = id;
-        this.appearance = { ...L.appearance, font: this.font().id };
+        this.appearance = { ...L.appearance, font: this.font().id, botanical: (this.appearance && this.appearance.botanical) || this.cleanBotanical() }; // (a look sets colours: the typeface and botanicals stay)
         this._theme = null;
         this._unsaved = true;
         this.restyle();
@@ -970,21 +998,31 @@
       // bitmap knows the colours it holds and repaints itself when they change (rose sprites a few a frame, keeping their old
       // colours meanwhile; plants are drawn live while a vine colour is being changed), so a colour picker can fire as fast as
       // it likes; the theme is compiled once, when next drawn, and the page's chrome follows once a frame. The preset whose
-      // values these are is selected again; otherwise the appearance is 'custom'. Returns whether anything changed.
+      // values these are is selected again; otherwise the appearance is 'custom'. Returns whether anything changed. The
+      // botanicals (a set of values, see BOTANICAL) change how the garden grows rather than what it is drawn in, but
+      // they too only ever show or hide what the plants already are: see beforeBotanical.
       setAppearance(patch) {
-        const A = this.appearance || { ...this.look().appearance, font: this.font().id }, next = { ...A };
+        const A = this.appearance || { ...this.look().appearance, font: this.font().id, botanical: this.cleanBotanical() }, next = { ...A };
         for (const k in patch) {
           if (!(k in A) || k === 'font') continue;
+          if (k === 'botanical') { // (any of its values; a new object only if one differs)
+            const v = this.cleanBotanical({ ...A.botanical, ...patch.botanical });
+            if (this.BOTANICAL.some(c => v[c.k] !== (A.botanical || {})[c.k])) next.botanical = v;
+            continue;
+          }
           const v = k === 'secondaryRole' ? (['focal', 'scattered', 'off'].includes(patch[k]) ? patch[k] : null) : this.normHex(patch[k]);
           if (v != null) next[k] = v;
         }
         const changed = Object.keys(A).filter(k => A[k] !== next[k]);
         if (!changed.length) return false;
+        const grown = changed.includes('botanical');
+        if (grown) this.beforeBotanical();
         this.appearance = next;
         this.state.look = this.matchLook(next);
         this._theme = null;
         this._chrome = true;
         this._unsaved = true;
+        if (grown) this.afterBotanical();
         return true;
       }
       // The preset whose colours these are, or 'custom'
@@ -1007,9 +1045,10 @@
         // every value is checked; anything unrecognised keeps its default
         const clean = A => {
           if (!A || typeof A !== 'object') return null;
-          const out = { ...this.LOOKS[0].appearance, font: 'playfair' };
+          const out = { ...this.LOOKS[0].appearance, font: 'playfair', botanical: null };
           for (const k in out) {
-            if (k === 'font') { if (this.FONTS.some(f => f.id === A.font) || /^user:[0-9a-f]{8}$/.test(A.font)) out.font = A.font; }
+            if (k === 'botanical') out.botanical = this.cleanBotanical(A.botanical); // (an appearance kept before botanicals existed has the neutral ones)
+            else if (k === 'font') { if (this.FONTS.some(f => f.id === A.font) || /^user:[0-9a-f]{8}$/.test(A.font)) out.font = A.font; }
             else if (k === 'secondaryRole') { if (['focal', 'scattered', 'off'].includes(A[k])) out[k] = A[k]; }
             else { const v = this.normHex(A[k]); if (v) out[k] = v; }
           }
@@ -1083,6 +1122,105 @@
         this._unsaved = true;
         this.syncAppearanceUI();
       }
+      // ---------- Botanicals ----------
+      // The values checked and filled in: every control of BOTANICAL as a number within its range, anything missing or unusable
+      // at its neutral setting. The largest roses never come out smaller than the smallest, and a mix of nothing is the usual mix.
+      cleanBotanical(b) {
+        const V = {};
+        for (const c of this.BOTANICAL) V[c.k] = b && typeof b[c.k] === 'number' && Number.isFinite(b[c.k]) ? Math.min(c.max, Math.max(c.min, b[c.k])) : c.def;
+        if (!(V.buds + V.half + V.full > 0)) for (const c of this.BOTANICAL) if (c.mix) V[c.k] = c.def;
+        if (V.roseLo > V.roseHi) V.roseHi = V.roseLo;
+        return V;
+      }
+      // What the values mean to the plants, ready to read while drawing (pure; the neutral values compile to exactly what the
+      // garden has always done, so every threshold below equals the constant it replaces):
+      //  roses: below the garden as grown, more of the scattered roses go (roseDrop; the hero and earned blooms stay) and so
+      //    do the coiled ones (roseGone); above it the dropped ones return, then the branch shoots that carry roses (branchRose)
+      //  mix: the boundaries along the closed-to-open line (buds below stageB, half-open below stageH, then full) and the usual
+      //    ones (dBud, dHalf); see roseStage
+      //  clusters: how many satellites each hero and earned bloom gathers (cap), their leaves too
+      //  foliage: below, more leaves go (leafGone) and more bare shoots; above, the dropped leaves and bare shoots return, then
+      //    the branches that carry no rose (branchLeaf)
+      //  thorns: below, fewer prickles (thornShow); above, up to three more on each cane (thornExtra); and their size
+      compileBotanical(b) {
+        const V = this.cleanBotanical(b), up = x => Math.max(0, x - 1), down = x => Math.max(0, 1 - x), mix = V.buds + V.half + V.full;
+        return {
+          sig: this.BOTANICAL.map(c => V[c.k]).join('|'),
+          roseDrop: V.roses < 1 ? 0.3 + 0.7 * down(V.roses) : 0.3 * (1 - up(V.roses)), roseGone: down(V.roses), branchRose: up(V.roses),
+          lo: V.roseLo, hi: V.roseHi,
+          stageB: V.buds / mix, stageH: (V.buds + V.half) / mix, mix: `${V.buds / mix}|${(V.buds + V.half) / mix}`,
+          dBud: this.BOTANICAL.find(c => c.k === 'buds').def, dHalf: this.BOTANICAL.find(c => c.k === 'buds').def + this.BOTANICAL.find(c => c.k === 'half').def,
+          // the coverage safeguard (see coverGuard) is only ever needed once sizes or the mix have been moved from the garden as
+          // grown: the most of one letter a full bloom may cover, an ordinary one and a hero or earned one (which are freer)
+          guard: V.roseLo !== 1 || V.roseHi !== 1 || Math.abs(V.buds / mix - this.BOTANICAL.find(c => c.k === 'buds').def) > 1e-9 ||
+            Math.abs((V.buds + V.half) / mix - this.BOTANICAL.find(c => c.k === 'buds').def - this.BOTANICAL.find(c => c.k === 'half').def) > 1e-9,
+          cover: 0.2, coverFree: 0.35,
+          cap: { hero: Math.floor(3 * V.clusters + 1e-9), leaf: Math.floor(2 * V.clusters + 1e-9), earned: Math.min(7, Math.round((this.REC ? this.REC.cluster : 5) * V.clusters)) },
+          leafGone: down(V.foliage), leafDrop: 0.35 * (1 - up(V.foliage)), bareDrop: V.foliage < 1 ? 0.5 + 0.5 * down(V.foliage) : 0.5 * (1 - up(V.foliage)), branchLeaf: up(V.foliage),
+          leaf: V.leaf, vine: V.vine,
+          thornShow: Math.min(1, V.thorns), thornExtra: 3 * up(V.thorns), thornSize: V.thorns < 1 ? 0.55 + 0.45 * V.thorns : 1 + 0.9 * up(V.thorns)
+        };
+      }
+      // The values in use, compiled once for each change (the appearance holds a new object whenever they change)
+      bots() {
+        const b = this.appearance && this.appearance.botanical;
+        if (this._botSrc !== b || !this._bot) { this._botSrc = b; this._bot = this.compileBotanical(b); }
+        return this._bot;
+      }
+      bot0() { return this._bot0 || (this._bot0 = this.compileBotanical()); }
+      // The type view grows with the visitor's botanicals; the poster, and anything that is not that view, as it always has
+      cur() { return this._vine ? this.bots() : this.bot0(); }
+      // A rose's drawn size in em: its own, stretched by how far up the garden's range of sizes it is (smallest roses by the
+      // small end, largest by the large end)
+      roseR(e) {
+        const B = this.cur();
+        if (B.lo === 1 && B.hi === 1) return e.R;
+        return e.R * (B.lo + (B.hi - B.lo) * Math.min(1, Math.max(0, (e.R - 0.07) / 0.23)));
+      }
+      // An edit to a control of the botanicals, applied and kept as the visitor's custom appearance. The three bloom-state
+      // values are shares of one mix: the other two give up (or take) what this one changes, in proportion to their own
+      editBotanical(patch) {
+        const cur = this.appearance.botanical, next = { ...cur };
+        for (const k in patch) {
+          const c = this.BOTANICAL.find(x => x.k === k), v = +patch[k];
+          if (!c || !Number.isFinite(v)) continue;
+          next[k] = Math.min(c.max, Math.max(c.min, v));
+          if (c.mix) {
+            const others = this.BOTANICAL.filter(x => x.mix && x.k !== k), rest = 1 - next[k], sum = others.reduce((s, x) => s + cur[x.k], 0);
+            for (const x of others) next[x.k] = Math.round((sum > 0 ? cur[x.k] / sum : 1 / others.length) * rest * 1000) / 1000;
+          }
+          if (k === 'roseLo' && next.roseLo > next.roseHi) next.roseHi = next.roseLo;
+          if (k === 'roseHi' && next.roseHi < next.roseLo) next.roseLo = next.roseHi;
+        }
+        this.editAppearance({ botanical: next });
+      }
+      // Around a change of botanicals. Before: what every plant shows now is remembered (as a visibility that eases to its new
+      // target, so growth appears and draws back rather than pops). After: what was settled under the old values is let go:
+      // stems' judged thinning, the rose spacing, and the stamped plants (a letter whose plants are easing is drawn live until
+      // they have, see _easeUntil). Bloom stages follow the mix by themselves (see roseStage).
+      beforeBotanical() {
+        for (const l of this.letters || []) {
+          if (l.ch === ' ' || !l.els) continue;
+          for (const list of this.letterLists(l, true)) for (const e of list) if (e._v === undefined) e._v = this.thinned(e, list) ? 0 : 1;
+        }
+      }
+      afterBotanical() {
+        this._roseKey = null;
+        const until = performance.now() + 1500;
+        for (const l of this.letters || []) {
+          if (l.ch === ' ' || !l.els) continue;
+          if (l._plantCache) { for (const k in l._plantCache) this.freeBitmap(l._plantCache[k].cv); l._plantCache = null; }
+          const lists = this.letterLists(l, true);
+          for (const list of lists) for (const e of list) if (e.t === 'stem') e._thin = undefined;
+          // what no longer differs from its new target has nothing to ease; a letter with plants that do is drawn live until
+          // they have (the others restamp their bitmaps as usual)
+          for (const list of lists) for (const e of list) {
+            if (e._v === undefined) continue;
+            if (e._v === (this.thinned(e, list) ? 0 : 1)) e._v = undefined; else l._easeUntil = until;
+          }
+        }
+      }
+
       // ---------- Bleeding ----------
       // How the blood (or ichor) behaves, apart from its colour: a preset (see BLEEDS), or the visitor's own, built on either
       // trail style with the controls of BLEED_CONTROLS and started from the effect showing (or from a style's own values; see
@@ -1149,6 +1287,19 @@
           const out = el.nextElementSibling;
           if (out) out.textContent = this.fxLabel(el.dataset.fx, v);
         }
+        // the botanicals: each value as a percentage of the garden as grown (the bloom mix as shares), and the section's
+        // reset once any differs
+        const V = A.botanical || this.cleanBotanical(), mix = V.buds + V.half + V.full || 1, bt = this.apEl.querySelector('[data-tg="ap-bot"]');
+        const tog = this.apEl.querySelector('[data-tg-bot="toggle"]'), rst = this.apEl.querySelector('[data-tg-bot="reset"]');
+        if (bt) bt.hidden = !this._botOpen;
+        if (tog) { tog.setAttribute('aria-expanded', String(!!this._botOpen)); tog.textContent = this._botOpen ? 'Botanicals ▴' : 'Botanicals ▾'; }
+        if (rst) rst.hidden = !this.BOTANICAL.some(c => V[c.k] !== c.def);
+        for (const el of this.apEl.querySelectorAll('[data-bot]')) {
+          const c = this.BOTANICAL.find(x => x.k === el.dataset.bot), v = V[c.k];
+          if (el !== active) el.value = String(v);
+          const out = el.nextElementSibling;
+          if (out) out.textContent = `${Math.round((c.mix ? v / mix : v / c.def) * 100)}%`;
+        }
         const warn = this.apEl.querySelector('[data-tg="ap-warn"]');
         if (warn) warn.textContent = this.contrastWarning(A);
         const sw = this.customSwatchEl, C = this.customAppearance || A;
@@ -1171,15 +1322,28 @@
           row.append(name, input, out);
           box.appendChild(row);
         }
+        // ...and one for each of the botanicals (shown when the Botanicals section is open)
+        const bot = panel.querySelector('[data-tg="ap-bot"]');
+        if (bot) for (const c of this.BOTANICAL) {
+          const row = doc.createElement('label'), name = doc.createElement('span'), input = doc.createElement('input'), out = doc.createElement('output');
+          row.setAttribute('data-tg', 'ap-fxrow'); row.title = c.title;
+          name.textContent = c.label;
+          Object.assign(input, { type: 'range', min: String(c.min), max: String(c.max), step: String(c.step) });
+          input.dataset.bot = c.k; input.setAttribute('aria-label', c.title);
+          out.setAttribute('data-tg', 'ap-fxval');
+          row.append(name, input, out);
+          bot.appendChild(row);
+        }
         const upload = panel.querySelector('[data-tg="ap-upload"]');
         if (upload && file) {
           upload.addEventListener('click', () => file.click());
           file.addEventListener('change', () => { const f = file.files && file.files[0]; file.value = ''; if (f) this.uploadFont(f); });
         }
         panel.addEventListener('input', e => {
-          const k = e.target.dataset && e.target.dataset.ap, f = e.target.dataset && e.target.dataset.fx;
+          const k = e.target.dataset && e.target.dataset.ap, f = e.target.dataset && e.target.dataset.fx, b = e.target.dataset && e.target.dataset.bot;
           if (k && k !== 'font') this.editAppearance({ [k]: e.target.value });
           else if (f) this.editBleed({ [f]: e.target.value });
+          else if (b) this.editBotanical({ [b]: e.target.value });
         });
         panel.addEventListener('change', e => { if (e.target === menu) this.setFont(menu.value); });
         panel.addEventListener('click', e => {
@@ -1190,6 +1354,9 @@
           if (y) this.baseBleed(y.dataset.fxstyle);
           const m = e.target.closest && e.target.closest('[data-material]');
           if (m) this.setMaterial(m.dataset.material);
+          const g = e.target.closest && e.target.closest('[data-tg-bot]');
+          if (g && g.dataset.tgBot === 'toggle') { this._botOpen = !this._botOpen; this.syncAppearanceUI(); }
+          else if (g && g.dataset.tgBot === 'reset') this.editAppearance({ botanical: this.cleanBotanical() });
         });
         panel.addEventListener('pointerdown', e => e.stopPropagation()); // a click in the panel never reaches the garden
       }
@@ -1387,7 +1554,7 @@
       // rewrites, bloom clocks and birth times) and every plant regrows from its own seeds in the new glyph geometry, as far
       // grown as it was; blood stains move onto the nearest ink of their letter, or go where there is none nearby.
       reshape() {
-        this.cache = {}; this.glyphs = {}; this._inkIdx = {}; this._inkB = {};
+        this.cache = {}; this.glyphs = {}; this._inkIdx = {}; this._inkB = {}; this._inkA = {};
         this._bentStems = new Map(); this._bentEls = new Set(); this._roseKey = null; // (the rose spacing is worked out afresh)
         for (const l of this.letters) {
           this.freeLetterBitmaps(l);
@@ -2154,26 +2321,40 @@
         return Math.min(a, R.emerge) + Math.max(0, to - from) * (b.kind === 'bang' ? R.bang : b.kind === 'stop' ? R.stop : R.open);
       }
       bloomFrozen(e, a) { return e.bloom.end != null && a >= this.REC.emerge; }
-      // What vine mode draws for an element: the element itself, or nothing where the original composition thins it out
-      vineShown(e, arr) { return this.thinned(e, arr) ? null : e; }
+      // What vine mode draws for an element: the element itself, or nothing where the original composition thins it out. An
+      // element whose thinning has just changed (a botanical moved, see beforeBotanical) holds a visibility _v that eases to
+      // its new target, once a frame, which the drawing scales growth by; one that is settled carries none.
+      vineShown(e, arr) {
+        const on = !this.thinned(e, arr);
+        if (e._v === undefined) return on ? e : null;
+        const t = on ? 1 : 0;
+        if (this._frameNo === undefined || e._vf !== this._frameNo) {
+          e._vf = this._frameNo;
+          e._v += (t - e._v) * (this._bk ?? 1);
+          if (Math.abs(t - e._v) < 0.02) e._v = t;
+        }
+        if (e._v === t) { e._v = undefined; return on ? e : null; }
+        return e._v > 0 ? e : null;
+      }
 
       // As stillness opens a bloom, five side stalks can gather buds, half-open roses and a small full bloom.
       // They share the parent's pause clock, and stop opening with it. A question's or comma's bloom gathers none.
       // age: the letter's custom-clock ms, when each new stalk starts to grow.
       growCluster(l, e, v, age) {
-        const kind = e.bloom.kind, max = kind === 'word' || kind === 'stop' || kind === 'bang' ? (this.REC ? this.REC.cluster : 0) : 0;
-        const have = e._cluster || 0, want = Math.min(max, [2600, 4600, 5600, 6200, 7000].filter(t => v >= t).length);
+        // (richer clusters gather up to two more, after the usual five; a poorer garden hides the later ones: see thinned)
+        const kind = e.bloom.kind, max = kind === 'word' || kind === 'stop' || kind === 'bang' ? (this.REC ? Math.max(this.REC.cluster, this.cur().cap.earned) : 0) : 0;
+        const have = e._cluster || 0, want = Math.min(max, [2600, 4600, 5600, 6200, 7000, 7600, 8200].filter(t => v >= t).length);
         if (want <= have) return;
         const P = e.stem._pts0 || e.stem.pts;
         for (let k = have; k < want; k++) {
-          const r = this.rng(Math.floor(e.id * 10) + k * 7919), side = k % 2 ? -1 : 1, hu = [0.62, 0.78, 0.5, 0.88, 0.35][k], [base, a] = this.at(P, hu);
-          const stage = ['bud', 'half', 'bud', 'half', 'full'][k], half = stage === 'half';
+          const r = this.rng(Math.floor(e.id * 10) + k * 7919), side = k % 2 ? -1 : 1, hu = [0.62, 0.78, 0.5, 0.88, 0.35, 0.7, 0.42][k], [base, a] = this.at(P, hu);
+          const stage = ['bud', 'half', 'bud', 'half', 'full', 'bud', 'half'][k], half = stage === 'half';
           const pts = this.vine(base, a + side * (0.75 + r() * 0.3), e.R * (2.2 + r() * 0.5), 0.22, 1 + r(), r() * 6.28, -side * 0.35, 12), tip = pts[pts.length - 1];
           const d0 = k < (l._regrown || 0) ? 0 : age; // (a stalk that had grown before the letter was refitted is grown again)
-          const stalk = { t: 'stem', id: l.id * 100 + 99.4 + k * 0.1, pts, segs: [{ u0: 0, u1: 1, layer: 1 }], d0, dur: 360, w: 0.6, thorns: [], fixedThorns: true, par: null, keep: true, host: e.stem, hu }; // (host: it follows the shoot if that bends)
+          const stalk = { t: 'stem', id: l.id * 100 + 99.4 + k * 0.1, pts, segs: [{ u0: 0, u1: 1, layer: 1 }], d0, dur: 360, w: 0.6, thorns: [], fixedThorns: true, par: null, keep: true, host: e.stem, hu, cg: 'earned', cr: k }; // (host: it follows the shoot if that bends)
           const rose = {
             t: 'rose', id: l.id * 100 + 99.45 + k * 0.1, x: tip[0], y: tip[1], R: e.R * (stage === 'full' ? 0.55 + r() * 0.08 : half ? 0.72 + r() * 0.1 : 0.62 + r() * 0.12), rot: (r() - 0.5) * 0.4,
-            ph1: r() * 6.28, ph2: r() * 6.28, turns: 2, layer: 1, d0, stem: stalk, su: 1, bloom: e.bloom, stage, cluster: true
+            ph1: r() * 6.28, ph2: r() * 6.28, turns: 2, layer: 1, d0, stem: stalk, su: 1, bloom: e.bloom, stage, soft: true, cluster: true, cg: 'earned', cr: k
           };
           l.bloomEls.push(stalk, rose);
         }
@@ -2188,13 +2369,28 @@
         if (e.stage === undefined) {
           const hs = this.h(e.id * 3.17 + 0.5), clear = e.wi == null && (e.y < -0.9 || e.y > 0.15);
           e.stage = hs < 0.12 && clear ? 'full' : hs < 0.4 ? 'bud' : 'half';
+          e.soft = true;
+        }
+        // The bloom-state mix reaches every rose but the hero and earned blooms (soft: the plain ones, the coiled ones, a
+        // cluster's satellites). Each keeps its usual stage s0 at the neutral mix; the stages are laid along a line from
+        // closed to open (buds, half-open, full), a rose sits at a fixed place within its own usual stage's stretch of the
+        // line (its hash), and a new mix moves the stage boundaries: more buds turns the nearest half-open roses to buds, more
+        // full blooms turns the nearest half-open roses to full ones, and so on, however they were first chosen.
+        const B = this.cur();
+        if (e.soft && e._mix !== B.mix) {
+          if (e.s0 === undefined) e.s0 = e.stage;
+          const lo = e.s0 === 'bud' ? 0 : e.s0 === 'half' ? B.dBud : B.dHalf, hi = e.s0 === 'bud' ? B.dBud : e.s0 === 'half' ? B.dHalf : 1;
+          const q = lo + this.h(e.id * 7.77 + 0.3) * (hi - lo) * (1 - 1e-9), stage = q < B.stageB ? 'bud' : q < B.stageH ? 'half' : 'full';
+          e._mix = B.mix; e._ms = stage;
+          this.setStage(e, stage);
         }
         return e.stage;
       }
       // The painted head of a rose when fully open (measured from the sprites, sepals included), in em from the letter's
       // origin (ox, oy): a full bloom's face sits low and wide over the tip of its stalk, a half-open goblet and a bud higher
-      roseFootprint(e, ox, oy) {
-        const st = this.roseStage(e), R = e.R * (st === 'full' ? 1.6 : st === 'bud' ? 0.85 : 1), aim = this.roseAim(e);
+      // (relief: a full bloom's softly eased size, see coverGuard; s tries another)
+      roseFootprint(e, ox, oy, s = e._rt ?? 1) {
+        const st = this.roseStage(e), R = this.roseR(e) * (st === 'full' ? 1.6 : st === 'bud' ? 0.85 : 1) * s, aim = this.roseAim(e);
         const up = R * (st === 'full' ? 0.26 : st === 'bud' ? 0.4 : 0.47);
         return { x: ox + e.x + Math.sin(aim) * up, y: oy + e.y - Math.cos(aim) * up, r: R * (st === 'full' ? 0.88 : st === 'bud' ? 0.7 : 0.8) };
       }
@@ -2259,6 +2455,7 @@
         for (const [stem, l] of bent) { was.set(stem, [stem.pts, l]); stem.pts = stem._pts0; }
         for (const e of this._bentEls || []) { e.x = e._at0[0]; e.y = e._at0[1]; if (e._at0[2] !== undefined) e.a = e._at0[2]; }
         this._bentStems = new Map(); this._bentEls = new Set();
+        for (const { e, ox, oy } of roses) this.coverGuard(e, ox, oy, L, T);
         const rank = { full: 0, half: 1, bud: 2 };
         roses.sort((a, b) => (a.fixed ? 0 : 1) - (b.fixed ? 0 : 1) || a.e._seen - b.e._seen ||
           rank[a.e.stage] - rank[b.e.stage] || b.e.R - a.e.R || a.e.id - b.e.id);
@@ -2306,6 +2503,80 @@
           if (ok(c)) best = c;
         }
         return best || head;
+      }
+
+      // A soft readability safeguard for full blooms, so more full blooms (or bigger roses) never smother a letter. A full bloom
+      // may cover only so much of any one letter's ink (a fraction: B.cover for an ordinary rose, B.coverFree for the freer hero
+      // and earned blooms). One that would cover more is first eased smaller, by just enough, but never below the size it has in
+      // the garden as grown; if that is not enough, an ordinary rose that the mix has promoted to a full bloom stays half-open
+      // over that letter (the same rule the garden has always had: a bloom opens fully only where it has room). So the sliders
+      // stay free and nothing is capped: a bloom with room, above or below the words, keeps its full size, and the garden as
+      // grown, where nothing is ever eased, is untouched. It is worked out where the head would sit before the spacing moves
+      // it, whenever the roses are placed (e._rt: the scale; e._ms: the stage the mix chose, which the safeguard may hold back).
+      coverGuard(e, ox, oy, L, T) {
+        const B = this.cur();
+        if (e.soft && e._ms !== undefined && e.stage !== e._ms) this.setStage(e, e._ms, false);
+        e._rt = 1;
+        if (!B.guard || this.roseStage(e) !== 'full') return;
+        const natural = e.R * (e.soft ? { bud: 0.85, half: 1, full: 1.6 }[e.s0 || 'full'] : 1.6), floor = Math.min(1, natural / (this.roseR(e) * 1.6));
+        const allow = e.soft ? B.cover : B.coverFree, cover = k => this.inkCover(this.roseFootprint(e, ox, oy, k), L, T);
+        if (cover(1) <= allow) return;
+        if (floor <= 0.999) {
+          if (cover(floor) <= allow) {
+            let lo = floor, hi = 1;
+            for (let i = 0; i < 6; i++) { const mid = (lo + hi) / 2; if (cover(mid) > allow) hi = mid; else lo = mid; }
+            e._rt = lo;
+            return;
+          }
+          e._rt = floor;
+        }
+        if (e.soft && e.s0 !== 'full') { e._rt = 1; this.setStage(e, 'half', false); }
+      }
+      // A rose's stage set; its sprite and (unless it is being placed right now) the rose spacing are made again
+      setStage(e, stage, redo = true) {
+        if (e.stage === stage) return;
+        e.stage = stage;
+        if (redo) this._roseKey = null;
+        if (e._spr) { this.freeBitmap(e._spr.cv); this.freeBitmap(e._spr.next); this.freeBitmap(e._spr.mix); e._spr = null; }
+      }
+      // The eased size a rose is drawn at: its relief, arrived at over a moment as the letters or the settings move
+      roseRelief(e) {
+        const t = e._rt ?? 1;
+        if (e._rf === undefined || e._rf === t) { e._rf = t; return t; }
+        if (this._frameNo === undefined || e._rff !== this._frameNo) {
+          e._rff = this._frameNo;
+          e._rf += (t - e._rf) * (this._bk ?? 1);
+          if (Math.abs(t - e._rf) < 0.005) e._rf = t;
+        }
+        return e._rf;
+      }
+      // The most of any one letter's ink that a rose head (x, y, r in em, as roseFootprint gives) covers, as a fraction of that
+      // letter's own ink; L: the letters, T: the em in pixels they were laid out in
+      inkCover(head, L, T) {
+        let most = 0;
+        for (const l of L) {
+          if (l.dead || l.ch === ' ') continue;
+          const lx = (l.tx ?? l.x) / T, ly = (l.ty ?? l.y) / T;
+          if (!Number.isFinite(lx) || !Number.isFinite(ly) || Math.abs(head.x - lx) > head.r + 0.7) continue;
+          const total = this.inkArea(l.ch);
+          if (!(total > 0)) continue;
+          const rows = this.inkIndex(l.ch), cx = head.x - lx, cy = head.y - ly;
+          let area = 0;
+          for (let k = Math.floor((cy - head.r) * 80); k <= Math.floor((cy + head.r) * 80); k++) {
+            const runs = rows.get(k), dy = (k + 0.5) / 80 - cy;
+            if (!runs || Math.abs(dy) >= head.r) continue;
+            const half = Math.sqrt(head.r * head.r - dy * dy);
+            for (const r of runs) area += Math.max(0, Math.min(r[1], cx + half) - Math.max(r[0], cx - half)) / 80;
+          }
+          most = Math.max(most, area / total);
+        }
+        return most;
+      }
+      // A letter's ink in em² (rows of runs are 1/80 em apart)
+      inkArea(ch) {
+        const A = this._inkA || (this._inkA = {});
+        if (A[ch] === undefined) { let s = 0; for (const runs of this.inkIndex(ch).values()) for (const r of runs) s += (r[1] - r[0]) / 80; A[ch] = s; }
+        return A[ch];
       }
 
       // Customized only: the shoot a pause sprouted (see checkSprout). It carries straight on from the letter's coiled vine where
@@ -2825,8 +3096,22 @@
             sorted.push({ u: Math.max(0.1, Math.min(0.9, u)), s });
           }
         }
+        // up to three more, which only grow where the garden is made thornier (x: which; see thornOn). They come from a
+        // stream of their own, so the prickles above stay exactly where they are.
+        const rx = this.rng(Math.floor(e.id * 839) + 9001);
+        for (let i = 0; i < 3; i++) {
+          const u = 0.1 + (i + 0.5 + (rx() - 0.5) * 0.5) * (0.8 / 3), s = (i % 2 ? 1 : -1) * (rx() < 0.85 ? 1 : -1);
+          if (!sorted.some(th => Math.abs(th.u - u) < 0.07)) sorted.push({ u: Math.max(0.1, Math.min(0.9, u)), s, x: i });
+        }
         sorted.sort((a, b) => a.u - b.u);
         return (e._cThorns = sorted);
+      }
+      // Whether a cane shows one of its prickles: a knot's or scar's hooked thorns are the writing record and always show;
+      // fewer of the others show on a smoother garden (the same ones go first), and the extras only on a thornier one
+      thornOn(e, th, B) {
+        if (e.thornK) return true;
+        if (th.x !== undefined) return th.x < B.thornExtra;
+        return B.thornShow >= 1 || this.h(e.id * 11.7 + th.u * 53.1) < B.thornShow;
       }
 
       // A wrap grows loose and cinches tight around its stroke once fully grown
@@ -2856,10 +3141,10 @@
         const normX = -sinA * s, normY = cosA * s;
 
         // Slender stem width. Prickles vary in size and hook, the odd one larger, but all stay well under half a knot's thorn
-        const stemW = S * 0.019;
+        const bt = this.cur(), stemW = S * 0.019 * bt.vine;
         const hVar = this.h(eId * 19.3 + u * 47.1), big = this.h(eId * 7.9 + u * 13.7) > 0.8 ? 0.35 : 0;
-        const H = stemW * (1.0 + hVar * 0.5 + big) * sc;
-        const bLen = stemW * (1.4 + hVar * 0.3) * sc;
+        const H = stemW * (1.0 + hVar * 0.5 + big) * sc * bt.thornSize;
+        const bLen = stemW * (1.4 + hVar * 0.3) * sc * (1 + bt.thornSize) / 2; // (a bigger prickle is broader at the base too)
         const hook = H * (0.32 + this.h(eId * 5.1 + u * 29.3) * 0.32);
 
         // Key contour points
@@ -2926,8 +3211,8 @@
         const sc = this.eo(Math.min(1, Math.max(0, (fr - th.u) / 0.12)));
         if (sc <= 0.01) return;
         const [p, a] = this.at(P, th.u), tx = Math.cos(a), ty = Math.sin(a), nx = -ty * th.s, ny = tx * th.s;
-        const stemW = S * 0.019 * Math.max(0.7, wk);
-        const H = stemW * (1.6 + 1.8 * th.k) * sc, b = H * (0.34 + 0.12 * this.h(eId * 3.7 + th.u * 31)), back = H * th.lean;
+        const bt = this.cur(), stemW = S * 0.019 * Math.max(0.7, wk) * bt.vine;
+        const H = stemW * (1.6 + 1.8 * th.k) * sc * bt.thornSize, b = H * (0.34 + 0.12 * this.h(eId * 3.7 + th.u * 31)), back = H * th.lean;
         const at = (along, out) => [p[0] + tx * along + nx * out, p[1] + ty * along + ny * out];
         // a curved centre line from the base out to the point, which bends back hard toward the cane's base near the end
         const C0 = at(-b * 0.1, 0), Cm = at(b * 0.2 - back * 0.1, H * 0.78), T = at(-back - H * 0.2 * th.curl, H * 0.88);
@@ -3303,7 +3588,7 @@
           if (bi > 0) E.push({
             t: 'rose', id: nid(), x: P[bi][0], y: P[bi][1], wi: bi, R: 0.085 + r() * 0.04,
             rot: Math.sign(Math.sin(wrap.ph[bi])) * (0.45 + r() * 0.3), ph1: r() * 6.28, ph2: r() * 6.28, turns: 2,
-            layer: 1, d0: 0, stem, su: bi / (n - 1), lag: 350, stage: r() < 0.5 ? 'bud' : 'half'
+            layer: 1, d0: 0, stem, su: bi / (n - 1), lag: 350, stage: r() < 0.5 ? 'bud' : 'half', soft: true
           });
         }
         const lu = Math.min(1, (nW + 3) / (n - 1)), [lq, la] = this.at(P, lu);
@@ -3321,46 +3606,63 @@
 
       // Flower-bearing roots stay; upper flowering branches stay only with a visible parent.
       // Offset companion duplicates and nonflowering branches go. The wraps always stay, with wandering vines kept sparse.
+      // The botanicals move the thresholds (see compileBotanical; at their neutral values each is the constant it replaces): the
+      // satellites a cluster gathers, leaves and coiled roses that go, and which dropped roses, leaves, bare shoots and branches
+      // come back. A hero or earned bloom is never thinned, since it is the writing record.
       thinned(e, arr) {
-        const parent = e.t === 'stem' ? e : e.stem;
+        const B = this.cur(), parent = e.t === 'stem' ? e : e.stem;
         if (parent && parent.companion && this.thinned(parent.par, arr)) return true;
+        if (e.cg && e.cr >= B.cap[e.cg]) return true;
+        if (B.leafGone > 0 && e.t === 'leaf' && this.h(e.id * 3.91 + 0.2) < B.leafGone) return true;
+        if (B.roseGone > 0 && e.t === 'rose' && !e.bloom && !e.cg && (e._ms || e.stage) !== 'full' && e.stem && (e.stem.wrap || e.stem.keep) && this.h(e.id * 6.71 + 0.2) < B.roseGone) return true;
         if (e.keep) return false;
         const s = e.t === 'stem' ? e : e.stem;
         if (!s || s.wrap || s.keep) return false;
-        if (e.t === 'leaf' && e.su < 1 && this.h(e.id * 2.31 + 0.7) < 0.35) return true;
+        if (e.t === 'leaf' && e.su < 1 && this.h(e.id * 2.31 + 0.7) < B.leafDrop) return true;
         if (e.t === 'rose' && this.roseDropped(e)) return true;
         if (s._thin === undefined) {
           if (!arr.includes(s)) return false; // a stem is judged only against its own list
-          s._thin = !!s.par || (!arr.some(x => x.stem === s && x.t === 'rose' && !this.roseDropped(x)) && this.h(s.id * 1.618) < 0.5);
+          const roses = arr.some(x => x.stem === s && x.t === 'rose' && !this.roseDropped(x));
+          s._thin = s.par ? !(this.h(s.id * 4.43 + 0.9) < (roses ? B.branchRose : B.branchLeaf)) : !roses && this.h(s.id * 1.618) < B.bareDrop;
         }
         return s._thin;
       }
-      // About a third of the scattered single roses are left out so the hero clusters stand out
-      roseDropped(e) { return e.stage !== 'full' && this.h(e.id * 5.13 + 0.3) < 0.3; }
+      // About a third of the scattered single roses are left out so the hero clusters stand out (the coiled roses stay unless
+      // the garden is made sparser: see thinned)
+      roseDropped(e) { return (e._ms || e.stage) !== 'full' && this.h(e.id * 5.13 + 0.3) < this.cur().roseDrop; }
 
       // Customized only: each hero rose is flanked by two buds and a half-open rose on short stalks
-      // branching from its stem, with a pair of leaves, so it reads as a lush cluster
+      // branching from its stem, with a pair of leaves, so it reads as a lush cluster. Three more satellites and two more
+      // leaves are grown from a stream of their own and shown only where the garden is given richer clusters (cg: which count
+      // limits it, cr: its place in it; see compileBotanical), so the usual ones are exactly as they have always grown.
       genCluster(l) {
         l.clusterEls = [];
         for (const hero of (l.els || []).filter(e => e.t === 'rose' && e.stage === 'full' && e.stem)) {
-          const r = this.rng(hero.id * 613 + 7), hs = hero.stem, P = hs._pts0 || hs.pts, n = P.length, E = l.clusterEls;
-          let k0 = 0; const nid = () => l.id * 100 + 80.5 + (k0++) * 0.25;
+          const hs = hero.stem, P = hs._pts0 || hs.pts, n = P.length, E = l.clusterEls;
           const d = Math.atan2(P[n - 1][1] - P[Math.max(0, n - 5)][1], P[n - 1][0] - P[Math.max(0, n - 5)][0]);
           const lay = { layer: hero.layer, cLayer: hero.cLayer };
-          [[0.84, -1, 0.7, 'bud'], [0.76, 1, 0.64, 'bud'], [0.68, -1, 0.72, 'half']].forEach(([u, side, rs, stage], k) => {
+          const satellite = (r, nid, [u, side, rs, stage], k) => {
             const [base] = this.at(P, u), dir = d + side * (0.85 + r() * 0.4);
             const pts = this.vine(base, dir, hero.R * (2.6 + r() * 0.6), 0.25, 1 + r(), r() * 6.28, -side * 0.35, 12);
-            const stalk = { t: 'stem', id: nid(), pts, segs: [{ u0: 0, u1: 1, layer: hero.cLayer != null ? hero.cLayer : hero.layer }], d0: 0, dur: 380, w: 0.6, thorns: [], par: hs, pu: u, keep: true };
+            const stalk = { t: 'stem', id: nid(), pts, segs: [{ u0: 0, u1: 1, layer: hero.cLayer != null ? hero.cLayer : hero.layer }], d0: 0, dur: 380, w: 0.6, thorns: [], par: hs, pu: u, keep: true, cg: 'hero', cr: k };
             const tip = pts[pts.length - 1];
             E.push(stalk, {
               t: 'rose', id: nid(), x: tip[0], y: tip[1], R: hero.R * rs, rot: (r() - 0.5) * 0.4, ph1: r() * 6.28, ph2: r() * 6.28, turns: 2,
-              ...lay, d0: 0, stem: stalk, su: 1, lag: 250 + k * 300, stage
+              ...lay, d0: 0, stem: stalk, su: 1, lag: 250 + k * 300, stage, soft: true, cg: 'hero', cr: k
             });
-          });
-          for (const [u, side] of [[0.62, 1], [0.55, -1]]) {
+          };
+          const leaf = (r, nid, [u, side], k) => {
             const [q, a] = this.at(P, u);
-            E.push({ t: 'leaf', id: nid(), x: q[0], y: q[1], a: a + side * (0.9 + r() * 0.4), L: 0.17 + r() * 0.06, bend: side * 0.4, ...lay, d0: 0, stem: hs, su: u, keep: true });
-          }
+            E.push({ t: 'leaf', id: nid(), x: q[0], y: q[1], a: a + side * (0.9 + r() * 0.4), L: 0.17 + r() * 0.06, bend: side * 0.4, ...lay, d0: 0, stem: hs, su: u, keep: true, cg: 'leaf', cr: k });
+          };
+          const r = this.rng(hero.id * 613 + 7); let k0 = 0;
+          const nid = () => l.id * 100 + 80.5 + (k0++) * 0.25;
+          [[0.84, -1, 0.7, 'bud'], [0.76, 1, 0.64, 'bud'], [0.68, -1, 0.72, 'half']].forEach((s, k) => satellite(r, nid, s, k));
+          [[0.62, 1], [0.55, -1]].forEach((s, k) => leaf(r, nid, s, k));
+          const rx = this.rng(hero.id * 613 + 31); let kx = 0;
+          const nx = () => l.id * 100 + 84 + (kx++) * 0.25;
+          [[0.6, 1, 0.6, 'bud'], [0.52, -1, 0.66, 'half'], [0.46, 1, 0.58, 'bud']].forEach((s, k) => satellite(rx, nx, s, 3 + k));
+          [[0.48, 1], [0.41, -1]].forEach((s, k) => leaf(rx, nx, s, 2 + k));
         }
       }
 
@@ -3454,7 +3756,7 @@
         let P = pts.map(p => this.wpt(st, l, l.x + p[0] * S + j[0], l.y + p[1] * S + j[1]));
         if (this._vine && grown < 1) P = this.searchTip(P, grown, e.id, S);
 
-        const stemW = S * 0.019 * (e.w || 1);
+        const bt = this.cur(), stemW = S * 0.019 * (e.w || 1) * bt.vine;
         // shadows and the mid tone fade in once the vine has finished growing (a growing vine is drawn cheaper)
         const done = frO != null || !this._vine ? 1 : Math.min(1, Math.max(0, (age - this.vineStart(e) - e.dur) * this._G / 400));
         // canes in the theme's vine colours (dark green by default); a revised letter's regrowth is bronze, a scar is cut wood
@@ -3492,7 +3794,7 @@
         // Distinctly thorny internode distribution
         const thorns = this.getCustomizedThorns(e);
         for (const th of thorns) {
-          if (fr > th.u && this.layerAt(e.segs, th.u) === layer) {
+          if (fr > th.u && this.layerAt(e.segs, th.u) === layer && this.thornOn(e, th, bt)) {
             this.thornCustomized(B, P, th, S, fr, e.id, e.w || 1);
           }
         }
@@ -3511,13 +3813,13 @@
             const sc = this.eo(la / 650) * kL;
             if (sc <= 0) return;
             const p = wx(e.x, e.y), sgn = e.bend < 0 ? -1 : 1, curl = ((1 - this.eo(la / 900)) * 1.8 + (1 - kL) * 1.6) * sgn;
-            this.leafCustomized(B, p[0], p[1], e.a + j[2] + rw + (1 - kL) * 0.5 * sgn, e.L * S * sc, e.bend + curl);
+            this.leafCustomized(B, p[0], p[1], e.a + j[2] + rw + (1 - kL) * 0.5 * sgn, e.L * S * sc * this.cur().leaf, e.bend + curl);
             return;
           }
           const sc = this.spr((age - e.d0) / 1000, 7, 15) * kk;
           if (sc <= 0) return;
           const p = wx(e.x, e.y);
-          this.leafCustomized(B, p[0], p[1], e.a + j[2] + rw, e.L * S * sc, e.bend);
+          this.leafCustomized(B, p[0], p[1], e.a + j[2] + rw, e.L * S * sc * this.cur().leaf, e.bend);
         } else if (e.t === 'rose') {
           // Vine mode: the rose's clock starts (in real ms) when the vine reaches it; an earned bloom then opens only in stillness
           const a0 = this._vine && e.stem ? (age - this.vineCross(e.stem, e.su != null ? e.su : 1)) * this._G - (e.lag || 0) : age - e.d0;
@@ -3542,7 +3844,7 @@
           // a wilting rose shrinks a little and droops toward the ground on whichever side it leans
           const kw = wilt != null ? 0.55 + 0.45 * kk : kk, droop = wilt != null ? (1 - kk) * 0.9 * (aim < 0 ? -1 : 1) : 0;
           // the bloom's centre, wherever the rose points
-          const Rp = e.R * S * kw * sz, ang = aim + rw + droop, up = Rp * (e.stage === 'full' ? 0.3 : e.stage === 'bud' ? 0.35 : 0.5);
+          const Rp = this.roseR(e) * S * kw * sz * this.roseRelief(e), ang = aim + rw + droop, up = Rp * (e.stage === 'full' ? 0.3 : e.stage === 'bud' ? 0.35 : 0.5);
           const bx = p[0] + Math.sin(ang) * up, by = p[1] - Math.cos(ang) * up;
           const bs = e.bloom ? this.bloomState(e, a) : null;
           if (this._blooms && kk === 1 && a > 700) this._blooms[e.id] = { x: bx, y: by, R: Rp, stage: e.stage, full: bs ? bs.full : 0 };
@@ -5030,6 +5332,7 @@
         if (st.vine) {
           this.petalFall = this.petalFall || [];
           this._dt = Math.min(0.05, Math.max(0, (now - (this._pfT || now)) / 1000)); this._pfT = now; this._S = S;
+          this._frameNo = (this._frameNo || 0) + 1; this._bk = 1 - Math.exp(-this._dt * 4.5); // (plants whose botanicals changed ease in or out: see vineShown)
         }
         // Vine choreography: growth runs on a slower clock (G), and leaves and roses wait for the vine tip to reach them
         this._vine = !!st.vine; this._G = st.vine ? 1.6 : 1;
@@ -5086,7 +5389,7 @@
             }
             const draw = (e, arr) => {
               if ((e.t === 'rose') !== roses) return;
-              const k = arr === l.endEls ? kk * this.endK(l, now, st.wither) : kk;
+              const k = (arr === l.endEls ? kk * this.endK(l, now, st.wither) : kk) * (e._v ?? 1);
               if (e.t === 'stem') {
                 this.drawStemCustomized(target, e, l, age, k, st, f, amp, layer);
               } else if ((e.cLayer != null ? e.cLayer : e.layer) === layer) {
@@ -5095,7 +5398,7 @@
             };
             const each = (e0, _, arr) => { const e = st.vine ? this.vineShown(e0, arr) : e0; if (e) draw(e, arr); };
             const lists = this.letterLists(l, st.vine);
-            if (roses || !(st.vine && target.ctx && kk === 1 && l.endDead == null && !amp && this.plantSettled(l, age) && this.stampPlants(target, l, layer, lists, age, st))) {
+            if (roses || !(st.vine && target.ctx && kk === 1 && l.endDead == null && !amp && !(now < l._easeUntil) && this.plantSettled(l, age) && this.stampPlants(target, l, layer, lists, age, st))) {
               for (const list of lists) list.forEach(each);
             }
             const i = act.indexOf(l), nx = i >= 0 ? act[i + 1] : null;

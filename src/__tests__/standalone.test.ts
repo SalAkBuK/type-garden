@@ -29,7 +29,7 @@ function constructorTable(name: string) {
   }
   return runInNewContext(`(${classSource.slice(open, end + 1)})`);
 }
-const TABLES = { ...Object.fromEntries(['LOOKS', 'INK', 'ICHOR', 'WINGS', 'DOF', 'VINES', 'GROUNDS', 'FONTS', 'BLEEDS', 'BLEED_CONTROLS', 'MATERIALS'].map(name => [name, constructorTable(name)])), FW: 700 };
+const TABLES = { ...Object.fromEntries(['LOOKS', 'INK', 'ICHOR', 'WINGS', 'DOF', 'VINES', 'GROUNDS', 'FONTS', 'BLEEDS', 'BLEED_CONTROLS', 'MATERIALS', 'BOTANICAL'].map(name => [name, constructorTable(name)])), FW: 700 };
 
 function app() {
   return Object.assign(Object.create(StandaloneApp.prototype), {
@@ -785,7 +785,9 @@ describe('Standalone TypeGardenApp rose density', () => {
     for (const letter of live(garden).filter((letter: any) => letter.wi === 0)) {
       const hero = letter.els.find((element: any) => element.t === 'rose' && element.stage === 'full' && !element.stem.companion);
       garden.genCluster(letter);
-      const roses = letter.clusterEls.filter((element: any) => element.t === 'rose');
+      const grown = letter.clusterEls.filter((element: any) => element.t === 'rose');
+      expect(grown).toHaveLength(6); // three more satellites are grown for a garden given richer clusters...
+      const roses = grown.filter((rose: any) => garden.vineShown(rose, letter.clusterEls)); // ...and are hidden at the neutral setting
       expect(roses.map((rose: any) => rose.stage)).toEqual(['bud', 'bud', 'half']);
       for (const rose of roses) {
         const stalk = rose.stem;
@@ -1894,7 +1896,7 @@ describe('Standalone TypeGardenApp looks and appearance', () => {
     garden.setLook('blackrose');
     const preset = garden.LOOKS.find((look: any) => look.id === 'blackrose');
     expect(garden.state.look).toBe('blackrose');
-    expect(garden.appearance).toEqual({ ...preset.appearance, font: 'playfair' }); // (the typeface stays as it was)
+    expect(garden.appearance).toEqual({ ...preset.appearance, font: 'playfair', botanical: garden.cleanBotanical() }); // (the typeface and botanicals stay as they were)
     expect(garden.appearance).not.toBe(preset.appearance); // a copy: editing it never edits the preset
     expect(garden.theme()).not.toBe(crimson);
     expect(garden.theme().bg).toBe('#150C0F');
@@ -2333,7 +2335,7 @@ describe('Standalone TypeGardenApp looks and appearance', () => {
     };
     const StoreApp = runInNewContext(classSource, { localStorage, performance: { now: () => 10000 } });
     const garden = Object.assign(Object.create(StoreApp.prototype), { state: { look: 'crimson' }, STORE: 'typeGarden.appearance', ...structuredClone(TABLES) });
-    garden.appearance = { ...garden.look().appearance, font: 'playfair' };
+    garden.appearance = { ...garden.look().appearance, font: 'playfair', botanical: garden.cleanBotanical() };
     return { garden, data };
   };
 
@@ -2365,15 +2367,39 @@ describe('Standalone TypeGardenApp looks and appearance', () => {
     const odd = storeHarness(JSON.stringify({ look: 'nonsense', appearance: { bg: 'red', text: '#123456', secondaryRole: 'everywhere', font: 'comic', blood: 12 }, custom: 7 }));
     odd.garden.restoreAppearance();
     const crimson = odd.garden.LOOKS[0].appearance;
-    expect(odd.garden.appearance).toEqual({ ...crimson, text: '#123456', font: 'playfair' });
+    expect(odd.garden.appearance).toEqual({ ...crimson, text: '#123456', font: 'playfair', botanical: odd.garden.cleanBotanical() });
     expect([odd.garden._savedFont, odd.garden.customAppearance, odd.garden.state.look]).toEqual([null, undefined, 'custom']);
     for (const stored of ['not json', '"a string"', 'null']) {
       const { garden } = storeHarness(stored);
       garden.restoreAppearance();
-      expect([garden.appearance, garden.state.look]).toEqual([{ ...crimson, font: 'playfair' }, 'crimson']);
+      expect([garden.appearance, garden.state.look]).toEqual([{ ...crimson, font: 'playfair', botanical: garden.cleanBotanical() }, 'crimson']);
     }
     const refused = storeHarness(null, true);
     expect(() => { refused.garden.restoreAppearance(); refused.garden.storeAppearance(); }).not.toThrow();
+  });
+
+  it('keeps the botanicals with the appearance, brings them back checked, and gives an older saved appearance the neutral ones', () => {
+    const first = storeHarness();
+    first.garden.setAppearance({ botanical: { roses: 1.5, foliage: 0.4, buds: 0.5, half: 0.3, full: 0.2 } });
+    first.garden.customAppearance = { ...first.garden.appearance };
+    first.garden.storeAppearance();
+    const saved = JSON.parse(first.data['typeGarden.appearance']);
+    expect(saved.appearance.botanical).toMatchObject({ roses: 1.5, foliage: 0.4 });
+    expect(saved.custom.botanical).toEqual(saved.appearance.botanical);
+    const next = storeHarness(first.data['typeGarden.appearance']);
+    next.garden.restoreAppearance();
+    expect(next.garden.appearance.botanical).toEqual(first.garden.appearance.botanical);
+    expect(next.garden.customAppearance.botanical).toEqual(first.garden.appearance.botanical);
+    expect(next.garden.state.look).toBe('crimson'); // (botanicals are not part of what a look is)
+    // saved before botanicals existed: the neutral ones
+    const old = storeHarness(JSON.stringify({ look: 'crimson', appearance: { ...first.garden.LOOKS[0].appearance, font: 'playfair' }, custom: null }));
+    old.garden.restoreAppearance();
+    expect(old.garden.appearance.botanical).toEqual(old.garden.cleanBotanical());
+    // saved with nonsense: brought into range
+    const odd = storeHarness(JSON.stringify({ look: 'crimson', appearance: { ...first.garden.LOOKS[0].appearance, font: 'playfair', botanical: { roses: 50, leaf: 'x', thorns: -1, roseLo: 1.4, roseHi: 0.6 } }, custom: null }));
+    odd.garden.restoreAppearance();
+    expect(odd.garden.appearance.botanical).toMatchObject({ roses: 2, leaf: 1, thorns: 0 });
+    expect(odd.garden.appearance.botanical.roseHi).toBeGreaterThanOrEqual(odd.garden.appearance.botanical.roseLo);
   });
 
   it('keeps the bleeding effect in the browser with the appearance, and brings back only what it recognises', () => {
@@ -2595,6 +2621,315 @@ describe('Standalone TypeGardenApp letter materials', () => {
     const odd = harness(JSON.stringify({ material: 'glass' }));
     odd.garden.restoreAppearance();
     expect(odd.garden.material().id).toBe('ink');
+  });
+});
+
+describe('Standalone TypeGardenApp botanicals', () => {
+  // three words of customized plants, grown the way the page grows them (the usual way of writing, no DOM)
+  const grown = () => {
+    const garden = writer();
+    typeInto(garden, 'in bloom red roses', 0, 120);
+    for (const letter of live(garden)) if (letter.els) garden.genCluster(letter);
+    return garden;
+  };
+  const botanical = (garden: any, patch: Record<string, number>) => garden.setAppearance({ botanical: patch });
+  const shown = (garden: any, kind: string) => new Set<number>(live(garden).flatMap((letter: any) => letter.els
+    ? garden.letterLists(letter, true).flatMap((list: any[]) => list.filter((e: any) => e.t === kind && garden.vineShown(e, list)).map((e: any) => e.id)) : []));
+  const subset = (a: Set<number>, b: Set<number>) => [...a].every(id => b.has(id));
+
+  it('compiles the neutral values to exactly the constants the garden has always used', () => {
+    const garden = app(), B = garden.compileBotanical();
+    expect([B.roseDrop, B.leafDrop, B.bareDrop, B.branchRose, B.branchLeaf, B.leafGone, B.roseGone]).toEqual([0.3, 0.35, 0.5, 0, 0, 0, 0]);
+    expect([B.lo, B.hi, B.leaf, B.vine, B.thornShow, B.thornExtra, B.thornSize]).toEqual([1, 1, 1, 1, 1, 0, 1]);
+    expect(B.cap).toEqual({ hero: 3, leaf: 2, earned: 5 });
+    expect([B.stageB, B.stageH, B.dBud, B.dHalf].map((v: number) => +v.toFixed(12))).toEqual([0.28, 0.88, 0.28, 0.88]);
+    expect(garden.cleanBotanical()).toEqual(Object.fromEntries(garden.BOTANICAL.map((c: any) => [c.k, c.def])));
+    expect(garden.bots()).toBe(garden.bots()); // compiled once for the appearance in use
+  });
+
+  it('checks every value, keeping the largest roses at least as big as the smallest and a mix of nothing the usual mix', () => {
+    const garden = app(), clean = garden.cleanBotanical({ roses: 9, leaf: 'big', vine: -3, thorns: NaN, roseLo: 1.4, roseHi: 0.6 });
+    expect([clean.roses, clean.leaf, clean.vine, clean.thorns]).toEqual([2, 1, 0.5, 1]);
+    expect(clean.roseHi).toBeGreaterThanOrEqual(clean.roseLo);
+    expect(garden.cleanBotanical({ buds: 0, half: 0, full: 0 })).toMatchObject({ buds: 0.28, half: 0.6, full: 0.12 });
+    expect(garden.cleanBotanical(null)).toEqual(garden.cleanBotanical());
+  });
+
+  it('shows more roses as the density rises and fewer as it falls, each setting holding the last one\'s roses, and always the hero blooms', () => {
+    const garden = grown(), at = (roses: number) => { botanical(garden, { roses }); return shown(garden, 'rose'); };
+    const usual = shown(garden, 'rose'), sets = [0, 0.5, 1, 1.5, 2].map(at);
+    expect(sets[2]).toEqual(usual); // the neutral setting is the garden as it grows
+    for (let i = 1; i < sets.length; i++) expect(subset(sets[i - 1], sets[i])).toBe(true);
+    expect(sets[0].size).toBeLessThan(sets[2].size);
+    expect(sets[2].size).toBeLessThan(sets[4].size);
+    const heroes = live(garden).flatMap((l: any) => l.els.filter((e: any) => e.t === 'rose' && e.stage === 'full' && !e.stem.companion).map((e: any) => e.id));
+    expect(heroes.length).toBeGreaterThan(0);
+    for (const id of heroes) expect(sets[0].has(id)).toBe(true);
+  });
+
+  it('brings leaves and leafy shoots back as the foliage rises, to none at all, without moving the vines that stay', () => {
+    const garden = grown(), at = (foliage: number) => { botanical(garden, { foliage }); return { leaves: shown(garden, 'leaf'), stems: shown(garden, 'stem') }; };
+    const usual = at(1), sets = [0, 0.5, 1, 1.5, 2].map(at);
+    expect(sets[0].leaves.size).toBe(0);
+    for (let i = 1; i < sets.length; i++) { expect(subset(sets[i - 1].leaves, sets[i].leaves)).toBe(true); expect(subset(sets[i - 1].stems, sets[i].stems)).toBe(true); }
+    expect(sets[2].leaves).toEqual(usual.leaves);
+    expect(sets[4].leaves.size).toBeGreaterThan(sets[2].leaves.size);
+    expect(sets[4].stems.size).toBeGreaterThan(sets[2].stems.size);
+  });
+
+  it('gathers more or fewer satellites around each hero rose as the clusters change, the usual three and two leaves at the neutral setting', () => {
+    const garden = grown(), count = () => {
+      let roses = 0, leaves = 0;
+      for (const letter of live(garden)) if (letter.clusterEls) for (const e of letter.clusterEls) if (garden.vineShown(e, letter.clusterEls)) { if (e.t === 'rose') roses++; else if (e.t === 'leaf') leaves++; }
+      return [roses, leaves];
+    };
+    const heroes = live(garden).filter((l: any) => l.clusterEls && l.clusterEls.length).length;
+    expect(heroes).toBeGreaterThan(0);
+    const at = (clusters: number) => { botanical(garden, { clusters }); return count(); };
+    expect(at(1)).toEqual([3 * heroes, 2 * heroes]);
+    expect(at(0)).toEqual([0, 0]);
+    expect(at(2)).toEqual([6 * heroes, 4 * heroes]);
+    expect(at(0.5)).toEqual([heroes, heroes]);
+  });
+
+  it('lets an earned bloom gather up to two more satellites, or fewer, with the clusters', () => {
+    const garden = app();
+    garden.REC = { cluster: 5 };
+    const make = () => ({ letter: { id: 42, bloomEls: [] as any[] }, flower: { id: 4299.2, R: 0.15, stem: { pts: Array.from({ length: 19 }, (_, i) => [0, -i * 0.03]) }, bloom: { at: 0, end: null, kind: 'word' } } as any });
+    const rich = make(); garden.setAppearance({ botanical: { clusters: 2 } });
+    garden.growCluster(rich.letter, rich.flower, 20000, 100);
+    const satellites = rich.letter.bloomEls.filter((e: any) => e.t === 'rose');
+    expect(satellites.map((e: any) => e.cr)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(rich.letter.bloomEls.every((e: any) => e.cg === 'earned')).toBe(true);
+    const shownRoses = (list: any[]) => list.filter((e: any) => e.t === 'rose' && garden.vineShown(e, list)).length;
+    expect(shownRoses(rich.letter.bloomEls)).toBe(7);
+    garden.setAppearance({ botanical: { clusters: 0.4 } }); // already grown, so hidden rather than grown again
+    expect(shownRoses(rich.letter.bloomEls)).toBe(2);
+    garden.setAppearance({ botanical: { clusters: 1 } });
+    const usual = make();
+    garden.growCluster(usual.letter, usual.flower, 20000, 100);
+    expect(usual.letter.bloomEls.filter((e: any) => e.t === 'rose')).toHaveLength(5);
+  });
+
+  it('stretches the roses by how far up the garden\'s range of sizes they are, and spaces the heads by the sizes drawn', () => {
+    const garden = app(), small = { id: 1, R: 0.07, x: 0, y: -0.5, rot: 0, stage: 'half' }, mid = { ...small, id: 2, R: 0.185 }, big = { ...small, id: 3, R: 0.3 };
+    expect([small, mid, big].map(e => garden.roseR(e))).toEqual([0.07, 0.185, 0.3]);
+    const usual = garden.roseFootprint(big, 0, 0).r;
+    botanical(garden, { roseLo: 0.5, roseHi: 1.5 });
+    expect(garden.roseR(small)).toBeCloseTo(0.035);
+    expect(garden.roseR(mid)).toBeCloseTo(0.185);
+    expect(garden.roseR(big)).toBeCloseTo(0.45);
+    expect(garden.roseR({ ...big, R: 0.9 })).toBeCloseTo(1.35); // (beyond the range, the large end)
+    expect(garden.roseFootprint(big, 0, 0).r).toBeGreaterThan(usual);
+    garden._vine = false;
+    expect(garden.roseR(big)).toBe(0.3); // the poster grows as it always has
+    expect(garden.cur().roseHi).toBeUndefined();
+    expect(garden.cur().vine).toBe(1);
+  });
+
+  it('keeps every rose\'s usual stage at the neutral mix, and moves them along the line from closed to open as the mix changes', () => {
+    const garden = app(), legacy = (e: any) => { const hs = garden.h(e.id * 3.17 + 0.5), clear = e.wi == null && (e.y < -0.9 || e.y > 0.15); return hs < 0.12 && clear ? 'full' : hs < 0.4 ? 'bud' : 'half'; };
+    const ambient = () => Array.from({ length: 300 }, (_, i) => ({ t: 'rose', id: 100 + i * 3.7, x: 0, y: i % 3 === 0 ? -1.2 : -0.4, R: 0.12, rot: 0 }));
+    const coil = () => Array.from({ length: 100 }, (_, i) => ({ t: 'rose', id: 9000 + i * 1.3, x: 0, y: -0.4, R: 0.1, rot: 0, wi: 3, stage: i % 2 ? 'bud' : 'half', soft: true }));
+    const roses = ambient(), expected = roses.map(legacy), coils = coil(), coilStages = coils.map(e => e.stage);
+    expect(roses.map(e => garden.roseStage(e))).toEqual(expected);
+    expect(coils.map(e => garden.roseStage(e))).toEqual(coilStages);
+    const stages = (list: any[], mix: Record<string, number>) => { botanical(garden, mix); return list.map(e => garden.roseStage(e)); };
+    const share = (list: string[], s: string) => list.filter(x => x === s).length / list.length;
+    expect(stages(roses, { buds: 1, half: 0, full: 0 }).every(s => s === 'bud')).toBe(true);
+    expect(stages(coils, { buds: 1, half: 0, full: 0 }).every(s => s === 'bud')).toBe(true); // the coiled roses follow the mix too
+    expect(share(stages(roses, { buds: 0.1, half: 0.3, full: 0.6 }), 'full')).toBeGreaterThan(0.45);
+    // more of one stage only ever takes roses from the stages next to it: nothing that was full stops being full
+    const before = stages(roses, { buds: 0.28, half: 0.6, full: 0.12 }), after = stages(roses, { buds: 0.2, half: 0.4, full: 0.4 });
+    expect(before).toEqual(expected);
+    before.forEach((s, i) => { if (s === 'full') expect(after[i]).toBe('full'); });
+    // heroes and earned blooms carry their own stage and never move
+    const hero = { t: 'rose', id: 5, x: 0, y: -1, R: 0.2, rot: 0, stage: 'full' };
+    expect(stages([hero], { buds: 1, half: 0, full: 0 })).toEqual(['full']);
+  });
+
+  it('grows more thorns, and bigger ones, as the danger rises, from smooth canes, and never hides a knot\'s or scar\'s', () => {
+    const garden = app(), stem = { t: 'stem', id: 77, thorns: [{ u: 0.3, s: 1 }, { u: 0.7, s: -1 }] }, knot = { t: 'stem', id: 78, thornK: 1, fixedThorns: true, thorns: [{ u: 0.5, s: 1 }] };
+    const all = garden.getCustomizedThorns(stem), usual = all.filter((th: any) => th.x === undefined), extras = all.filter((th: any) => th.x !== undefined);
+    expect(extras.length).toBeGreaterThan(0);
+    const shown = (e: any, thorns: number) => { botanical(garden, { thorns }); return garden.getCustomizedThorns(e).filter((th: any) => garden.thornOn(e, th, garden.bots())); };
+    expect(shown(stem, 1)).toEqual(usual); // the neutral setting shows exactly the usual prickles
+    expect(shown(stem, 0)).toHaveLength(0);
+    const half = shown(stem, 0.5);
+    expect(half.length).toBeLessThanOrEqual(usual.length);
+    expect(half.every((th: any) => usual.includes(th))).toBe(true);
+    expect(shown(stem, 2)).toHaveLength(usual.length + extras.length);
+    expect(shown(knot, 0)).toHaveLength(1);
+    expect(garden.compileBotanical({ thorns: 0 }).thornSize).toBeLessThan(1);
+    expect(garden.compileBotanical({ thorns: 2 }).thornSize).toBeGreaterThan(1.5);
+    expect(garden.getCustomizedThorns(stem)).toBe(all); // (remembered: the extras came from a stream of their own)
+  });
+
+  it('eases plants in and out when a botanical changes rather than popping them, and settles each one', () => {
+    const garden = grown();
+    garden._frameNo = 0; garden._bk = 0.4;
+    const letter = live(garden).find((l: any) => l.els.some((e: any) => e.t === 'rose' && e.stage !== 'full' && !garden.thinned(e, l.els)));
+    const element = letter.els.find((e: any) => e.t === 'rose' && e.stage !== 'full' && !garden.thinned(e, letter.els)), list = letter.els;
+    expect(garden.vineShown(element, list)).toBe(element);
+    expect(element._v).toBeUndefined(); // settled: nothing to ease
+    botanical(garden, { roses: 0 }); // hides it
+    const seen: number[] = [];
+    for (let frame = 1; frame < 40; frame++) { garden._frameNo = frame; if (garden.vineShown(element, list)) seen.push(element._v ?? 1); else break; }
+    expect(garden.thinned(element, list)).toBe(true);
+    expect(seen.length).toBeGreaterThan(3);
+    expect(seen.slice(0, -1).every((v, i) => v > seen[i + 1])).toBe(true); // shrinking a little every frame
+    expect(garden.vineShown(element, list)).toBeNull();
+    expect(element._v).toBeUndefined();
+    botanical(garden, { roses: 1 }); // and back
+    const up: number[] = [];
+    for (let frame = 80; frame < 120; frame++) { garden._frameNo = frame; if (garden.vineShown(element, list)) { up.push(element._v ?? 1); if (element._v === undefined) break; } }
+    expect(up[0]).toBeLessThan(0.5);
+    expect(up[up.length - 1]).toBe(1);
+    expect(up.slice(0, -1).every((v, i) => v < up[i + 1])).toBe(true);
+  });
+
+  it('only shows and hides what the plants already are: the writing record and every plant\'s identity are untouched', () => {
+    const garden = grown();
+    const record = () => JSON.stringify(live(garden).map((l: any) => [l.ch, l.id, l.seed, l.hes, l.rev, l.birth, (l.els || []).map((e: any) => [e.t, e.id, e.x, e.y, e.R, e.d0, e.a])]));
+    const before = record();
+    botanical(garden, { roses: 2, foliage: 0, thorns: 2, vine: 1.8, leaf: 1.6, clusters: 2, roseHi: 1.5, buds: 0.1, half: 0.2, full: 0.7 });
+    expect(record()).toBe(before);
+    botanical(garden, { roses: 0.2, foliage: 1.7, thorns: 0, clusters: 0 });
+    expect(record()).toBe(before);
+  });
+
+  it('keeps them in the appearance, which a look leaves alone, and in the custom appearance once edited', () => {
+    const garden = Object.assign(writer(), { updateTheme: vi.fn(), buildPalettesUI: vi.fn(), paint: vi.fn(), focus: vi.fn(), buildPoster: vi.fn() });
+    garden.state.look = 'crimson';
+    expect(botanical(garden, { roses: 1 })).toBe(false); // nothing differs
+    expect(botanical(garden, { roses: 1.4, thorns: 1.6 })).toBe(true);
+    expect(garden.state.look).toBe('crimson'); // they are not part of what a look is
+    expect(garden.appearance.botanical).toMatchObject({ roses: 1.4, thorns: 1.6, foliage: 1 });
+    garden.setLook('ivory');
+    expect(garden.appearance.botanical).toMatchObject({ roses: 1.4, thorns: 1.6 });
+    garden.editBotanical({ foliage: 1.3 });
+    expect(garden.customAppearance.botanical).toMatchObject({ roses: 1.4, foliage: 1.3 });
+    // an edit changes only what it names; the three bloom shares stay one mix; the largest never falls below the smallest
+    garden.editBotanical({ full: 0.4 });
+    const b = garden.appearance.botanical;
+    expect(b.buds + b.half + b.full).toBeCloseTo(1, 2);
+    expect(b.full).toBe(0.4);
+    expect(b.half / b.buds).toBeCloseTo(0.6 / 0.28, 1); // the other two keep their proportion
+    garden.editBotanical({ roseLo: 1.3 });
+    garden.editBotanical({ roseHi: 0.8 });
+    expect(garden.appearance.botanical.roseLo).toBeLessThanOrEqual(garden.appearance.botanical.roseHi);
+    expect(garden.customAppearance.botanical).toEqual(garden.appearance.botanical);
+  });
+
+  it('names the controls for what they do', () => {
+    const garden = app(), label = (k: string) => garden.BOTANICAL.find((c: any) => c.k === k).label;
+    expect([label('roseLo'), label('roseHi'), label('clusters')]).toEqual(['Min rose size', 'Max rose size', 'Bloom clusters']);
+  });
+
+  it('leaves every look botanically neutral: a look sets colours only, and trying looks never changes a botanical', () => {
+    const garden = Object.assign(writer(), { updateTheme: vi.fn(), buildPalettesUI: vi.fn(), paint: vi.fn(), focus: vi.fn(), buildPoster: vi.fn() });
+    expect(garden.LOOKS.some((look: any) => 'botanical' in look.appearance || 'botanical' in look)).toBe(false);
+    botanical(garden, { roses: 1.3, foliage: 0.6, thorns: 1.7, clusters: 0.5, roseHi: 1.4, full: 0.3 });
+    const set = JSON.stringify(garden.appearance.botanical);
+    for (const look of garden.LOOKS) { garden.setLook(look.id); expect(JSON.stringify(garden.appearance.botanical)).toBe(set); }
+    garden.setLook('crimson');
+    expect(garden.state.look).toBe('crimson'); // (and a look is still matched by its colours alone)
+  });
+
+  // a stand-in letter 'l': a stem 0.14 em wide from the baseline up to -0.75 em, in the glyph scan's rows
+  const stem = () => {
+    const rows = new Map<number, number[][]>();
+    for (let k = -60; k < 0; k++) rows.set(k, [[-0.07, 0.07]]);
+    return rows;
+  };
+  const withLetter = (garden: any) => Object.assign(garden, { inkIndex: () => stem() });
+  const letters = [{ ch: 'l', tx: 0, ty: 0, els: [] }];
+
+  it('measures how much of a letter\'s ink a rose head covers', () => {
+    const garden = withLetter(app());
+    expect(garden.inkArea('l')).toBeCloseTo(0.14 * 0.75, 3);
+    expect(garden.inkCover({ x: 0, y: -0.4, r: 2 }, letters, 1)).toBeCloseTo(1, 3); // all of it
+    expect(garden.inkCover({ x: 3, y: -0.4, r: 0.3 }, letters, 1)).toBe(0); // none
+    const half = garden.inkCover({ x: 0, y: -0.375, r: 0.1 }, letters, 1); // a small head on the middle of the stem
+    expect(half).toBeGreaterThan(0.15);
+    expect(half).toBeLessThan(0.35);
+    expect(garden.inkCover({ x: 0, y: -0.4, r: 2 }, [{ ...letters[0], dead: 1 }, { ch: ' ', tx: 0, ty: 0 }], 1)).toBe(0); // dead letters and spaces have none
+  });
+
+  it('eases a full bloom smaller where it would cover too much of a letter, then holds an ordinary one half-open, and never caps the slider', () => {
+    const garden = withLetter(app());
+    garden.setAppearance({ botanical: { buds: 0, half: 0, full: 1 } }); // every ordinary rose promoted to a full bloom
+    const B = garden.bots(), rose = (x: number, y: number, id = 11): any => ({ t: 'rose', id, x, y, R: 0.2, rot: 0, soft: true, stage: 'half' });
+    expect(B.guard).toBe(true);
+    const natural = 0.2, head = (e: any, k = 1) => garden.roseFootprint(e, 0, 0, k);
+    // clear of the letter: a full bloom keeps its full size
+    const free = rose(2, -0.4); garden.roseStage(free);
+    garden.coverGuard(free, 0, 0, letters, 1);
+    expect([free.stage, free._rt]).toEqual(['full', 1]);
+    // scan across the stem for a spot where a full bloom covers a little more than the allowance
+    let edge: any = null;
+    for (let x = 0.5; x > 0; x -= 0.01) { const e = rose(x, -0.4); garden.roseStage(e); const c = garden.inkCover(head(e), letters, 1); if (!edge && c > B.cover + 0.05 && c < 0.5) edge = e; }
+    expect(edge).not.toBeNull();
+    garden.coverGuard(edge, 0, 0, letters, 1);
+    expect(edge.stage).toBe('full'); // eased smaller rather than closed
+    expect(edge._rt).toBeLessThan(1);
+    expect(edge._rt).toBeGreaterThanOrEqual(natural / (0.2 * 1.6) - 1e-9); // never below its size in the garden as grown
+    expect(garden.inkCover(head(edge, edge._rt), letters, 1)).toBeLessThanOrEqual(B.cover + 0.02);
+    // right over the letter: easing is not enough, so an ordinary rose that the mix promoted stays half-open
+    const over = rose(0, -0.4, 12); garden.roseStage(over);
+    garden.coverGuard(over, 0, 0, letters, 1);
+    expect([over.stage, over._rt, over._ms]).toEqual(['half', 1, 'full']);
+    expect(garden.roseDropped(over)).toBe(false); // (it is still the mix's full bloom as far as being left out goes)
+    // the settings change back: it opens fully again
+    garden.setAppearance({ botanical: { buds: 0.28, half: 0.6, full: 0.12 } });
+    garden.coverGuard(over, 0, 0, letters, 1);
+    expect(over._rt).toBe(1);
+    expect(garden.bots().guard).toBe(false);
+  });
+
+  it('is freer with hero and earned blooms, easing them only past a looser allowance and never below their size in the garden as grown', () => {
+    const garden = withLetter(app());
+    garden.setAppearance({ botanical: { roseLo: 1.6, roseHi: 1.6 } });
+    const B = garden.bots(), hero = (x: number): any => ({ t: 'rose', id: 21, x, y: -0.4, R: 0.2, rot: 0, stage: 'full' });
+    expect(B.coverFree).toBeGreaterThan(B.cover);
+    const spots = [] as any[];
+    for (let x = 0.7; x > 0; x -= 0.01) { const e = hero(x); spots.push({ x, c: garden.inkCover(garden.roseFootprint(e, 0, 0), letters, 1) }); }
+    const middling = spots.find(s => s.c > B.cover + 0.04 && s.c < B.coverFree - 0.04), heavy = spots.find(s => s.c > B.coverFree + 0.1);
+    expect(middling && heavy).toBeTruthy();
+    const a = hero(middling.x); garden.coverGuard(a, 0, 0, letters, 1);
+    expect(a._rt).toBe(1); // an ordinary full bloom here would be eased; a hero is not
+    const b = hero(heavy.x); garden.coverGuard(b, 0, 0, letters, 1);
+    expect(b._rt).toBeLessThan(1);
+    expect(b._rt).toBeGreaterThanOrEqual(1 / 1.6 - 1e-9);
+    expect(b.stage).toBe('full'); // never closed
+  });
+
+  it('does nothing at the neutral settings, in the poster, or for roses that are not full', () => {
+    const garden = withLetter(app()), over: any = { t: 'rose', id: 31, x: 0, y: -0.4, R: 0.2, rot: 0, stage: 'full' };
+    expect(garden.bots().guard).toBe(false);
+    garden.coverGuard(over, 0, 0, letters, 1);
+    expect(over._rt).toBe(1);
+    garden.setAppearance({ botanical: { roseLo: 1.6, roseHi: 1.6 } });
+    const half: any = { t: 'rose', id: 32, x: 0, y: -0.4, R: 0.2, rot: 0, stage: 'half' };
+    garden.coverGuard(half, 0, 0, letters, 1);
+    expect([half._rt, half.stage]).toEqual([1, 'half']);
+    garden._vine = false; // the poster grows as it always has
+    garden.coverGuard(over, 0, 0, letters, 1);
+    expect(over._rt).toBe(1);
+  });
+
+  it('arrives at an eased size over a moment rather than popping', () => {
+    const garden = app(), rose: any = { id: 41 };
+    garden._frameNo = 1; garden._bk = 0.4;
+    rose._rt = 0.7;
+    expect(garden.roseRelief(rose)).toBe(0.7); // first seen: no easing
+    rose._rt = 1;
+    garden._frameNo = 2;
+    expect(garden.roseRelief(rose)).toBeCloseTo(0.82, 5);
+    expect(garden.roseRelief(rose)).toBeCloseTo(0.82, 5); // once a frame
+    for (let f = 3; f < 30; f++) { garden._frameNo = f; garden.roseRelief(rose); }
+    expect(garden.roseRelief(rose)).toBe(1);
+    expect(garden.roseRelief({ id: 42 })).toBe(1); // a rose nothing has eased
   });
 });
 
