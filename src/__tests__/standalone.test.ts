@@ -29,7 +29,7 @@ function constructorTable(name: string) {
   }
   return runInNewContext(`(${classSource.slice(open, end + 1)})`);
 }
-const TABLES = { ...Object.fromEntries(['LOOKS', 'INK', 'ICHOR', 'WINGS', 'DOF', 'VINES', 'GROUNDS', 'FONTS', 'BLEEDS', 'BLEED_CONTROLS'].map(name => [name, constructorTable(name)])), FW: 700 };
+const TABLES = { ...Object.fromEntries(['LOOKS', 'INK', 'ICHOR', 'WINGS', 'DOF', 'VINES', 'GROUNDS', 'FONTS', 'BLEEDS', 'BLEED_CONTROLS', 'MATERIALS'].map(name => [name, constructorTable(name)])), FW: 700 };
 
 function app() {
   return Object.assign(Object.create(StandaloneApp.prototype), {
@@ -2469,6 +2469,120 @@ describe('Standalone TypeGardenApp looks and appearance', () => {
     const embedded = atob(css.match(/base64,([^)]+)\)/)[1]);
     expect(Array.from(embedded, (c: string) => c.charCodeAt(0))).toEqual(Array.from(new Uint8Array(data))); // the file itself
     expect(garden.svgFontCss(garden.FONTS[5])).toBe("@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700&amp;display=swap');");
+  });
+});
+
+describe('Standalone TypeGardenApp letter materials', () => {
+  // The app with a clock the test moves (the materials time beads and spreading by it)
+  const clocked = () => {
+    const clock = { t: 10000 };
+    const App = runInNewContext(classSource, { performance: { now: () => clock.t } });
+    const garden = Object.assign(Object.create(App.prototype), { props: {}, state: { look: 'crimson' }, ...structuredClone(TABLES), stains: [], drops: [] });
+    garden.bloodFx = LEGACY();
+    return { garden, clock };
+  };
+  const material = (garden: any, id: string) => garden.MATERIALS.find((m: any) => m.id === id);
+  // A letter's liquid over a letterform given cell by cell (what soakField builds from the glyph), at 80 cells to the em
+  const field = (garden: any, M: any, nx: number, ny: number, ink: (x: number, y: number) => boolean) => {
+    const n = nx * ny, A = () => new Float32Array(n), inked = A();
+    for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) inked[y * nx + x] = ink(x, y) ? 1 : 0;
+    const f: any = { ch: 'l', RES: 80, SUB: 1, ox: 0, oy: 0, nx, ny, n, ink: inked, w: A(), pm: A(), pb: A(), film: A(), ever: A(), sat: A(), dw: A(), dp: A(),
+      seed: 7, mat: null, box: null, done: false, ver: 0, dep: 0 };
+    garden.soakFibres(f, M);
+    return f;
+  };
+  const sum = (a: Float32Array) => a.reduce((s, v) => s + v, 0);
+
+  it('leaves the blood to the bleeding effect while the letters are ink', () => {
+    const { garden } = clocked(), letter: any = { ch: 'l', x: 0, y: 0 }, hit = { l: letter, lx: 0, ly: -0.5 };
+    garden.addStainLegacy = vi.fn(() => ({ runs: [] }));
+    garden.soakField = vi.fn();
+    expect(garden.material().id).toBe('ink');
+    const st = garden.addStain(hit, 0.04, 1000);
+    expect(garden.addStainLegacy).toHaveBeenCalledWith(hit, 0.04, 1000);
+    expect(garden.soakField).not.toHaveBeenCalled();
+    expect(st.mat).toBeUndefined();
+    expect(letter._soak).toBeUndefined();
+  });
+
+  it('cuts a splash\'s trails and holds back its drips where an absorbent letter is dry, and lets them run where it is soaked', () => {
+    const { garden } = clocked(), made: any[] = [];
+    garden.state.material = 'blotting';
+    garden.soakField = () => ({});
+    garden.addStainLegacy = vi.fn(() => { made.push(garden.fx()); return { runs: [] }; });
+    for (const full of [0, 1]) { garden.soakAt = () => full; expect(garden.addStain({ l: {}, lx: 0, ly: -0.5 }, 0.04, 1000).mat.id).toBe('blotting'); }
+    const [dry, soaked] = made;
+    expect(dry.length).toBeCloseTo(0.12);
+    expect([dry.beads, dry.pool]).toEqual([0, 0]);
+    expect(soaked).toEqual(LEGACY());
+    expect(garden.fx()).toEqual(LEGACY()); // (the effect in use is as it was)
+  });
+
+  it('gives wax only the splash, and puts the effect back even when a splash fails', () => {
+    const { garden } = clocked();
+    garden.state.material = 'wax';
+    garden.soakField = () => ({}); garden.soakAt = () => 0;
+    garden.addStainFluid = vi.fn(() => { throw new Error('no room'); });
+    garden.addStainLegacy = vi.fn(() => ({ runs: [], fx: garden.fx() }));
+    expect(garden.addStain({ l: {}, lx: 0, ly: -0.5 }, 0.04, 1000).fx).toEqual({ ...LEGACY(), trails: 0, beads: 0, pool: 0 });
+    garden.bloodFx = FLUID();
+    expect(() => garden.addStain({ l: {}, lx: 0, ly: -0.5 }, 0.04, 1000)).toThrow('no room');
+    expect(garden.fx()).toEqual(FLUID());
+  });
+
+  it('wicks liquid through the letter only, up as well as down, and keeps every drop of blood', () => {
+    const { garden } = clocked(), f = field(garden, material(garden, 'blotting'), 24, 60, x => x >= 9 && x < 15); // (an upright stroke 6 cells wide)
+    const at = 30 * 24 + 12;
+    f.film[at] = 40; f.box = [12, 30, 12, 30];
+    for (let k = 0; k < 120; k++) garden.soakTick(f, 0.05);
+    for (let y = 0; y < 60; y++) for (let x = 0; x < 24; x++) if (x < 9 || x >= 15) expect(f.w[y * 24 + x] + f.pm[y * 24 + x] + f.pb[y * 24 + x]).toBe(0);
+    const wet = (y: number) => [9, 10, 11, 12, 13, 14].some(x => f.ever[y * 24 + x] > 0); // (anywhere across the stroke)
+    const rows = (from: number, step: number) => { let y = from; while (y + step >= 0 && y + step < 60 && wet(y + step)) y += step; return Math.abs(y - from); };
+    expect(rows(30, -1)).toBeGreaterThanOrEqual(2); // (it climbs)
+    expect(rows(30, 1)).toBeGreaterThan(rows(30, -1)); // (and sags a little further)
+    expect(sum(f.pm) + sum(f.pb) + sum(f.film)).toBeCloseTo(40, 3);
+    expect(Math.min(...f.w, ...f.pm, ...f.pb)).toBeGreaterThanOrEqual(0);
+    // the blood is densest where it fell
+    expect(f.pm[at] + f.pb[at]).toBeGreaterThan(f.pm[22 * 24 + 12] + f.pb[22 * 24 + 12]);
+  });
+
+  it('slides a heavy bead down a wax letter and lets it fall from the end of the stroke, while a small one stays and dries', () => {
+    const { garden, clock } = clocked(), f = field(garden, material(garden, 'wax'), 20, 60, (x, y) => x >= 3 && x < 17 && y < 40);
+    garden.bloodFx = LEGACY({ dry: 5 });
+    for (let y = 4; y <= 6; y++) for (let x = 9; x <= 11; x++) f.film[y * 20 + x] = 12; // (a big splash near the top)
+    f.film[20 * 20 + 5] = 3; // (a droplet)
+    f.box = [5, 4, 11, 20];
+    for (let k = 0; k < 240; k++) { clock.t += 50; garden.beadTick(f, 0.05, { x: 0, y: 0 }, 100); }
+    const fell = garden.drops.filter((d: any) => d.st === 'fall');
+    expect(fell).toHaveLength(1);
+    expect(fell[0].y).toBeGreaterThan(48); // (from the stroke's end, 40 cells down: half an em)
+    // what stayed is dried where it was: the droplet, and at most a speck where the splash landed
+    expect(f.beads.every((b: any) => b.dried)).toBe(true);
+    expect(f.beads.some((b: any) => Math.round(b.x) === 5 && Math.round(b.y) === 20)).toBe(true);
+    expect(f.beads.every((b: any) => b.v < material(garden, 'wax').pin)).toBe(true);
+    expect(f.pb[25 * 20 + 10]).toBeGreaterThan(0); // (the smear it left on the way down)
+  });
+
+  it('keeps the material with the appearance and brings it back, ignoring one it does not know', () => {
+    const harness = (stored: string | null = null) => {
+      const data: Record<string, string> = {};
+      if (stored != null) data['typeGarden.appearance'] = stored;
+      const localStorage = { getItem: (k: string) => data[k] ?? null, setItem: (k: string, v: string) => { data[k] = v; } };
+      const StoreApp = runInNewContext(classSource, { localStorage, performance: { now: () => 10000 } });
+      const garden = Object.assign(Object.create(StoreApp.prototype), { state: { look: 'crimson', material: 'ink' }, STORE: 'typeGarden.appearance', ...structuredClone(TABLES) });
+      garden.appearance = { ...garden.look().appearance, font: 'playfair' };
+      return { garden, data };
+    };
+    const first = harness();
+    expect(first.garden.setMaterial('glass')).toBe(false);
+    expect(first.garden.setMaterial('wax')).toBe(true);
+    first.garden.storeAppearance();
+    const next = harness(first.data['typeGarden.appearance']);
+    next.garden.restoreAppearance();
+    expect(next.garden.material().id).toBe('wax');
+    const odd = harness(JSON.stringify({ material: 'glass' }));
+    odd.garden.restoreAppearance();
+    expect(odd.garden.material().id).toBe('ink');
   });
 });
 

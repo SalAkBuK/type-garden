@@ -350,6 +350,7 @@
       <div data-tg="ap-fx" hidden>
         <div data-tg="ap-row"><span>Based on</span><span data-tg="ap-seg" role="radiogroup" aria-label="Trail style"><button type="button" role="radio" data-fxstyle="legacy" title="Start from the legacy effect's values: splatter, with trails creeping straight down">legacy</button><button type="button" role="radio" data-fxstyle="fluid" title="Start from the fluid effect's values: rivulets traced over the letters">fluid</button></span></div>
       </div>
+      <div data-tg="ap-row"><span>Material</span><span data-tg="ap-seg" role="radiogroup" aria-label="What the letters are made of"><button type="button" role="radio" data-material="ink" title="Sealed: the blood stays on the surface">ink</button><button type="button" role="radio" data-material="blotting" title="Drinks the blood: it soaks in, wicks through the letter and feathers">blotting</button><button type="button" role="radio" data-material="linen" title="Soaks it up along the weave">linen</button><button type="button" role="radio" data-material="wax" title="Refuses the blood: it beads up, rolls down and drips off">wax</button></span></div>
       <div data-tg="ap-warn" aria-live="polite"></div>
     </div>
 
@@ -558,6 +559,27 @@
           { k: 'gloss', label: 'Gloss', min: 0, max: 2, step: 0.05, title: 'The wet shine, and the glow of ichor' },
           { k: 'aged', label: 'Dried look', min: 0, max: 2, step: 0.05, title: 'Stays fresh-looking, dries darker and matte, or darkens further and fades' }
         ];
+        // What the letters are made of: what happens to the liquid once it touches them (the bleeding effect decides what the
+        // liquid does before that). Ink is sealed: the liquid stays on the surface exactly as the effect paints it. The others
+        // drink it (see soakStep): how readily the surface film sinks in (absorb, sink: seconds), how much liquid a splash
+        // carries for its size (vol), how fast it wicks (wick: em²/s), the fibres it feathers along (fibres: how many, fibreLen
+        // in em, fibreK: how much faster along them) or the weave it follows (weave: thread width in em), how unevenly a dry
+        // cell is entered (gate) and how uneven the material is (grain), how far behind the water the blood keeps (lag) and how
+        // fast it binds where it is (bind), how much of a dried stain new liquid takes up again (rewet), how much it sags
+        // (grav), how much faster it dries at its edges (tide: the tide line), and how it shows: water darkening the material
+        // (wetDark), the pale ring the water leaves (halo) and the line where it stopped (tideA)
+        this.MATERIALS = [
+          { id: 'ink', name: 'Ink', absorb: 0 },
+          { id: 'blotting', name: 'Blotting paper', absorb: 1, sink: 0.35, vol: 2.2, wick: 0.0025, base: 0.3, fibres: 1, fibreLen: 0.12, fibreK: 1.4,
+            gate: 0.45, grain: 0.3, lag: 0.7, bind: 0.45, rewet: 0.08, grav: 0.15, tide: 2, wetDark: 0.16, halo: 0.07, tideA: 0.18, ring: 0.5, texK: 0.3 },
+          { id: 'linen', name: 'Linen', absorb: 0.85, sink: 0.8, vol: 2, wick: 0.0018, base: 0.2, weave: 0.02, fibres: 0.2, fibreLen: 0.08, fibreK: 0.6,
+            gate: 0.35, grain: 0.2, lag: 0.75, bind: 0.3, rewet: 0.06, grav: 0.25, tide: 1.5, wetDark: 0.18, halo: 0.05, tideA: 0.12, ring: 0.3, texK: 0.42 },
+          // (wax refuses it: see beadTick. How long a splash takes to draw up into beads (gather: s), how much a bead must hold
+          // to slide (pin), how fast the heaviest slide (slide: em/s), the smear a sliding bead leaves (trail) and the stain a
+          // splash leaves where it landed (residue), and how round a bead stands (dome))
+          { id: 'wax', name: 'Wax', absorb: 0, repel: 1, vol: 1.6, gather: 0.3, pin: 14, slide: 0.55, trail: 0.065, residue: 0.03, dome: 0.75,
+            wick: 0, base: 0.5, fibres: 0, fibreLen: 0, fibreK: 0, gate: 0.5, grain: 0.1, lag: 0, bind: 0, rewet: 0, grav: 0, tide: 0, wetDark: 0, halo: 0, tideA: 0, ring: 0, texK: 0.2 }
+        ];
         this.VINES = {
           green: { stem: '#163a20', stemLit: '#4f8f5b', stemMid: '#24592f', stalk: '#183d22', leafLit: '#36763f', leafMid: '#1d4c28',
             leafDark: '#11301a', leafRim: '#96c896', sepal: ['#0c1e10', '#1c4224', '#3a7040'], prickle: '#2b3a20', thornRoot: '#1f2914' }
@@ -590,6 +612,7 @@
           palette: 0,
           look: 'crimson', // the customized view's preset (see LOOKS)
           bleed: 'legacy', // its bleeding effect: a preset (see BLEEDS) or 'custom'
+          material: 'ink', // what its letters are made of (see MATERIALS)
           text: 'in bloom',
           seed: 7,
           status: '',
@@ -975,7 +998,7 @@
       // kept, and the garden behaves exactly the same.
       storeAppearance() {
         this._unsaved = false;
-        try { localStorage.setItem(this.STORE, JSON.stringify({ look: this.state.look, appearance: this.appearance, custom: this.customAppearance || null, bleed: this.bleed(), bleedCustom: this.customBleed || null })); } catch (e) { /* not kept */ }
+        try { localStorage.setItem(this.STORE, JSON.stringify({ look: this.state.look, appearance: this.appearance, custom: this.customAppearance || null, bleed: this.bleed(), bleedCustom: this.customBleed || null, material: this.material().id })); } catch (e) { /* not kept */ }
       }
       restoreAppearance() {
         let saved = null;
@@ -1003,6 +1026,7 @@
         const fx = this.cleanBleed(saved.bleedCustom), P = this.BLEEDS.find(b => b.id === saved.bleed);
         if (fx) this.customBleed = fx;
         if (P || (saved.bleed === 'custom' && fx)) { this.state.bleed = saved.bleed; this.bloodFx = P ? P.fx : fx; }
+        if ((this.MATERIALS || []).some(m => m.id === saved.material)) this.state.material = saved.material;
       }
       // A kept custom effect, its values checked (anything unrecognised keeps the legacy preset's), or null
       cleanBleed(F) {
@@ -1118,6 +1142,7 @@
         for (const b of this.apEl.querySelectorAll('[data-bleed]')) b.setAttribute('aria-checked', String(b.dataset.bleed === bleed));
         for (const b of this.apEl.querySelectorAll('[data-fxstyle]')) b.setAttribute('aria-checked', String(b.dataset.fxstyle === F.style));
         if (box) box.hidden = bleed !== 'custom';
+        for (const b of this.apEl.querySelectorAll('[data-material]')) b.setAttribute('aria-checked', String(b.dataset.material === this.material().id));
         for (const el of this.apEl.querySelectorAll('[data-fx]')) {
           const v = F[el.dataset.fx];
           if (el !== active) el.value = String(v);
@@ -1163,6 +1188,8 @@
           const p = e.target.closest && e.target.closest('[data-bleed]'), y = e.target.closest && e.target.closest('[data-fxstyle]');
           if (p) this.setBleed(p.dataset.bleed);
           if (y) this.baseBleed(y.dataset.fxstyle);
+          const m = e.target.closest && e.target.closest('[data-material]');
+          if (m) this.setMaterial(m.dataset.material);
         });
         panel.addEventListener('pointerdown', e => e.stopPropagation()); // a click in the panel never reaches the garden
       }
@@ -1398,6 +1425,7 @@
           }
           st.runs = st.runs.filter(run => run.path.length >= 2);
         }
+        for (const l of this.letters) if (l._soak) this.resoak(l);
       }
       // The nearest point of a letter's ink to (lx, ly), within reach (em), or null
       nearestInk(ch, lx, ly, reach) {
@@ -3763,7 +3791,11 @@
         }
       }
       // A splash on a letter, in the bleeding effect in use (which it keeps). Repeat visits add to the marks already there.
-      addStain(hit, r, now) { return this.fx().style === 'fluid' ? this.addStainFluid(hit, r, now) : this.addStainLegacy(hit, r, now); }
+      addStain(hit, r, now) {
+        const M = this.material();
+        if (M.absorb || M.repel) return this.soakStain(hit, r, now, M);
+        return this.fx().style === 'fluid' ? this.addStainFluid(hit, r, now) : this.addStainLegacy(hit, r, now);
+      }
       splashSpray(d, st, S) { if (this.fluid(st)) this.splashSprayFluid(d, st, S); else this.splashSprayLegacy(d, st, S); }
       paintStain(g, l, st, S, now) { if (this.fluid(st)) this.paintStainFluid(g, l, st, S, now); else this.paintStainLegacy(g, l, st, S, now); }
       paintStainBeads(g, l, st, S, now) { if (this.fluid(st)) this.paintBeadsFluid(g, l, st, S, now); else this.paintBeadsLegacy(g, l, st, S, now); }
@@ -4192,6 +4224,540 @@
           if (T.w > 0.3 && r > 1.2) { g.fillStyle = `rgba(${T.I.bead},${(0.75 * T.G * T.w).toFixed(3)})`; g.beginPath(); g.arc(x - r * 0.35, cy - r * 0.3, r * 0.26, 0, 6.283); g.fill(); }
         }
       }
+      // ---------- Letter materials ----------
+      // The bleeding effect decides what the liquid is and does: how much falls, how it splashes, trails and drips. The letters'
+      // material decides what happens once it touches them (see MATERIALS). Ink is sealed: the liquid stays on the surface,
+      // exactly as the effect paints it. An absorbent material drinks it. A splash still lands as the effect makes it, and the
+      // effect's own marks (splash, droplets, trails) are where the liquid reaches the letter; there it sinks in as fast as the
+      // material has room, and wicks on through the letter, inside its outline only (round a bowl, up a hairline): feathering
+      // along its fibres, the water running ahead of the blood, the blood binding near where it fell. It dries, leaving the
+      // stain, the line where it stopped and a pale ring where only the water went. What a letter can't drink stays on top and
+      // does what the effect says: a dry letter drinks a splash nearly whole (short trails, no drips); a soaked one runs and
+      // drips like ink. Each letter keeps its liquid (l._soak) for as long as it stays.
+      material() { return (this.MATERIALS || []).find(m => m.id === this.state.material) || { id: 'ink', absorb: 0 }; }
+      setMaterial(id) {
+        if (!(this.MATERIALS || []).some(m => m.id === id) || id === this.material().id) return false;
+        this.state.material = id;
+        this._unsaved = true;
+        if (this.apOpen) this.syncAppearanceUI();
+        return true;
+      }
+      // A splash on an absorbent letter: the effect makes it, with as much of its running and dripping as the letter can't
+      // drink where it lands (its trails cut short and its drips held back the drier the letter is there). On wax it makes
+      // only the splash, which the wax then draws up into beads.
+      soakStain(hit, r, now, M) {
+        const F = this.fx(), f = this.soakField(hit.l, M), a = M.absorb * (1 - this.soakAt(f, hit.lx, hit.ly, r));
+        const keep = this.bloodFx;
+        this.bloodFx = M.repel ? { ...F, trails: 0, beads: 0, pool: 0 } // (on wax the splash draws up into beads: see beadTick)
+          : { ...F, length: F.length * (1 - 0.88 * a), beads: F.beads * Math.max(0, 1 - 1.6 * a), pool: F.pool * (1 - a) };
+        let st;
+        try { st = F.style === 'fluid' ? this.addStainFluid(hit, r, now) : this.addStainLegacy(hit, r, now); } finally { this.bloodFx = keep; }
+        st.mat = M;
+        return st;
+      }
+      soakCanvas(w, h) { return typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(w, h) : Object.assign(document.createElement('canvas'), { width: w, height: h }); }
+      // A letter's liquid: a grid over its ink (RES cells to the em, from (ox, oy) in em), each cell holding water (w), blood
+      // moving with it (pm), blood bound where it is (pb) and liquid still on the surface (film); and how wet it has ever been
+      // (ever: where the water went)
+      soakField(l, M, seed = null) {
+        let f = l._soak;
+        if (!f) {
+          const bb = this.inkBounds(l.ch), pad = 0.04, RES = Math.max(48, Math.min(104, Math.round((this.Sd || 200) * (this.dpr || 1) / 3)));
+          const ox = bb.x0 - pad, oy = bb.y0 - pad, nx = Math.ceil((bb.x1 - bb.x0 + 2 * pad) * RES) + 1, ny = Math.ceil((bb.y1 - bb.y0 + 2 * pad) * RES) + 1, n = nx * ny;
+          const cv = this.soakCanvas(nx, ny), g = cv.getContext('2d', { willReadFrequently: true });
+          g.font = `${this.FW} ${RES}px ${this.F}`; g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.fillStyle = '#000';
+          g.fillText(l.ch, -ox * RES, -oy * RES);
+          const px = g.getImageData(0, 0, nx, ny).data, ink = new Float32Array(n), A = () => new Float32Array(n);
+          for (let i = 0; i < n; i++) ink[i] = px[i * 4 + 3] / 255;
+          f = l._soak = { ch: l.ch, RES, SUB: Math.max(1, Math.min(3, Math.round((this.Sd || 200) * (this.dpr || 1) / RES / 1.6))), ox, oy, nx, ny, n, ink, w: A(), pm: A(), pb: A(), film: A(), ever: A(), sat: A(), dw: A(), dp: A(),
+            seed: seed != null ? seed : Math.floor(Math.random() * 1e6), mat: null, box: null, done: true, ver: 0, dep: 0 };
+        }
+        this.soakWake(f);
+        if (f.mat !== M) {
+          // (the letters are now another material: what's on and in them stays as it is, dried where it was wet)
+          if (f.mat && f.mat.repel !== M.repel) {
+            for (const b of f.beads || []) b.dried = true;
+            for (let i = 0; i < f.n; i++) { f.pb[i] += f.pm[i] + f.film[i] * 0.5; f.pm[i] = 0; f.w[i] = 0; f.film[i] = 0; }
+            f.box = null; f.ver++; f.dirty = [0, 0, f.nx - 1, f.ny - 1];
+          }
+          this.soakFibres(f, M);
+        }
+        return f;
+      }
+      // A letter's liquid carried over to its new letterform (after a change of typeface): a new field over the new glyph,
+      // with each wet cell's contents moved to the nearest ink within reach (beyond it, lost, as a stain is), and its beads
+      // likewise
+      resoak(l) {
+        const old = l._soak;
+        l._soak = null;
+        if (l.ch === ' ' || l.dead) return;
+        const f = this.soakField(l, old.mat, old.seed), to = (x, y) => {
+          const at = this.nearestInk(l.ch, old.ox + (x + 0.5) / old.RES, old.oy + (y + 0.5) / old.RES, 0.08);
+          if (!at) return -1;
+          const cx = Math.round((at[0] - f.ox) * f.RES - 0.5), cy = Math.round((at[1] - f.oy) * f.RES - 0.5);
+          return cx >= 0 && cy >= 0 && cx < f.nx && cy < f.ny ? cy * f.nx + cx : -1;
+        };
+        let box = null;
+        for (let y = 0, i = 0; y < old.ny; y++) for (let x = 0; x < old.nx; x++, i++) {
+          if (!(old.w[i] > 0 || old.pm[i] > 0 || old.pb[i] > 0 || old.film[i] > 0 || old.ever[i] > 0)) continue;
+          const j = to(x, y);
+          if (j < 0) continue;
+          f.w[j] += old.w[i]; f.pm[j] += old.pm[i]; f.pb[j] += old.pb[i]; f.film[j] += old.film[i]; f.ever[j] = Math.max(f.ever[j], old.ever[i]);
+          if (old.w[i] > 0 || old.film[i] > 0) { const jx = j % f.nx, jy = (j / f.nx) | 0; box = box ? [Math.min(box[0], jx), Math.min(box[1], jy), Math.max(box[2], jx), Math.max(box[3], jy)] : [jx, jy, jx, jy]; }
+        }
+        f.beads = (old.beads || []).map(b => { const j = to(b.x, b.y); return j < 0 ? null : { ...b, x: j % f.nx, y: (j / f.nx) | 0, v: b.v * (f.RES / old.RES) ** 2 }; }).filter(Boolean);
+        f.box = box; f.done = !box && !f.beads.some(b => !b.dried); f.ver++; f.dirty = [0, 0, f.nx - 1, f.ny - 1];
+        // (what its splashes still on the move have given is in the field already: only what reaches further arrives)
+        const live = (this.stains || []).filter(st => st.l === l && st.mat && !st.sunk);
+        if (live.length) this.soakDeposit(f, l, live, performance.now(), true);
+      }
+      // The material's structure in a letter (its own, from the letter's seed): how much each cell holds (cap), how easily
+      // liquid crosses to its neighbours to the right, below, below right and below left (kh, kv, kd, ka: through ink only;
+      // the other four are theirs), and how wet a neighbour must be to wet it when it's dry (th, in lobes a few hundredths of
+      // an em across). Fibres are lines of easy passage at random angles; a weave is threads across and down.
+      soakFibres(f, M) {
+        const { nx, ny, n, ink } = f, rnd = this.rng(f.seed + 17), dir = [new Float32Array(n), new Float32Array(n), new Float32Array(n), new Float32Array(n)], th = new Float32Array(n), cap = new Float32Array(n);
+        const P = M.weave ? Math.max(3, Math.round(M.weave * f.RES)) : 0, lobes = this.soakNoise(nx, ny, 0.045 * f.RES, rnd), mottle = this.soakNoise(nx, ny, 0.012 * f.RES, rnd);
+        for (let y = 0, i = 0; y < ny; y++) for (let x = 0; x < nx; x++, i++) {
+          dir[0][i] = dir[1][i] = M.base; dir[2][i] = dir[3][i] = M.base * 0.4;
+          cap[i] = ink[i] * (1 + M.grain * (mottle[i] - 0.5) * 2);
+          th[i] = M.gate * (0.45 + 1.1 * lobes[i] + 0.2 * mottle[i]);
+          if (P) { dir[0][i] = y % P < P / 2 ? 1 : 0.15; dir[1][i] = x % P < P / 2 ? 1 : 0.15; dir[2][i] = dir[3][i] = 0.06; cap[i] *= (Math.floor(x / P) + Math.floor(y / P)) % 2 ? 1.15 : 0.85; }
+        }
+        for (let k = 0, N = Math.round(M.fibres * n / 30); k < N; k++) {
+          const a = rnd() * Math.PI, dx = Math.cos(a), dy = Math.sin(a), len = M.fibreLen * f.RES * (0.4 + rnd()), c = Math.cos(2 * a), s = Math.sin(2 * a);
+          const wt = [Math.max(0, c), Math.max(0, -c), Math.max(0, s), Math.max(0, -s)].map(v => v * M.fibreK);
+          for (let t = 0, x = rnd() * nx, y = rnd() * ny; t < len && x >= 0 && y >= 0 && x < nx && y < ny; t++, x += dx, y += dy) {
+            const i = (y | 0) * nx + (x | 0);
+            for (let d = 0; d < 4; d++) dir[d][i] += wt[d];
+            th[i] *= 0.3;
+          }
+        }
+        const K = [new Float32Array(n), new Float32Array(n), new Float32Array(n), new Float32Array(n)], on = i => ink[i] > 0.3;
+        // (kmax: how fast a typical inked cell passes liquid on, which sets the steps a frame; the few faster crossings of
+        // fibres are held steady by the limit on what a cell can give in a step)
+        let tot = 0, cells = 0, kmax = 0;
+        for (let y = 0, i = 0; y < ny; y++) for (let x = 0; x < nx; x++, i++) {
+          if (!on(i)) continue;
+          const to = [x < nx - 1 ? i + 1 : -1, y < ny - 1 ? i + nx : -1, x < nx - 1 && y < ny - 1 ? i + nx + 1 : -1, x > 0 && y < ny - 1 ? i + nx - 1 : -1];
+          let sum = 0;
+          for (let d = 0; d < 4; d++) if (to[d] >= 0 && on(to[d])) sum += K[d][i] = Math.min(1.5, (dir[d][i] + dir[d][to[d]]) / 2);
+          tot += sum; cells++; kmax = Math.max(kmax, sum);
+        }
+        kmax = Math.min(kmax, 1.5 * tot / Math.max(1, cells));
+        Object.assign(f, { mat: M, kh: K[0], kv: K[1], kd: K[2], ka: K[3], th, cap, kmax });
+      }
+      // Smooth noise over the field, 0 to 1, varying over about `size` cells
+      soakNoise(nx, ny, size, rnd) {
+        const s = Math.max(2, size), gx = Math.ceil(nx / s) + 2, gy = Math.ceil(ny / s) + 2, lat = Array.from({ length: gx * gy }, () => rnd()), out = new Float32Array(nx * ny);
+        for (let y = 0, i = 0; y < ny; y++) for (let x = 0; x < nx; x++, i++) {
+          const u = x / s, v = y / s, X = Math.floor(u), Y = Math.floor(v), a = u - X, b = v - Y, A = a * a * (3 - 2 * a), B = b * b * (3 - 2 * b);
+          const p = lat[Y * gx + X], q = lat[Y * gx + X + 1], r = lat[(Y + 1) * gx + X], t = lat[(Y + 1) * gx + X + 1];
+          out[i] = p + (q - p) * A + (r - p) * B + (p - q - r + t) * A * B;
+        }
+        return out;
+      }
+      // How much a cell holds now: dried blood partly seals what it fills
+      soakCap(f, i) { return f.cap[i] * (1 - 0.5 * Math.min(1, f.pb[i])); }
+      // How full the letter is around (lx, ly) within r (em), 0 to 1: wet, or sealed by old blood
+      soakAt(f, lx, ly, r) {
+        const R = Math.max(2, r * f.RES), cx = (lx - f.ox) * f.RES, cy = (ly - f.oy) * f.RES;
+        let s = 0, k = 0;
+        for (let y = Math.max(0, Math.floor(cy - R)); y <= Math.min(f.ny - 1, Math.ceil(cy + R)); y++)
+          for (let x = Math.max(0, Math.floor(cx - R)); x <= Math.min(f.nx - 1, Math.ceil(cx + R)); x++) {
+            const i = y * f.nx + x;
+            if ((x - cx) ** 2 + (y - cy) ** 2 > R * R || f.cap[i] < 0.05) continue;
+            s += Math.min(1, (f.w[i] + f.film[i]) / Math.max(0.05, this.soakCap(f, i)) + 0.4 * Math.min(1, f.pb[i])); k++;
+          }
+        return k ? s / k : 0;
+      }
+      // The liquid that each of a letter's absorbent splashes still on the move has newly reached, from the effect's own
+      // painting of it (at the field's resolution, without glow). It arrives as surface film: deep where the splash lands,
+      // and along its trails as deep as the drop has liquid left, then only a wetting film (a drop carries so much)
+      soakDeposit(f, l, list, now, prime = false) {
+        let R = this._soakRaster;
+        if (!R || R.cv.width < f.nx || R.cv.height < f.ny) {
+          const cv = this.soakCanvas(Math.max(f.nx, 96), Math.max(f.ny, 96)), g = cv.getContext('2d', { willReadFrequently: true });
+          Object.defineProperty(g, 'shadowBlur', { get: () => 0, set: () => {} });
+          R = this._soakRaster = { cv, g };
+        }
+        const g = R.g, at0 = { x: 0, y: 0, ch: l.ch }, { nx, ny, n, film, ink } = f;
+        let [x0, y0, x1, y1] = f.box || [nx, ny, -1, -1];
+        for (const st of list) {
+          // (only the cells the splash can reach: see soakReach)
+          const e = this.soakReach(st), bx = Math.max(0, Math.floor((e[0] - f.ox) * f.RES) - 1), by = Math.max(0, Math.floor((e[1] - f.oy) * f.RES) - 1);
+          const bw = Math.min(nx, Math.ceil((e[2] - f.ox) * f.RES) + 2) - bx, bh = Math.min(ny, Math.ceil((e[3] - f.oy) * f.RES) + 2) - by;
+          if (bw <= 0 || bh <= 0) { if (st.done) st.sunk = true; continue; }
+          g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, nx, ny);
+          g.setTransform(1, 0, 0, 1, -f.ox * f.RES, -f.oy * f.RES);
+          this.paintStain(g, at0, st, f.RES, now);
+          const px = g.getImageData(bx, by, bw, bh).data, got = st._got && st._got.length === n ? st._got : (st._got = new Uint8Array(n)), vol = st.mat.vol;
+          if (prime) { for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) got[(by + y) * nx + bx + x] = px[(y * bw + x) * 4 + 3]; continue; }
+          if (st._left == null) st._left = vol * Math.PI * (st.r * f.RES) ** 2 * 1.3;
+          for (let y = by; y < by + bh; y++) for (let x = bx, i = y * nx + bx; x < bx + bw; x++, i++) {
+            const a = px[((y - by) * bw + x - bx) * 4 + 3];
+            if (a <= got[i] + 4 || ink[i] < 0.05) continue;
+            const k = (a - got[i]) / 242 * Math.min(1, ink[i] * 1.4), q = Math.max(0.12 * k, Math.min(vol * k, st._left));
+            film[i] += q; st._left = Math.max(0, st._left - q); got[i] = a;
+            if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+          }
+          if (st.done) { st.sunk = true; st._got = null; }
+        }
+        if (x1 >= 0) f.box = [x0, y0, x1, y1];
+      }
+      // How far a splash's marks can reach on its letter, in em: [x0, y0, x1, y1] (its droplets, and its trails as they are)
+      soakReach(st) {
+        const R = st.r * 3.4;
+        let x0 = st.lx - R, x1 = st.lx + R, y0 = st.ly - R, y1 = st.ly + R;
+        for (const run of st.runs || []) {
+          if (run.path) { for (const p of run.path) { x0 = Math.min(x0, p[0] - run.w * 2); x1 = Math.max(x1, p[0] + run.w * 2); y1 = Math.max(y1, p[1] + run.w * 2); } }
+          else { const x = st.lx + run.dx, d = Math.abs(run.wob || 0) + run.w * 1.5; x0 = Math.min(x0, x - d); x1 = Math.max(x1, x + d); y1 = Math.max(y1, st.ly + (run.len || 0) + run.w * 2); }
+        }
+        return [x0, y0, x1, y1];
+      }
+      // Each absorbent letter's liquid moves on: what newly reaches it arrives (10 times a second at most), then the liquid in
+      // the letter sinks in, wicks, binds and dries (see soakTick) until it's all still
+      soakStep(now, dt, S, L) {
+        let lists = null;
+        for (const l of L) {
+          const f = l._soak;
+          if (!f || l.dead) continue;
+          if (now - f.dep > 100) {
+            if (!lists) { lists = new Map(); for (const st of this.stains || []) if (st.mat && !st.sunk) { const a = lists.get(st.l); if (a) a.push(st); else lists.set(st.l, [st]); } }
+            const live = lists.get(l);
+            if (live) { this.soakDeposit(f, l, live, now); f.dep = now; f.done = false; }
+          }
+          if (f.done || !dt) continue;
+          if (f.calm) { f.acc = (f.acc || 0) + dt; if ((f.skip = (f.skip || 0) + 1) % 3) continue; dt = f.acc; f.acc = 0; }
+          f.done = !this.soakTick(f, Math.min(dt, f.calm ? 0.1 : 0.05), l, S);
+          f.ver++;
+          if (f.done) f.slimAt = now + 1000; // (its working memory is let go a moment after it's all still: see soakSlim)
+        }
+        for (const l of L) { const f = l._soak; if (f && f.done && !f.slim && f.slimAt && now > f.slimAt && f.painted === f.ver) this.soakSlim(f); }
+      }
+      // A still letter keeps only what it holds (and how much it can hold): what it moves and paints with is made again,
+      // the same, if liquid reaches it again or its colours change
+      soakSlim(f) {
+        for (const k of ['kh', 'kv', 'kd', 'ka', 'th', 'sat', 'dw', 'dp', 'ce', 'Pc', 'Sc', 'Ec', 'Es', 'img', 'fimg']) f[k] = null;
+        f.slim = true;
+      }
+      soakWake(f) {
+        if (!f.slim) return;
+        const M = f.mat; f.mat = null; this.soakFibres(f, M);
+        f.sat = new Float32Array(f.n); f.dw = new Float32Array(f.n); f.dp = new Float32Array(f.n);
+        f.slim = false;
+      }
+      // One frame of the liquid in a letter, over the part that's wet (and the margin its front can reach). Film sinks into
+      // the room beneath it. Water flows from wetter cells to drier ones, as fast as the difference and as how wet the giver is
+      // (damp material passes liquid on slowly), a little faster downhill; a dry cell is entered only from a neighbour wet
+      // enough for its fibres to draw, so the front feathers and a blot stops growing once it has spread thin. Blood travels
+      // with the water, behind it, and binds; water reaching old blood takes a little of it up again. Water dries over the
+      // effect's drying time, faster at the edges, which draws the blood still moving out to them (the tide line). Returns
+      // whether anything is still wet.
+      soakTick(f, dt, l, S) {
+        if (f.mat.repel) return this.beadTick(f, dt, l, S);
+        const M = f.mat, { nx, ny, w, pm, pb, film, cap, kh, kv, kd, ka, th, sat, dw, dp, ever, ink } = f, ce = f.ce || (f.ce = new Float32Array(f.n));
+        if (!f.box) return false;
+        const D = M.wick * f.RES * f.RES, steps = f.calm ? 1 : Math.max(1, Math.min(8, Math.ceil(D * dt * f.kmax * 2 / 0.9))), h = dt / steps, m = steps + 1;
+        const x0 = Math.max(0, f.box[0] - m), y0 = Math.max(0, f.box[1] - m), x1 = Math.min(nx - 1, f.box[2] + m), y1 = Math.min(ny - 1, f.box[3] + m);
+        const sink = Math.min(1, dt * 3 / M.sink), G = M.grav, lag = M.lag, rewet = M.rewet;
+        // (what each cell holds this frame: see soakCap)
+        for (let y = y0; y <= y1; y++) for (let x = x0, i = y * nx + x0; x <= x1; x++, i++) ce[i] = pb[i] > 0 ? cap[i] * (1 - 0.5 * Math.min(1, pb[i])) : cap[i];
+        for (let y = y0; y <= y1; y++) for (let x = x0, i = y * nx + x0; x <= x1; x++, i++) {
+          if (film[i] <= 0) continue;
+          const room = ce[i] - w[i];
+          if (room <= 0) continue;
+          const q = film[i] < 0.002 ? Math.min(film[i], room) : Math.min(film[i], room) * sink;
+          if (q > 1e-3) f.stir = true;
+          film[i] -= q; w[i] += q; pm[i] += q;
+          if (pb[i] > 0) { const r = pb[i] * rewet * Math.min(1, q / Math.max(0.05, cap[i])); pb[i] -= r; pm[i] += r; }
+        }
+        // (between each cell and its neighbours to the right, below, below right and below left; the giver is the wetter)
+        const OFF = [1, nx, nx + 1, nx - 1], KS = [kh, kv, kd, ka], GV = [0, 1, 0.7, 0.7], R = D * h;
+        for (let s = 0; s < steps; s++) {
+          for (let y = y0; y <= y1; y++) for (let x = x0, i = y * nx + x0; x <= x1; x++, i++) { const c = ce[i]; sat[i] = c > 0.02 ? w[i] / c : 0; dw[i] = 0; dp[i] = 0; }
+          for (let y = y0; y <= y1; y++) {
+            const bottom = y >= y1;
+            for (let x = x0, i = y * nx + x0; x <= x1; x++, i++) {
+              const si = sat[i], gi = si > 0.55 ? G * (si - 0.55) : 0;
+              for (let e = 0; e < 4; e++) {
+                if (e > 0 && bottom) break;
+                const k0 = KS[e][i];
+                if (!k0 || ((e === 0 || e === 2) && x >= x1) || (e === 3 && x <= x0)) continue;
+                const j = i + OFF[e], sj = sat[j];
+                if (si === 0 && sj === 0) continue;
+                let d = si - sj + gi * GV[e], a = i, b = j, hi = si, lo = sj;
+                if (d < 0) { d = -d; a = j; b = i; hi = sj; lo = si; }
+                if (hi < 1e-4 || d < 1e-5 || (lo < 0.02 && hi < th[b])) continue;
+                const ca = cap[a], cb = cap[b], wa = w[a];
+                let q = k0 * R * d * hi * (ca < cb ? ca : cb);
+                if (q > wa * 0.11) q = wa * 0.11;
+                dw[a] -= q; dw[b] += q;
+                const pa = pm[a];
+                if (pa > 0) { const p = q * pa / wa * lag; dp[a] -= p; dp[b] += p; }
+                const pbb = pb[b];
+                if (pbb > 0) { const u = q / (cb > 0.05 ? cb : 0.05), r = pbb * rewet * (u < 1 ? u : 1); pb[b] = pbb - r; dp[b] += r; }
+              }
+            }
+          }
+          let most = 0;
+          for (let y = y0; y <= y1; y++) for (let x = x0, i = y * nx + x0; x <= x1; x++, i++) { const q = dw[i]; if (q) { w[i] += q; pm[i] += dp[i]; if (q > most) most = q; else if (-q > most) most = -q; } }
+          if (s === steps - 1) f.most = most / Math.max(h, 1e-6);
+        }
+        const evap = dt / Math.max(1, this.fx().dry), bind = Math.min(1, M.bind * dt), dryAt = i => ink[i] > 0.3 && w[i] < 1e-4;
+        let bx0 = nx, by0 = ny, bx1 = -1, by1 = -1, filmAny = false;
+        for (let y = y0; y <= y1; y++) for (let x = x0, i = y * nx + x0; x <= x1; x++, i++) {
+          if (w[i] <= 0 && film[i] <= 0) continue;
+          if (w[i] > 0) {
+            const c = ce[i], s = c > 0.02 ? w[i] / c : 0;
+            if (s > ever[i]) ever[i] = Math.min(1, s);
+            const edge = (x > 0 && dryAt(i - 1)) + (x < nx - 1 && dryAt(i + 1)) + (y > 0 && dryAt(i - nx)) + (y < ny - 1 && dryAt(i + nx));
+            w[i] -= Math.min(w[i], evap * cap[i] * (1 + M.tide * edge / 4));
+            const b = pm[i] * bind; pm[i] -= b; pb[i] += b;
+            if (w[i] < 1e-4) { w[i] = 0; pb[i] += pm[i]; pm[i] = 0; }
+          }
+          if (w[i] > 0 || film[i] > 1e-4) { if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y; }
+          else film[i] = 0;
+          if (film[i] > 0.002) filmAny = true;
+        }
+        // (calm once its front has stopped spreading and little moves: then it settles in single steps; new film stirs it)
+        const grew = !f.box || bx0 < f.box[0] || by0 < f.box[1] || bx1 > f.box[2] || by1 > f.box[3];
+        if (grew || f.stir) f.grewAt = performance.now();
+        f.calm = performance.now() - (f.grewAt || 0) > 800 && f.most < 0.4;
+        f.stir = false;
+        f.box = bx1 >= 0 ? [bx0, by0, bx1, by1] : null;
+        f.filmAny = filmAny;
+        return !!f.box;
+      }
+      // ---------- Wax: letters that refuse the liquid ----------
+      // On a repellent letter the effect's splash lands, then draws itself up into beads (the film gathers into the bead it
+      // touches, or starts one); beads that touch run together. A bead heavy enough to overcome the wax's grip slides down
+      // the letter's face, faster the heavier it is, leaving a faint smear and shrinking as it goes; at the edge of a stroke
+      // it hangs, and if it's heavy enough it lets go and falls (onto a letter below, if there is one). Small beads stay put
+      // and dry where they are, into dark dots. Positions are in the letter's cells (see soakField).
+      beadTick(f, dt, l, S) {
+        const M = f.mat, { nx, ny, film, pb, ink } = f, beads = f.beads || (f.beads = []), take = Math.min(1, dt * 3 / M.gather), now = performance.now();
+        // the film gathers into beads
+        if (f.box) {
+          const [x0, y0, x1, y1] = f.box;
+          for (let y = y0; y <= y1; y++) for (let x = x0, i = y * nx + x0; x <= x1; x++, i++) {
+            if (film[i] <= 0) continue;
+            const q = film[i] < 0.02 ? film[i] : film[i] * take;
+            film[i] -= q;
+            let best = null, bd = 1e9;
+            for (const b of beads) { const d = Math.hypot(b.x - x, b.y - y) - this.beadR(b, M); if (!b.dried && d < 1.6 && d < bd) { bd = d; best = b; } }
+            if (best) { best.x += (x - best.x) * q / (best.v + q); best.y += (y - best.y) * q / (best.v + q); best.v += q; best.t = now; }
+            else beads.push({ x, y, v: q, vy: 0, t: now, born: now, hang: false });
+            pb[i] += q * M.residue;
+          }
+        }
+        // beads that touch run together
+        for (let a = 0; a < beads.length; a++) for (let c = beads.length - 1; c > a; c--) {
+          const A = beads[a], B = beads[c];
+          if (A.dried !== B.dried) continue;
+          if (Math.hypot(A.x - B.x, A.y - B.y) < (this.beadR(A, M) + this.beadR(B, M)) * 0.85) {
+            const v = A.v + B.v; A.x = (A.x * A.v + B.x * B.v) / v; A.y = (A.y * A.v + B.y * B.v) / v; A.v = v; A.vy = Math.max(A.vy, B.vy); A.t = now; A.hang = false; beads.splice(c, 1);
+          }
+        }
+        // heavy beads slide down the face, leaving a smear; at an edge they hang, and the heaviest fall
+        const inkAt = (x, y) => { const xi = Math.round(x), yi = Math.round(y); return xi >= 0 && yi >= 0 && xi < nx && yi < ny && ink[yi * nx + xi] > 0.5; };
+        for (let k = beads.length - 1; k >= 0; k--) {
+          const b = beads[k], r = this.beadR(b, M), over = b.v - M.pin;
+          if (b.dried || over <= 0 || now - b.born < M.gather * 1000) { b.vy = 0; continue; }
+          const v = M.slide * f.RES * Math.min(1, Math.sqrt(over / (M.pin * 6)));
+          b.vy += (v - b.vy) * Math.min(1, dt * 6);
+          const step = b.vy * dt;
+          if (!inkAt(b.x, b.y + r * 0.6 + step)) { // the stroke ends below it
+            b.hang = true; b.vy = 0;
+            if (b.v > M.pin * 3) { // it lets go
+              (this.drops || (this.drops = [])).push({ st: 'fall', id: null, x: l.x + (f.ox + (b.x + 0.5) / f.RES) * S, y: l.y + (f.oy + (b.y + r + 0.5) / f.RES) * S, vx: 0, vy: 0, r: r / f.RES * S * 0.8, t: 0 });
+              beads.splice(k, 1);
+            }
+            continue;
+          }
+          // (a thin smear the width of the bead over every row it passes, and it shrinks a little)
+          const R = Math.max(1, Math.round(r * 0.45)), cx = Math.round(b.x);
+          for (let yi = Math.round(b.y - r * 0.4), y2 = Math.round(b.y + step - r * 0.4); yi <= y2; yi++) {
+            if (yi < 0 || yi >= ny) continue;
+            for (let dx = -R; dx <= R; dx++) { const xi = cx + dx, i = yi * nx + xi; if (xi >= 0 && xi < nx && ink[i] > 0.3) pb[i] = Math.max(pb[i], M.trail * (1 - Math.abs(dx) / (R + 1))); }
+          }
+          this.soakDirty(f, cx - R, Math.round(b.y - r), cx + R, Math.round(b.y + step + r));
+          b.hang = false; b.y += step; b.t = now;
+          b.v -= Math.min(b.v * 0.5, step * M.trail * 0.3 * r);
+        }
+        // still beads dry where they are, into dark dots that stay
+        for (const b of beads) if (!b.dried && now - b.t >= this.fx().dry * 1000) b.dried = true;
+        let box = null;
+        for (let y = 0, i = 0; y < ny; y++) for (let x = 0; x < nx; x++, i++) if (film[i] > 1e-4) {
+          if (!box) box = [x, y, x, y]; else { if (x < box[0]) box[0] = x; if (x > box[2]) box[2] = x; if (y < box[1]) box[1] = y; if (y > box[3]) box[3] = y; }
+        }
+        f.box = box; f.filmAny = !!box;
+        f.calm = true;
+        return !!(box || beads.some(b => !b.dried));
+      }
+      // Cells whose look has changed outside the wet part (see soakPaint)
+      soakDirty(f, x0, y0, x1, y1) { const d = f.dirty; f.dirty = d ? [Math.min(d[0], x0), Math.min(d[1], y0), Math.max(d[2], x1), Math.max(d[3], y1)] : [x0, y0, x1, y1]; f.ver++; }
+      // A bead's radius in cells: a dome holding its volume
+      beadR(b, M) { return Math.sqrt(b.v / Math.PI) * M.dome; }
+      // The beads on a wax letter, glossy domes on its face (drawn after the glyph mask, so one at an edge hangs over it)
+      paintBeadsWax(g, l, f, S, now) {
+        if (!f.beads || !f.beads.length) return;
+        const I = this.theme().blood, F = this.fx(), k = S / f.RES, M = f.mat;
+        for (const b of f.beads) {
+          const r = this.beadR(b, M) * k, x = l.x + (f.ox + (b.x + 0.5) / f.RES) * S, y = l.y + (f.oy + (b.y + 0.5) / f.RES) * S;
+          if (r < 0.4) continue;
+          const dry = b.dried ? 1 : Math.min(1, Math.max(0, (now - b.t) / (F.dry * 1000))), c = I.wet.map((v, j) => v + (I.dry[j] - v) * dry * Math.min(1, F.aged)), sag = b.hang ? 1.18 : 1;
+          if (b.dried) { // a dried drop: a dark, flat dot with a darker rim
+            g.fillStyle = `rgb(${c.map(v => v * 0.9 | 0).join(',')})`; g.beginPath(); g.ellipse(x, y, r * 0.92, r * 0.92 * sag, 0, 0, 6.283); g.fill();
+            g.strokeStyle = `rgba(${c.map(v => v * 0.55 | 0).join(',')},0.9)`; g.lineWidth = Math.max(0.5, r * 0.16); g.stroke();
+            if (I.rim) { g.strokeStyle = `rgba(${I.rim},0.5)`; g.lineWidth = Math.max(0.5, r * 0.08); g.stroke(); }
+            continue;
+          }
+          const rgb = m => c.map(v => Math.min(255, v * m) | 0).join(',');
+          // its shadow on the wax, a little down and right
+          g.fillStyle = 'rgba(0,0,0,0.18)'; g.beginPath(); g.ellipse(x + r * 0.18, y + r * 0.22, r * 1.02, r * 1.02 * sag, 0, 0, 6.283); g.fill();
+          const grd = g.createRadialGradient(x - r * 0.3, y - r * 0.35, r * 0.1, x, y, r * 1.05);
+          grd.addColorStop(0, `rgb(${rgb(1.25)})`); grd.addColorStop(0.55, `rgb(${rgb(0.95)})`); grd.addColorStop(1, `rgb(${rgb(0.5)})`);
+          if (I.glow) { g.shadowColor = I.glow; g.shadowBlur = r * 0.8 * F.gloss; }
+          g.fillStyle = grd; g.beginPath(); g.ellipse(x, y + (sag - 1) * r * 0.5, r, r * sag, 0, 0, 6.283); g.fill();
+          g.shadowBlur = 0;
+          if (I.rim) { g.strokeStyle = `rgba(${I.rim},0.6)`; g.lineWidth = Math.max(0.5, r * 0.1); g.stroke(); }
+          // the light in it, and the glint
+          const G = F.gloss * (1 - 0.7 * dry);
+          if (G > 0.05 && r > 1) {
+            g.fillStyle = `rgba(${I.bead},${(0.45 * G).toFixed(3)})`; g.beginPath(); g.ellipse(x - r * 0.32, y - r * 0.38, r * 0.34, r * 0.22, -0.6, 0, 6.283); g.fill();
+            g.fillStyle = `rgba(255,255,255,${(0.8 * G).toFixed(3)})`; g.beginPath(); g.arc(x - r * 0.42, y - r * 0.46, Math.max(0.5, r * 0.1), 0, 6.283); g.fill();
+          }
+        }
+      }
+      // The letter's liquid as it shows, at a few pixels a cell (SUB), each read smoothly between the cells around it: the
+      // material darkened by water; the blood, wet or dried, deeper where it's dense, threaded with the material's fibres
+      // and ending where it thins out in a crisp, fibrous edge, with a darker rim once dry; where the water went and has
+      // dried, a pale ring, and the line where it stopped. Only the part that can have changed is painted again. And the film
+      // still on the surface (a pixel a cell), as a mask for the effect's own painting of it.
+      soakPaint(f) {
+        const T = this.theme(), I = T.blood, F = this.fx(), look = `${T.text}|${F.aged}`, now = performance.now();
+        if (f.painted === f.ver && f.paintedLook === look && f.paintedBlood === I) return;
+        // (liquid in paper changes slowly: painted 20 times a second while it spreads, 7 once it's only drying)
+        if (f.cv && f.paintedLook === look && f.paintedBlood === I && !f.done && now - f.paintedAt < (f.calm ? 150 : 50)) return;
+        f.paintedAt = now;
+        const { nx, ny, n, w, pm, pb, film, ever, ink, SUB } = f, M = f.mat, W = nx * SUB, H = ny * SUB;
+        const full = f.cv && (f.paintedLook !== look || f.paintedBlood !== I);
+        if (!f.cv) { f.cv = this.soakCanvas(W, H); f.cg = f.cv.getContext('2d'); f.fcv = this.soakCanvas(nx, ny); f.fg = f.fcv.getContext('2d'); }
+        if (!f.img) {
+          f.img = f.cg.createImageData(W, H); f.fimg = f.fg.createImageData(nx, ny); // (only the part painted is put back)
+          f.tex = f.tex || this.soakTexture(f, W, H); f.Pc = new Float32Array(n); f.Sc = new Float32Array(n); f.Ec = new Float32Array(n);
+        }
+        f.painted = f.ver; f.paintedLook = look; f.paintedBlood = I; f.paintVer = (f.paintVer || 0) + 1;
+        // the cells that can have changed since the last painting (and the cells beside them, read in between)
+        const box = f.box ? [f.box[0] - 3, f.box[1] - 3, f.box[2] + 3, f.box[3] + 3] : null, last = f.lastBox;
+        const u = (a, b) => a && b ? [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])] : a || b;
+        // (painted again: what can have changed since last time, or for new colours everything it has ever held)
+        f.everBox = u(u(f.everBox, box), f.dirty);
+        const r = full ? f.everBox : u(u(box, last), f.dirty);
+        f.lastBox = box; f.dirty = null;
+        if (!r) return;
+        const x0 = Math.max(0, r[0] - 1), y0 = Math.max(0, r[1] - 1), x1 = Math.min(nx - 1, r[2] + 1), y1 = Math.min(ny - 1, r[3] + 1);
+        const P = f.Pc, Sa = f.Sc, E = f.Ec, fd = f.fimg.data, d = f.img.data, tex = f.tex;
+        for (let y = Math.max(0, y0 - 1); y <= Math.min(ny - 1, y1 + 1); y++) for (let x = Math.max(0, x0 - 1), i = y * nx + x; x <= Math.min(nx - 1, x1 + 1); x++, i++) {
+          const c = this.soakCap(f, i);
+          P[i] = pm[i] + pb[i]; Sa[i] = c > 0.02 ? Math.min(1, w[i] / c) : 0; E[i] = ever[i];
+          fd[i * 4 + 3] = Math.min(255, film[i] * 6400);
+        }
+        // (beyond the ink, cells take the wettest of their inked neighbours, so no edge is drawn where the letter ends)
+        for (let y = y0; y <= y1; y++) for (let x = x0, i = y * nx + x; x <= x1; x++, i++) {
+          if (ink[i] >= 0.5) continue;
+          let p = 0, e = 0;
+          for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+            const j = i + dy * nx + dx;
+            if ((dx || dy) && x + dx >= 0 && x + dx < nx && y + dy >= 0 && y + dy < ny && ink[j] >= 0.5) { if (pm[j] + pb[j] > p) p = pm[j] + pb[j]; if (ever[j] > e) e = ever[j]; }
+          }
+          P[i] = p; E[i] = e;
+        }
+        // (where the water went, softened a little, so the line where it stopped runs smooth rather than along the cells)
+        const Es = f.Es || (f.Es = new Float32Array(n));
+        for (let y = Math.max(0, y0 - 1); y <= Math.min(ny - 1, y1 + 1); y++) for (let x = Math.max(0, x0 - 1), i = y * nx + x; x <= Math.min(nx - 1, x1 + 1); x++, i++) {
+          const l = x > 0 ? i - 1 : i, r = x < nx - 1 ? i + 1 : i, t = y > 0 ? i - nx : i, b = y < ny - 1 ? i + nx : i;
+          Es[i] = (4 * E[i] + 2 * (E[l] + E[r] + E[t] + E[b]) + E[t - i + l] + E[t - i + r] + E[b - i + l] + E[b - i + r]) / 16;
+        }
+        const sm = (a, b, x) => { const t = x <= a ? 0 : x >= b ? 1 : (x - a) / (b - a); return t * t * (3 - 2 * t); };
+        const aged = Math.min(1, F.aged), wetC = I.wet.map(v => v * 0.82), tideC = I.wet.map((v, k) => (v + I.dry[k]) / 2);
+        const u0 = x0 * SUB, u1 = (x1 + 1) * SUB, v0 = y0 * SUB, v1 = (y1 + 1) * SUB;
+        for (let v = v0; v < v1; v++) {
+          const cy = (v + 0.5) / SUB - 0.5, j0 = Math.max(0, Math.min(ny - 2, Math.floor(cy))), ty = Math.max(0, Math.min(1, cy - j0));
+          for (let u = u0; u < u1; u++) {
+            const cx = (u + 0.5) / SUB - 0.5, i0 = Math.max(0, Math.min(nx - 2, Math.floor(cx))), tx = Math.max(0, Math.min(1, cx - i0)), i = j0 * nx + i0, o = (v * W + u) * 4;
+            const p00 = P[i], p10 = P[i + 1], p01 = P[i + nx], p11 = P[i + nx + 1], e00 = Es[i], e10 = Es[i + 1], e01 = Es[i + nx], e11 = Es[i + nx + 1];
+            if (p00 + p10 + p01 + p11 + e00 + e10 + e01 + e11 <= 0) { d[o + 3] = 0; continue; }
+            const w00 = (1 - tx) * (1 - ty), w10 = tx * (1 - ty), w01 = (1 - tx) * ty, w11 = tx * ty;
+            const Pb = p00 * w00 + p10 * w10 + p01 * w01 + p11 * w11, Eb = e00 * w00 + e10 * w10 + e01 * w01 + e11 * w11;
+            const Sb = Sa[i] * w00 + Sa[i + 1] * w10 + Sa[i + nx] * w01 + Sa[i + nx + 1] * w11, fib = tex[v * W + u] / 255, dry = 1 - Math.min(1, Sb / 0.35);
+            // the blood: more of it along the fibres, its edge where it thins out
+            const Pt = Pb * (1 - M.texK + 2 * M.texK * fib);
+            let ap = (1 - Math.exp(-1.8 * Pt)) * sm(0.03, 0.09, Pt), rimP = 0;
+            if (dry > 0 && Pt > 0.02) { // dried: a darker rim where it stopped
+              const gx = (p10 - p00) * (1 - ty) + (p11 - p01) * ty, gy = (p01 - p00) * (1 - tx) + (p11 - p10) * tx, g = Math.sqrt(gx * gx + gy * gy);
+              if (g > 1e-3 && Math.min(p00, p10, p01, p11) < 0.04) rimP = (1 - sm(0.15, 0.7, Math.abs(Pb - 0.1) / g)) * dry * M.ring;
+              if (rimP > 0) ap = Math.max(ap, 0.8 * rimP);
+            }
+            // the material: darker while wet; once dry, the pale ring and the line where the water stopped
+            let a1 = M.wetDark * Sb, c1 = wetC;
+            if (Eb > 0.01) {
+              const halo = M.halo * sm(0.015, 0.08, Eb) * (1 - Sb), gx = (e10 - e00) * (1 - ty) + (e11 - e01) * ty, gy = (e01 - e00) * (1 - tx) + (e11 - e10) * tx, g = Math.sqrt(gx * gx + gy * gy);
+              const line = g > 1e-3 ? (1 - sm(0.15, 0.6, Math.abs(Eb - 0.05) / g)) * M.tideA * (1 - Sb) : 0;
+              if (halo > a1) { a1 = halo; c1 = I.wet; }
+              if (line > a1) { a1 = line; c1 = tideC; }
+            }
+            const a = ap + a1 * (1 - ap);
+            if (a < 0.004) { d[o + 3] = 0; continue; }
+            const k = Math.min(1, dry * aged) * 0.8, deep = (1 - 0.22 * Math.min(1, Math.max(0, Pb - 0.6) / 1.4)) * (1 - 0.25 * rimP);
+            for (let j = 0; j < 3; j++) d[o + j] = ((I.wet[j] + (I.dry[j] - I.wet[j]) * k) * deep * ap + c1[j] * a1 * (1 - ap)) / a;
+            d[o + 3] = a * 255;
+          }
+        }
+        f.cg.putImageData(f.img, 0, 0, u0, v0, u1 - u0, v1 - v0); f.fg.putImageData(f.fimg, 0, 0, x0, y0, x1 - x0 + 1, y1 - y0 + 1);
+      }
+      // The material's fine grain, at the painting's resolution: short fibres at every angle (and its threads, for a weave),
+      // 0 to 255
+      soakTexture(f, W, H) {
+        const cv = this.soakCanvas(W, H), g = cv.getContext('2d', { willReadFrequently: true }), rnd = this.rng(f.seed + 91), em = f.RES * f.SUB, M = f.mat;
+        g.fillStyle = '#000'; g.fillRect(0, 0, W, H); g.lineCap = 'round';
+        for (let k = 0, N = Math.round(W * H / 40 * (M.fibres ? 1 : 0.3)); k < N; k++) {
+          const x = rnd() * W, y = rnd() * H, a = rnd() * Math.PI, L = em * (0.012 + 0.04 * rnd()) * (M.fibres ? 1 : 0.4);
+          g.strokeStyle = `rgba(255,255,255,${(0.25 + 0.6 * rnd()).toFixed(2)})`; g.lineWidth = 0.6 + 0.8 * rnd();
+          g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * L, y + Math.sin(a) * L); g.stroke();
+        }
+        if (M.weave) { // threads over and under: each crossing shows the thread on top, brighter along its middle
+          const P = M.weave * em;
+          g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
+          for (let y = 0, r = 0; y < H; y += P, r++) for (let x = 0, c = 0; x < W; x += P, c++) {
+            const across = (r + c) % 2 === 0, j = 0.75 + 0.5 * rnd(), grd = across ? g.createLinearGradient(0, y, 0, y + P) : g.createLinearGradient(x, 0, x + P, 0);
+            grd.addColorStop(0, 'rgba(255,255,255,0.15)'); grd.addColorStop(0.5, `rgba(255,255,255,${(0.85 * j).toFixed(2)})`); grd.addColorStop(1, 'rgba(255,255,255,0.15)');
+            g.fillStyle = grd; g.fillRect(x + 0.4, y + 0.4, P - 0.8, P - 0.8);
+          }
+          g.globalAlpha = 0.5;
+          for (let k = 0, N = Math.round(W * H / 400); k < N; k++) { const x = rnd() * W, y = rnd() * H, L = P * (1 + 3 * rnd()), h = rnd() < 0.5; g.strokeStyle = '#fff'; g.lineWidth = 0.6; g.beginPath(); g.moveTo(x, y); g.lineTo(h ? x + L : x, h ? y : y + L); g.stroke(); }
+          g.globalAlpha = 1;
+        }
+        const px = g.getImageData(0, 0, W, H).data, out = new Uint8Array(W * H);
+        for (let i = 0; i < W * H; i++) out[i] = px[i * 4];
+        return out;
+      }
+      // A soaked letter's marks: its absorbent splashes still on the move as the effect paints them, kept only where their
+      // film is still on the surface (what's left of the others is in the letter); under them, the liquid in the letter; over
+      // all, any splash that landed while the letters were ink
+      paintSoaked(g, f, list, S, now, at0) {
+        this.soakPaint(f);
+        const x = f.ox * S, y = f.oy * S, w = f.nx / f.RES * S, h = f.ny / f.RES * S;
+        for (const st of list) if (st.mat && !st.sunk) this.paintStain(g, at0, st, S, now);
+        g.save();
+        g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+        g.globalCompositeOperation = 'destination-in'; g.drawImage(f.fcv, x, y, w, h);
+        g.globalCompositeOperation = 'destination-over'; g.drawImage(f.cv, x, y, w, h);
+        g.restore();
+        for (const st of list) if (!st.mat) this.paintStain(g, at0, st, S, now);
+      }
+
       // A reusable layer at the current canvas resolution. The ink scan is for collision detection only.
       stainCanvas(l, S, scale, old) {
         const bb = this.inkBounds(l.ch), x = l.x || 0, y = l.y || 0;
@@ -4207,17 +4773,19 @@
         return { cv, cg: cv.getContext('2d'), x0, y0, w: cw / scale, h: ch / scale, S, scale, cw, ch };
       }
       // Mask the original splashes and trails with native text alpha, then draw hanging beads outside the glyph.
-      paintLetterStains(c, ch, list, now, beads = false) {
+      paintLetterStains(c, ch, list, now, beads = false, soak = null) {
         const g = c.cg, at0 = { x: 0, y: 0, ch };
         g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, c.cv.width, c.cv.height);
         g.setTransform(c.scale, 0, 0, c.scale, -c.x0 * c.scale, -c.y0 * c.scale);
-        for (const st of list) this.paintStain(g, at0, st, c.S, now);
+        if (soak) this.paintSoaked(g, soak, list, c.S, now, at0);
+        else for (const st of list) this.paintStain(g, at0, st, c.S, now);
         g.save();
         g.globalCompositeOperation = 'destination-in';
         g.font = `${this.FW} ${c.S}px ${this.F}`; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
         g.fillStyle = '#000'; g.fillText(ch, 0, 0);
         g.restore();
         if (beads) for (const st of list) this.paintStainBeads(g, at0, st, c.S, now);
+        if (beads && soak) this.paintBeadsWax(g, at0, soak, c.S, now);
       }
 
       // Moving stains share one scratch canvas; dried stains retain one bitmap per letter.
@@ -4225,9 +4793,26 @@
         const m = g.getTransform ? g.getTransform() : null, scale = m ? Math.hypot(m.a, m.b) : (this.dpr || 1);
         const byLetter = new Map(), dryMs = this.fx().dry * 1000;
         for (const st of this.stains || []) { const a = byLetter.get(st.l); if (a) a.push(st); else byLetter.set(st.l, [st]); }
+        for (const l of this.letters || []) if (l._soak && !byLetter.has(l) && !l.dead) byLetter.set(l, []); // (liquid soaked in, with no splash left on it)
         for (const [l, list] of byLetter) {
           const still = st => Math.max(st.born, ...(st.runs || []).map(run => run.wetAt || 0)); // (when its blood last moved)
           const settled = list.filter(st => st.done && now - still(st) > dryMs), live = list.filter(st => !settled.includes(st));
+          if (l._soak) { // (an absorbent letter's marks are painted together, with the liquid in it: baked once it's all still)
+            if (l._soak.done && !live.length) { this.stampStains(g, l, list, S, now); continue; }
+            if (live.every(st => st.mat && st.sunk)) { // (nothing moving on its surface: only the liquid in it changes, repainted at most 20 times a second)
+              this.soakPaint(l._soak);
+              this.stampStains(g, l, list, S, now, false);
+              for (const st of list) this.paintStainBeads(g, l, st, S, now);
+              this.paintBeadsWax(g, l, l._soak, S, now);
+              continue;
+            }
+            const c = this._stainLayer = this.stainCanvas(l, S, scale, this._stainLayer);
+            this.paintLetterStains(c, l.ch, list, now, false, l._soak);
+            g.drawImage(c.cv, 0, 0, c.cw, c.ch, l.x + c.x0, l.y + c.y0, c.w, c.h);
+            for (const st of list) this.paintStainBeads(g, l, st, S, now);
+            this.paintBeadsWax(g, l, l._soak, S, now);
+            continue;
+          }
           if (settled.length) this.stampStains(g, l, settled, S, now);
           if (live.length) {
             const c = this._stainLayer = this.stainCanvas(l, S, scale, this._stainLayer);
@@ -4237,15 +4822,17 @@
           }
         }
       }
-      stampStains(g, l, settled, S, now) {
+      stampStains(g, l, settled, S, now, beads = true) {
         const m = g.getTransform ? g.getTransform() : null, scale = m ? Math.hypot(m.a, m.b) : (this.dpr || 1);
         let c = l._stainCache;
-        const blood = this.theme().blood, F = this.fx(), finish = `${F.gloss},${F.aged},${F.dry}`;
-        if (!c || c.blood !== blood || c.finish !== finish || c.n !== settled.length || c.list.some((st, i) => st !== settled[i]) || S > c.S * 1.06 || S < c.S * 0.6 || Math.abs(scale - c.scale) > 0.01) {
-          if (c) this.freeBitmap(c.cv);
-          c = this.stainCanvas(l, S, scale);
-          this.paintLetterStains(c, l.ch, settled, now, true);
+        const blood = this.theme().blood, F = this.fx(), finish = `${F.gloss},${F.aged},${F.dry}`, soak = l._soak || null;
+        if (!c || c.blood !== blood || c.finish !== finish || c.n !== settled.length || c.list.some((st, i) => st !== settled[i]) || S > c.S * 1.06 || S < c.S * 0.6 || Math.abs(scale - c.scale) > 0.01
+          || (soak && (c.soakVer !== soak.paintVer || c.soakText !== this.theme().text || c.beads !== beads))) {
+          if (soak && c) c = this.stainCanvas(l, S, scale, c); // (a soaking letter's is repainted often: its bitmap is kept)
+          else { if (c) this.freeBitmap(c.cv); c = this.stainCanvas(l, S, scale); }
+          this.paintLetterStains(c, l.ch, settled, now, beads, soak);
           c.n = settled.length; c.list = settled.slice(); c.blood = blood; c.finish = finish;
+          if (soak) { c.soakVer = soak.paintVer; c.soakText = this.theme().text; c.beads = beads; }
           l._stainCache = c;
         }
         const k = S / c.S;
@@ -4555,7 +5142,7 @@
         // Rear bloom alpha cuts holes in late foliage; foreground blooms then cover every remaining plant.
         this.drawFrontPlants(B, rearRoses, target => drawCustom(1, false, target));
         drawCustom(1, true);
-        if (st.vine && B.ctx) { this.bloodStep(now, this._dt, S, L); this.drawBloodFront(B.ctx, now, S); }
+        if (st.vine && B.ctx) { this.bloodStep(now, this._dt, S, L); this.soakStep(now, this._dt, S, L); this.drawBloodFront(B.ctx, now, S); }
         if (st.vine) this.drawFallingPetals(B, this._dt);
         if (st.vine && B.ctx) this.dofDraw(B, S, true);
       }
