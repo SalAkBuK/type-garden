@@ -270,6 +270,18 @@ describe('Standalone TypeGardenApp unobstructed rose layering', () => {
     expect(garden._tint).toBe(0);
   });
 
+  it('never tints a chosen vine colour bronze: a rewritten letter shows white vines as white at once', () => {
+    const { garden, backend, operations, state } = roseLayerHarness();
+    garden.appearance = { ...garden.look().appearance, vine: '#FFFFFF' };
+    garden._theme = null;
+    expect(garden.theme().freshShoots).toBe(false);
+    garden.renderCustomized(backend, 10000, state);
+    const rewritten = operations.filter(operation => operation.letter?.id === 2 && operation.kind !== 'cached-foliage');
+    expect(rewritten.length).toBeGreaterThan(0);
+    expect(rewritten.every(operation => operation.tint === 0)).toBe(true);
+    expect(garden._tint).toBe(0);
+  });
+
   it('uses exact rear-petal alpha at physical pixel coordinates without altering the target transform', () => {
     const { garden, backend, context, operations, canvases } = roseLayerHarness();
     const transform = { a: 1.5, b: 0.2, c: -0.1, d: 1.5, e: 33.25, f: -4.5 };

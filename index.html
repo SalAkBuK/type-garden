@@ -535,7 +535,7 @@
         // Curated vine colours, used exactly for their own leaf colour (leafMid); see vineFor. The cane's body, lit edge and the
         // middle tone of its shading; the leaf stalk, the leaf's lit, middle and dark tones and the light along its midrib; the
         // sepal and hip ramp (shadow, body, lit); and where thorns grow from the cane (the small prickle's base, the hooked
-        // thorn's root). A rewritten letter's regrowth still starts bronze and greens over to these.
+        // thorn's root). A rewritten letter's regrowth still starts bronze and greens over to these (the curated green only).
         // How blood (or ichor) behaves, whatever its colour: the bleeding presets, each a trail style (legacy: splatter with
         // trails creeping straight down the strokes and dripping from their ends; fluid: rivulets traced over the ink that
         // pool and hang beads) with the values it was made with, and the controls a custom effect is built from (min, max,
@@ -1499,6 +1499,8 @@
           ink: { primary, secondary }, secondaryRole: A.secondaryRole,
           blood: this.bloodFor(A.blood), dof: this.dofFor(A.rosePrimary), wing: this.wingFor(A.wingMarks), ground: this.groundFor(A.wing),
           vine: this.vineFor(A.vine),
+          // only the curated green regrows bronze on a rewritten letter; a colour the visitor chose is shown as chosen from the first frame
+          freshShoots: this.curated(this.VINES, A.vine, k => k.leafMid) != null,
           // what a rose sprite holds besides the rose itself: its ink, its sepals (the vine) and, in front, the shadow it casts
           paintKey: Object.fromEntries([['primary', A.rosePrimary], ['secondary', A.roseSecondary]].map(([role, hex]) =>
             [role, [hex, A.vine, shade, shadeK].join('|').toLowerCase()]))
@@ -5078,8 +5080,9 @@
             const age = (now - l.birth) * sp / this._G, kk = kd(l);
             if (st.vine) {
               this._wp = l.dead ? Math.min(1, (now - l.dead) / st.wither) : null;
-              // a rewritten letter's regrowth greens over 45 s (in five steps, so its cached bitmap is rebuilt only a few times)
-              this._tint = l.rev ? Math.max(0, Math.ceil((1 - (now - l.birth) / 45000) * 5) / 5) : 0;
+              // a rewritten letter's regrowth greens over 45 s (in five steps, so its cached bitmap is rebuilt only a few times);
+              // only the curated green does: a chosen vine colour (white, say) is never tinted, so it is true at once
+              this._tint = l.rev && this.theme().freshShoots ? Math.max(0, Math.ceil((1 - (now - l.birth) / 45000) * 5) / 5) : 0;
             }
             const draw = (e, arr) => {
               if ((e.t === 'rose') !== roses) return;
