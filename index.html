@@ -379,16 +379,9 @@
         </div>
 
         <div style="display:flex;flex-direction:column;gap:10px">
-          <div style="color:#8C8C8C;text-transform:uppercase;font-size:11px;letter-spacing:0.08em">Treatment</div>
-          <div id="poster-treatment-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-            <button id="pbtn-treat-custom" style="background:#1E1E1E;border:1px solid #FFFFFF;color:#FFFFFF;font:inherit;font-size:11px;padding:8px 6px;border-radius:8px;cursor:pointer">Customized</button>
-            <button id="pbtn-treat-baseline" style="background:transparent;border:1px solid #2A2A2A;color:#8C8C8C;font:inherit;font-size:11px;padding:8px 6px;border-radius:8px;cursor:pointer">Baseline</button>
-          </div>
-        </div>
-
-        <div style="display:flex;flex-direction:column;gap:10px">
-          <div style="color:#8C8C8C;text-transform:uppercase;font-size:11px;letter-spacing:0.08em">Palette</div>
+          <div style="color:#8C8C8C;text-transform:uppercase;font-size:11px;letter-spacing:0.08em">Look</div>
           <div id="poster-palettes-grid" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px"></div>
+          <div style="color:#8C8C8C;font-size:11px;line-height:1.5">The poster is your garden: it follows your look, material, botanicals, typeface and blood. Change those in the type view.</div>
         </div>
 
         <div style="display:flex;flex-direction:column;gap:10px;border-top:1px solid #1E1E1E;padding-top:20px">
@@ -446,14 +439,16 @@
         this.FW = 700;
         this.C = { red: '#FF1400', blue: '#3257FF', line: '#FFB4A8', text: '#FFFFFF', vein: '#000000' };
 
-        this.PRESETS = [
-          { id: 'breathe', label: 'Breathe', sub: 'Slow sway · 3s', T: 3000 },
-          { id: 'grow', label: 'Grow & wither', sub: 'Bloom, then back · 6s', T: 6000 },
-          { id: 'typed', label: 'Typed', sub: 'Type, cut, repeat · 5s', T: 5000 },
-          { id: 'wind', label: 'Gust', sub: 'Wind sweeps through · 4s', T: 4000 },
-          { id: 'reach', label: 'Reach', sub: 'Stems follow a light · 6s', T: 6000 },
-          { id: 'scatter', label: 'Scatter', sub: 'Random bloom, fade · 6s', T: 6000 },
-          { id: 'visit', label: 'Visitor', sub: 'Butterfly drops by · 7s', T: 7000 }
+        // The poster's motions: loop length (ms), how fast the bleeding runs against the loop (clock) and when it starts (bite, as a
+        // fraction of the loop), and where the still is taken (as a fraction of the loop). See the poster engine.
+        this.POSTER = { size: 1080, t0: 300000, age: 13000, margin: 0.05 }; // (the poster's size, where its clock starts, a garden's full growth in ms, and the margin kept clear of it: a share of the size)
+        this.MOTIONS = [
+          { id: 'breathe', label: 'Breathe', sub: 'The garden at rest · 8 s', T: 8000, clock: 1, still: 0.25 },
+          { id: 'creep', label: 'Creep', sub: 'Vines grow over the words · 16 s', T: 16000, clock: 1, still: 0.5 },
+          { id: 'bloom', label: 'Bloom & fall', sub: 'Blooms open, shed petals · 12 s', T: 12000, clock: 1, still: 0.55 },
+          { id: 'wither', label: 'Wither', sub: 'The life is drawn out · 26 s', T: 26000, clock: 1, still: 0.3 },
+          { id: 'gust', label: 'Gust', sub: 'A wind sweeps through · 9 s', T: 9000, clock: 1, still: 0.4 },
+          { id: 'bite', label: 'Bite', sub: 'The butterfly feeds · 14 s', T: 14000, clock: 2, bite: 0.26, still: 0.62, push: 1.15 }
         ];
 
         // name, background, flower, stem & leaf, flower line, type
@@ -629,13 +624,23 @@
           pink: { fg: ['rgb(110,34,60)', 'rgb(200,100,132)', 'rgb(238,166,188)'], bg: ['rgb(96,30,52)', 'rgb(170,80,110)', 'rgb(214,136,160)'] },
           black: { fg: ['rgb(8,2,4)', 'rgb(40,10,16)', 'rgb(84,26,36)'], bg: ['rgb(20,6,10)', 'rgb(52,16,24)', 'rgb(90,36,46)'] }
         };
+        // What dies, and the colours it dies in (see drainRgb): for each kind of colour the two stops it passes through, what it
+        // turns on the way (a leaf yellows, a cane goes olive-umber) and what it ends as; and a dead rose's ramp [shadow, body, lit]
+        // (dusty maroon-brown, ash at the lit edge)
+        this.DEAD = {
+          stem: [[84, 74, 40], [86, 72, 58]], stemLit: [[156, 138, 84], [172, 158, 138]], stemMid: [[104, 92, 52], [112, 96, 78]], stalk: [[100, 86, 44], [90, 76, 62]],
+          leafLit: [[208, 180, 76], [166, 140, 108]], leafMid: [[164, 134, 52], [112, 90, 66]], leafDark: [[106, 84, 32], [62, 48, 38]], leafRim: [[222, 204, 130], [196, 176, 150]],
+          prickle: [[104, 86, 46], [72, 58, 46]], prickleBody: [[108, 76, 46], [78, 60, 48]], prickleTip: [[190, 166, 120], [176, 162, 148]], thornRoot: [[76, 62, 32], [52, 42, 34]],
+          sepal0: [[42, 32, 16], [26, 20, 15]], sepal1: [[100, 80, 36], [60, 46, 36]], sepal2: [[154, 126, 60], [108, 90, 74]]
+        };
+        this.DEADROSE = [[24, 14, 12], [70, 44, 36], [138, 112, 96]];
         this.props = { boil: true, recoil: 20, density: 1, showHint: true };
         // A pause sprouts a bloom; its opening clock stops on the next writing key.
         this.REC = { pause: 900, punct: 350, hes: 450, emerge: 1300, open: 1, stop: 1.5, bang: 2.4, wither: 650, cluster: 5 };
         this.state = {
           mode: 'type',
           treatment: 'customized', // 'customized' | 'baseline'
-          preset: 'breathe',
+          motion: 'breathe', // the poster's motion (see MOTIONS)
           palette: 0,
           look: 'crimson', // the customized view's preset (see LOOKS)
           bleed: 'legacy', // its bleeding effect: a preset (see BLEEDS) or 'custom'
@@ -818,8 +823,9 @@
       buildPalettesUI() {
         // The customized view offers its looks; the baseline its palettes
         const custom = this.state.treatment === 'customized';
+        const looks = this.LOOKS.map(k => ({ name: k.name, bg: k.appearance.bg, dot: k.dot, ring: k.ring, dot2: k.ring || k.dot, text: k.appearance.text, sel: k.id === this.state.look, title: k.id === this.state.look ? `${k.name} · click again to adjust` : k.name, pick: () => this.pickLook(k.id) }));
         const items = custom
-          ? this.LOOKS.map(k => ({ name: k.name, bg: k.appearance.bg, dot: k.dot, ring: k.ring, dot2: k.ring || k.dot, text: k.appearance.text, sel: k.id === this.state.look, title: k.id === this.state.look ? `${k.name} · click again to adjust` : k.name, pick: () => this.pickLook(k.id) }))
+          ? looks
           : this.PAL.map((p, idx) => ({ name: p[0], bg: p[1], dot: p[2], dot2: p[3], text: p[5], sel: idx === this.state.palette, pick: () => this.setPalette(idx) }));
         const mark = custom && this.theme().light ? '#111111' : '#FFFFFF'; // the selected swatch's outline, against the bar
         const own = custom ? this.customItem() : null;
@@ -851,9 +857,10 @@
           this.palBarEl.appendChild(btn);
         });
 
-        // Poster panel swatches
+        // Poster panel swatches: the poster is always the real garden, so it always offers the looks
         this.palettesGrid.innerHTML = '';
-        (own && this.customAppearance ? [...items, own] : items).forEach(p => {
+        const poster = this.customItem();
+        (this.customAppearance ? [...looks, poster] : looks).forEach(p => {
           const isSel = p.sel;
           const btn = document.createElement('button');
           btn.style.cssText = `display:flex;flex-direction:column;gap:8px;align-items:stretch;background:transparent;border:1px solid ${isSel ? '#FFFFFF' : '#2A2A2A'};color:#EDEDED;font:inherit;padding:6px 6px 8px;border-radius:12px;cursor:pointer;text-align:left;transition:border-color 0.15s ease`;
@@ -879,8 +886,8 @@
 
       buildPresetsUI() {
         this.presetsGrid.innerHTML = '';
-        this.PRESETS.forEach(p => {
-          const isSel = p.id === this.state.preset;
+        this.MOTIONS.forEach(p => {
+          const isSel = p.id === this.state.motion;
           const btn = document.createElement('button');
           btn.style.cssText = `text-align:left;background:${isSel ? '#1E1E1E' : 'transparent'};border:1px solid ${isSel ? '#FFFFFF' : '#2A2A2A'};color:#FFFFFF;font:inherit;padding:10px 12px;border-radius:10px;cursor:pointer;display:flex;flex-direction:column;gap:4px;transition:border-color 0.15s ease, background 0.15s ease`;
           btn.innerHTML = `
@@ -889,7 +896,7 @@
           `;
           btn.addEventListener('click', e => {
             e.stopPropagation();
-            this.setPreset(p.id);
+            this.setMotion(p.id);
           });
           this.presetsGrid.appendChild(btn);
         });
@@ -908,18 +915,14 @@
         if (btnTreatCustom) btnTreatCustom.addEventListener('click', () => this.setTreatment('customized'));
         if (btnTreatBase) btnTreatBase.addEventListener('click', () => this.setTreatment('baseline'));
 
-        const pbtnCustom = document.getElementById('pbtn-treat-custom');
-        const pbtnBase = document.getElementById('pbtn-treat-baseline');
-
-        if (pbtnCustom) pbtnCustom.addEventListener('click', () => this.setTreatment('customized'));
-        if (pbtnBase) pbtnBase.addEventListener('click', () => this.setTreatment('baseline'));
-
         this.pTextInput.addEventListener('input', e => {
+          if (this.state.busy) { e.target.value = this.state.text; return; } // (an export is drawing the garden as it is)
           this.state.text = e.target.value;
           this.buildPoster();
         });
 
         this.btnReshuffle.addEventListener('click', () => {
+          if (this.state.busy) return;
           this.state.seed = Math.floor(Math.random() * 1e6);
           this.buildPoster();
         });
@@ -933,6 +936,9 @@
         if (mode !== 'type') this.closeAppearance();
         this.state.mode = mode;
         this.posterEl.toggleAttribute('data-open', mode === 'poster');
+        const treat = document.getElementById('tg-treatment-bar'); // (the poster is always the real garden: no comparison to switch to)
+        if (treat) treat.style.display = mode === 'poster' ? 'none' : '';
+        if (mode !== 'poster' && this.stage) { this.stage.stageRelease(); this.stage = null; } // (the poster's garden and its bitmaps are only kept while it is showing)
         if (mode === 'type') {
           this.btnType.style.background = '#FFFFFF';
           this.btnType.style.color = '#000000';
@@ -1625,7 +1631,7 @@
       }
       // Bitmaps that hold the old colours are redrawn: rose sprites, stamped plants, settled stains and the out-of-focus petals
       restyle() {
-        for (const l of [...(this.letters || []), ...(this.posterLetters || [])]) {
+        for (const l of [...(this.letters || []), ...(this.stage ? this.stage.letters : [])]) {
           if (l._plantCache) { for (const k in l._plantCache) this.freeBitmap(l._plantCache[k].cv); l._plantCache = null; }
           for (const list of this.letterLists(l, true)) for (const e of list) if (e._spr) {
             this.freeBitmap(e._spr.cv); this.freeBitmap(e._spr.next); this.freeBitmap(e._spr.mix); e._spr = null;
@@ -1799,11 +1805,12 @@
         return lin.map(v => { v = Math.max(0, Math.min(1, v)); return Math.round(255 * (v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - 0.055)); });
       }
 
-      setPreset(id) {
-        this.state.preset = id;
+      // The poster's motion (see MOTIONS): its loop starts again
+      setMotion(id) {
+        if (this.state.busy || !this.MOTIONS.some(m => m.id === id)) return;
+        this.state.motion = id;
         this.pt0 = performance.now();
-        const pr = this.preset();
-        this.infoLabel.textContent = `1080 × 1080 loop · ${pr.sub}`;
+        this.infoLabel.textContent = `${this.POSTER.size} × ${this.POSTER.size} loop · ${this.motion().sub}`;
         this.buildPresetsUI();
       }
 
@@ -1824,18 +1831,6 @@
           btn.style.background = active ? '#FFFFFF' : 'transparent';
           btn.style.color = active ? '#000000' : '#BDBDBD';
           btn.style.fontWeight = active ? '500' : 'normal';
-        });
-
-        [
-          ['pbtn-treat-custom', 'customized'],
-          ['pbtn-treat-baseline', 'baseline']
-        ].forEach(([id, t]) => {
-          const btn = document.getElementById(id);
-          if (!btn) return;
-          const active = t === treatment;
-          btn.style.background = active ? '#1E1E1E' : 'transparent';
-          btn.style.borderColor = active ? '#FFFFFF' : '#2A2A2A';
-          btn.style.color = active ? '#FFFFFF' : '#8C8C8C';
         });
 
         this.updateTheme();
@@ -1871,6 +1866,11 @@
       vineStart(e) { return e.par ? this.vineCross(e.par, e.pu) : e.d0; }
       vineCross(stem, u) { return this.vineStart(stem) + stem.dur * this.eioInv(u); }
       eb(t) { if (t <= 0) return 0; if (t >= 1) return 1; const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); }
+      // The simulations' random numbers (blood, splashes, soaking): Math.random, unless a scripted stage (the poster) has seeded
+      // its own so that every frame it draws can be drawn again exactly (see _rnd)
+      rnd() { return this._rnd ? this._rnd() : Math.random(); }
+      // ...and the time the soaking liquid is painted and settles by (performance.now, unless the stage has its own clock)
+      clock() { return this._clock ? this._clock() : performance.now(); }
       rng(seed) {
         let s = seed | 0;
         return () => {
@@ -2173,7 +2173,7 @@
         return (this.cache[ch] = ch === ' ' ? 0.45 : 0.55);
       }
       layoutCore(A, W, H, prevWrapped) {
-        const maxW = W * 0.8, S0 = H * 0.28, LH = 2.1;
+        const maxW = W * (this.fill || 0.8), S0 = H * 0.28, LH = 2.1; // (this.fill: how much of the width a line may take; the poster fills more)
         const ws = A.map(l => this.mw(l.ch));
         const words = []; let cur = null;
         A.forEach((l, i) => {
@@ -2312,6 +2312,33 @@
         const p = c => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16)), A = p(base), F = p(fresh);
         return `rgb(${A.map((v, i) => Math.round(v + (F[i] - v) * t)).join(',')})`;
       }
+
+      // ---- Withering (a scripted stage's motion). x is how far a thing has died: 0 alive, 1 dead. A stage's st.drain(kind, e, y, u, l) says
+      // how far each stem piece ('stem', u along it), leaf and rose has got, from where it is (y: its place on the poster)
+      sm(a, b, x) { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); }
+      // What dying has done to it by x: its colour (c), how shrivelled and curled it is (s), how far a rose has bowed (b)
+      wither(x) { return { x, c: this.sm(0, 0.85, x), s: this.sm(0.08, 0.9, x), b: this.sm(0.12, 0.72, x) }; }
+      rgbOf(col) {
+        if (Array.isArray(col)) return col;
+        if (col[0] === '#') return this.hexRgb(col);
+        const m = col.match(/[\d.]+/g);
+        return [+m[0], +m[1], +m[2]];
+      }
+      // A colour drained by c (0..1) toward the dead colour of its kind, by way of what it turns on the way: [r, g, b]
+      drainRgb(col, c, kind) {
+        const from = this.rgbOf(col), D = this.DEAD[kind], mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+        return c < 0.5 ? mix(from, D[0], c * 2) : mix(D[0], D[1], c * 2 - 1);
+      }
+      drain(col, c, kind) { const v = this.drainRgb(col, c, kind); return `rgb(${v[0] | 0},${v[1] | 0},${v[2] | 0})`; }
+      // A colour as it is now: drained by this._dry (the thing being drawn, set by whoever draws it), or as it is
+      dry(col, kind) { return this._dry ? this.drain(col, this._dry, kind) : col; }
+      // How a dying leaf holds itself: shrunk, its angle drooping toward the ground, its blade curling (sgn: which way)
+      leafPose(a, L, bend, sgn, w) {
+        const down = Math.atan2(Math.sin(Math.PI / 2 - a), Math.cos(Math.PI / 2 - a));
+        return { a: a + down * 0.4 * w.b, L: L * (1 - 0.58 * w.s), bend: bend + sgn * 2.4 * w.s };
+      }
+      // How far a dying rose's head has bowed over its stem (radians), on the side it leans to
+      witherBow(e, aim, w) { return w.b * (1.45 + 0.35 * this.h(e.id * 2.9)) * (aim < 0 ? -1 : 1); }
 
       // An earned bloom's age for bloomState. The bud swells in real time once its shoot has grown (a: ms since the shoot's tip
       // arrived), then opens only through the stillness of the pause that sprouted it; once the writer types again it holds
@@ -2719,7 +2746,7 @@
         // diverges from the first character that differs. Rhythm and revisions add their own marks on top (see genMarks).
         // The opening text keeps the garden it has always grown instead: numbered letters drawing on the stream buildPoster
         // has just seeded, so the landing composition is the same on every load.
-        const seed = opening ? null : this.hashText(A.map(l => l.ch).join('') + ch);
+        const seed = opening ? null : this.hashText(A.map(l => l.ch).join('') + ch + (this._salt || '')); // (_salt: the poster's "regrow", a garden of the same words grown differently)
         const id = opening ? this.letters.length + 1 : this.freshId(seed), cut = this._cuts[A.length];
         delete this._cuts[A.length];
         if (ch === ' ') {
@@ -3183,7 +3210,7 @@
         ];
 
         // Base blending into the cane (olive on the green vine)
-        B.fill(thornPoly, this.theme().vine.prickle);
+        B.fill(thornPoly, this.dry(this.theme().vine.prickle, 'prickle'));
 
         // Reddish-brown body
         if (sc > 0.25) {
@@ -3191,7 +3218,7 @@
             pt[0] * 0.8 + pTip[0] * 0.2,
             pt[1] * 0.8 + pTip[1] * 0.2
           ]);
-          B.fill(innerPoly, '#5c3424');
+          B.fill(innerPoly, this.dry('#5c3424', 'prickleBody'));
         }
 
         // Pale tan point
@@ -3202,7 +3229,7 @@
             pTip,
             [pTip[0] - normX * (H * 0.24) + cosA * (hook * 0.18), pTip[1] - normY * (H * 0.24) + sinA * (hook * 0.18)]
           ];
-          B.stroke(tipArc, '#c4a27c', Math.max(0.5, stemW * 0.12));
+          B.stroke(tipArc, this.dry('#c4a27c', 'prickleTip'), Math.max(0.5, stemW * 0.12));
         }
       }
       // A knot's or scar's thorn (th.k: size, lean, curl): broad at the base, curving back to a needle
@@ -3226,7 +3253,7 @@
           hook1.push([pt[0] + ox * hw * 0.9, pt[1] + oy * hw * 0.9]);
         }
         const poly = [...back1, T, T, ...hook1.reverse()]; // T twice keeps the point sharp
-        B.fill(poly, { x0: C0[0], y0: C0[1], x1: T[0], y1: T[1], stops: [[0, this.theme().vine.thornRoot], [0.3, '#36150e'], [0.72, '#62291c'], [0.9, '#b08660'], [1, '#f0e6cc']] });
+        B.fill(poly, { x0: C0[0], y0: C0[1], x1: T[0], y1: T[1], stops: [[0, this.dry(this.theme().vine.thornRoot, 'thornRoot')], [0.3, '#36150e'], [0.72, '#62291c'], [0.9, '#b08660'], [1, '#f0e6cc']] });
         if (sc > 0.5 && H > 3) {
           B.stroke(back1.slice(1, 7), 'rgba(200,150,110,0.4)', Math.max(0.5, H * 0.045)); // light catching the back
           B.stroke(hook1.slice(1, 7), 'rgba(8,2,1,0.55)', Math.max(0.5, H * 0.05)); // shadow in the hook
@@ -3246,8 +3273,9 @@
         const stalk = [];
         for (let i = 0; i <= 8; i++) stalk.push(ax(0.62 * i / 8));
         const V = this.theme().vine; // (a rewritten letter's regrowth starts bronze)
-        B.stroke(stalk, this.tc(V.stalk, '#5a2a1a'), Math.max(0.6, L * 0.028));
-        const cLit = this.tc(V.leafLit, '#a35a3a'), cMid = this.tc(V.leafMid, '#6e3420'), cDark = this.tc(V.leafDark, '#3e1a10');
+        B.stroke(stalk, this.dry(this.tc(V.stalk, '#5a2a1a'), 'stalk'), Math.max(0.6, L * 0.028));
+        const cLit = this.dry(this.tc(V.leafLit, '#a35a3a'), 'leafLit'), cMid = this.dry(this.tc(V.leafMid, '#6e3420'), 'leafMid'), cDark = this.dry(this.tc(V.leafDark, '#3e1a10'), 'leafDark');
+        const rim = this._dry ? `rgba(${this.drainRgb(V.leafRim, this._dry, 'leafRim').map(v => v | 0).join(',')},0.35)` : V.leafRim, fold = 1 - 0.68 * (this._curl || 0); // (a drying leaf's leaflets fold up toward its midrib)
 
         const leaflet = (p, ang, len, wid) => {
           const c = Math.cos(ang), s = Math.sin(ang), nx = -s, ny = c, N = L > 24 ? 30 : 14, A = [], Z = [];
@@ -3262,14 +3290,14 @@
             x0: A[m][0], y0: A[m][1], x1: Z[N - m][0], y1: Z[N - m][1],
             stops: [[0, litA ? cLit : cDark], [0.5, cMid], [1, litA ? cDark : cLit]]
           });
-          if (L > 12) B.stroke([p, [p[0] + c * len * 0.85, p[1] + s * len * 0.85]], V.leafRim, Math.max(0.4, len * 0.025));
+          if (L > 12) B.stroke([p, [p[0] + c * len * 0.85, p[1] + s * len * 0.85]], rim, Math.max(0.4, len * 0.025));
         };
 
         const pairs = L > 30 ? 2 : 1;
         for (let k = 0; k < pairs; k++) {
           const u = 0.22 + k * 0.22, p = ax(u), d = dirAt(u), len = L * (0.3 + 0.05 * k);
-          leaflet(p, d + 0.85, len, len * 0.6);
-          leaflet(p, d - 0.85, len, len * 0.6);
+          leaflet(p, d + 0.85 * fold, len, len * 0.6);
+          leaflet(p, d - 0.85 * fold, len, len * 0.6);
         }
         const tl = L * 0.42;
         leaflet(ax(0.6), dirAt(0.6), tl, tl * 0.62);
@@ -3306,7 +3334,9 @@
         // Stage: a bud stays closed, a half-open rose stops at the goblet, a hero rose keeps going into a full bloom
         const stage = e.stage || 'half';
         // (a sprite is rendered at full size and scaled by `grow` when stamped)
-        const Rg = R * (this._growOne ? 1 : grow) * (1.2 - 0.25 * full); // a slim half-open bloom needs a little more size than a flat one
+        // (W: a dying rose, see wither: shrivelled, its petals curled and dark and shed, its head bowed by whoever draws it)
+        const W = this._wd, shr = W ? W.s : 0;
+        const Rg = R * (this._growOne ? 1 : grow) * (1.2 - 0.25 * full) * (1 - 0.42 * shr); // a slim half-open bloom needs a little more size than a flat one
         const breathe = vine ? 0 : 0.04 * Math.sin((this._now || 0) / 1000 * 0.9 + e.ph1);
 
         // Camera: the bloom axis (z) leans toward the viewer by `tilt` (0 = face-on, PI/2 = side-on).
@@ -3329,9 +3359,10 @@
         // (a texture bud is a darker shade, so it reads as quiet texture beside the earned blooms)
         const ink = this.roseInk(e);
         const dk = e.dark === true ? 0.8 : e.dark || 1, dark = ramp3 => ramp3.map(c => c.map(v => v * dk));
-        const FACE = dark(ink.face);
-        const BACK = dark(ink.back);
-        const GREEN = this.theme().vine.sepal; // the sepals and hip, in the vine's colours
+        const toDead = (ramp, t) => ramp.map((c, i) => c.map((v, k) => v + (this.DEADROSE[i][k] - v) * t)); // (a dying rose: toward dusty maroon-brown)
+        const FACE = W ? toDead(dark(ink.face), W.c) : dark(ink.face);
+        const BACK = W ? toDead(dark(ink.back), W.c) : dark(ink.back);
+        const GREEN = W ? this.theme().vine.sepal.map((c, i) => this.drainRgb(c, W.c, 'sepal' + i)) : this.theme().vine.sepal; // the sepals and hip, in the vine's colours
         const lerp3 = (c1, c2, t) => [c1[0] + (c2[0] - c1[0]) * t, c1[1] + (c2[1] - c1[1]) * t, c1[2] + (c2[2] - c1[2]) * t];
         const ramp = (stops, l) => l < 0.5 ? lerp3(stops[0], stops[1], l * 2) : lerp3(stops[1], stops[2], l * 2 - 1);
         const rgb = (c, m = 1) => `rgb(${(c[0] * m) | 0},${(c[1] * m) | 0},${(c[2] * m) | 0})`;
@@ -3346,18 +3377,18 @@
 
         // Now and then an open rose lets a petal go (an earned bloom's age only advances in stillness, so it sheds in stillness)
         if (vine && !this._noSprite && !this.reduced && this.petalFall && stage !== 'bud' && open > 0.95 && a > 4200 && this.petalFall.length < 12 &&
-            Math.random() < (this._dt || 0) * (stage === 'full' ? 0.08 : 0.035)) {
+            this.rnd() < (this._dt || 0) * (stage === 'full' ? 0.08 : 0.035)) {
           const c0 = S2(V(0, 0, Rg * 0.7)), k = Math.max(0.5, (this._S || 200) / 200);
           this.petalFall.push({
-            x: c0[0] + (Math.random() - 0.5) * Rg * 0.4, y: c0[1], s: Rg * (0.4 + Math.random() * 0.15), k, t: 0,
-            vx: (Math.random() - 0.5) * 12 * k, vy: 0, term: (16 + Math.random() * 10) * k,
-            sw: 0.9 + Math.random() * 0.7, ph: Math.random() * 6.28, amp: (14 + Math.random() * 16) * k,
-            rot: Math.random() * 6.28, spin: (Math.random() - 0.5) * 1.6, flip: Math.random() * 6.28, fs: 1.4 + Math.random() * 1.4,
-            life: 9 + Math.random() * 4, rose: e // (it takes the rose's colour in whatever look is showing)
+            x: c0[0] + (this.rnd() - 0.5) * Rg * 0.4, y: c0[1], s: Rg * (0.4 + this.rnd() * 0.15), k, t: 0,
+            vx: (this.rnd() - 0.5) * 12 * k, vy: 0, term: (16 + this.rnd() * 10) * k,
+            sw: 0.9 + this.rnd() * 0.7, ph: this.rnd() * 6.28, amp: (14 + this.rnd() * 16) * k,
+            rot: this.rnd() * 6.28, spin: (this.rnd() - 0.5) * 1.6, flip: this.rnd() * 6.28, fs: 1.4 + this.rnd() * 1.4,
+            life: 9 + this.rnd() * 4, rose: e // (it takes the rose's colour in whatever look is showing)
           });
         }
         // On canvas every rose is stamped from its own bitmap (SVG export stays vector): see roseSprite
-        if (B.ctx && !this._noSprite) { this.roseSprite(B, cx, cy, R, rot, e, a, grow, opening && !e._held); return; }
+        if (B.ctx && !this._noSprite && !W) { this.roseSprite(B, cx, cy, R, rot, e, a, grow, opening && !e._held); return; } // (a dying rose changes every frame: drawn live)
 
         // Soft shadow the bloom casts onto the letter behind it (light from the upper left; fainter on a pale page)
         if ((e.cLayer != null ? e.cLayer : e.layer) === 1) {
@@ -3408,10 +3439,11 @@
         const petals = [];
         for (let i = 0; i < n; i++) {
           const k = i / (n - 1), q = 1 - k;
+          if (W && k <= 0.88 && W.x > 0.38 + 0.5 * k) continue; // (a dying rose lets its outer petals go first, and keeps only a dried heart)
           const o = Math.pow(open, 1 + 1.8 * k);
           const jit = this.h(e.id * 7.13 + i * 3.71) - 0.5;
           const phi = e.ph1 + i * GA + jit * 0.3;
-          const len = Rg * (1.1 - 0.3 * k + (-0.1 - 0.02 * k) * full) * (1 + jit * 0.08) * (0.75 + 0.25 * o);
+          const len = Rg * (1.1 - 0.3 * k + (-0.1 - 0.02 * k) * full) * (1 + jit * 0.08) * (0.75 + 0.25 * o) * (1 - 0.38 * shr * (0.6 + 0.4 * q));
           // Midrib lean from the axis at the base, waist and lip. Bud: a teardrop with tips curving in.
           // Half-open: an egg-shaped cup that swells out from a round base, rises upright, and opens
           // slightly at the lip (the outermost petal or two peel a little further away).
@@ -3425,8 +3457,9 @@
             const fB = 0.25 + 0.95 * Math.pow(q, 0.9), fM = 0.1 + 0.35 * Math.pow(q, 1.2), fT = 0.25 + 1.25 * Math.pow(q, 1.3) + peel + breathe * q;
             aB += (fB - aB) * full; aM += (fM - aM) * full; aT += (fT - aT) * full;
           }
-          const hwMax = 1.15 + 0.75 * Math.pow(k, 1.4) + (-0.15 + 0.05 * Math.pow(k, 1.4)) * full;
-          const roll = Rg * (0.17 + 0.08 * full) * o * Math.pow(q, 0.6);
+          if (W) { aT += shr * (0.35 + 0.65 * q) + jit * 0.9 * shr; aM += 0.3 * shr * q; aB += 0.2 * shr; } // (the petals lose their tension and flop outward, each its own way)
+          const hwMax = (1.15 + 0.75 * Math.pow(k, 1.4) + (-0.15 + 0.05 * Math.pow(k, 1.4)) * full) * (1 - 0.28 * shr);
+          const roll = Rg * (0.17 + 0.08 * full) * o * Math.pow(q, 0.6) * (1 + 2.6 * shr); // (the margins curl and crisp)
           const al = [], rr = [Rg * (0.08 + (0.05 * q - 0.04) * full)], zz = [Rg * (0.08 + 0.06 * full) * k];
           for (let j = 0; j <= M; j++) { const u = j / M; al.push(aB + (aM - aB) * smooth(0, 0.42, u) + (aT - aM) * smooth(0.62, 1, u)); }
           for (let j = 1; j <= M; j++) {
@@ -3470,12 +3503,13 @@
           const g0 = S2(p.pt(0, 0)), g1 = S2(p.pt(5, 0));
           B.fill(p.region(0, 5).map(S2), { x0: g0[0], y0: g0[1], x1: g1[0], y1: g1[1], stops: [[0, `rgba(${ink.base},${ink.baseA})`], [1, `rgba(${ink.base},0)`]] });
           if (R >= 6) B.stroke([...fullS, fullS[0]], `rgba(${ink.edge},${((0.4 - 0.28 * full) * ink.edgeA).toFixed(3)})`, lw * 0.4);
+          if (W && W.c > 0.12) B.stroke([...fullS, fullS[0]], `rgba(30,17,10,${(0.8 * W.c).toFixed(3)})`, lw * (0.5 + 0.9 * W.c)); // (burnt, brittle edges)
           // Light catching the rolled-back margin
           if (R >= 10) {
             const rim = [];
             for (let j = 6; j <= M; j++) rim.push(S2(p.pt(j, -1)));
             for (let j = M - 1; j >= 6; j--) rim.push(S2(p.pt(j, 1)));
-            B.stroke(rim, `rgba(${ink.rim},${Math.min(1, (0.05 + 0.4 * p.lTip * (1 - 0.75 * p.k * (1 - full)) + 0.12 * full) * ink.rimA).toFixed(3)})`, lw * (0.5 + 0.2 * full));
+            B.stroke(rim, `rgba(${ink.rim},${Math.min(1, (0.05 + 0.4 * p.lTip * (1 - 0.75 * p.k * (1 - full)) + 0.12 * full) * ink.rimA * (W ? 1 - 0.85 * W.c : 1)).toFixed(3)})`, lw * (0.5 + 0.2 * full));
           }
         }
 
@@ -3772,16 +3806,25 @@
           const k = Math.max(1, Math.ceil((b - sg.u0) / 0.18));
           for (let c = 0; c < k; c++) {
             const u0 = sg.u0 + (b - sg.u0) * c / k, u1 = sg.u0 + (b - sg.u0) * (c + 1) / k;
-            const w = stemW * (e.scar ? 1 : 1.25 - 0.6 * (u0 + u1) / 2);
+            let w = stemW * (e.scar ? 1 : 1.25 - 0.6 * (u0 + u1) / 2), bodyC = body, litC = lit, midK = midC;
+            if (this._drain && !e.scar) { // (a dying cane goes olive, then dead umber, and thins a little, piece by piece)
+              const xs = this._drain('stem', e, this.at(P, (u0 + u1) / 2)[0][1], (u0 + u1) / 2, l);
+              if (xs > 0) {
+                const dw = this.wither(xs);
+                bodyC = this.drain(body, dw.c, 'stem'); litC = this.drain(lit, dw.c, 'stemLit');
+                midK = `rgba(${this.drainRgb(mid, dw.c, 'stemMid').map(v => v | 0).join(',')},${done.toFixed(3)})`;
+                w *= 1 - 0.24 * dw.s;
+              }
+            }
             // Soft shadow cast onto the letter where the vine passes in front of it (light from the upper left)
             if (layer === 1 && done > 0) {
               this.strokeOffset(B, P, u0, u1, w * 0.7, w * 1.1, shA, w * 2.2);
               this.strokeOffset(B, P, u0, u1, w * 0.35, w * 0.55, shB, w * 1.4);
             }
             // Round stem: shaded body, a mid tone and a lit edge nudged toward the light
-            this.strokeRange(B, P, u0, u1, body, w);
-            if (w > 2.5 && done > 0) this.strokeOffset(B, P, u0, u1, -w * 0.12, -w * 0.15, midC, w * 0.62);
-            this.strokeOffset(B, P, u0, u1, -w * 0.24, -w * 0.3, lit, w * 0.2);
+            this.strokeRange(B, P, u0, u1, bodyC, w);
+            if (w > 2.5 && done > 0) this.strokeOffset(B, P, u0, u1, -w * 0.12, -w * 0.15, midK, w * 0.62);
+            this.strokeOffset(B, P, u0, u1, -w * 0.24, -w * 0.3, litC, w * 0.2);
           }
         }
         // the pale face of the cut at the end of a scar stub
@@ -3795,7 +3838,9 @@
         const thorns = this.getCustomizedThorns(e);
         for (const th of thorns) {
           if (fr > th.u && this.layerAt(e.segs, th.u) === layer && this.thornOn(e, th, bt)) {
+            if (this._drain && !e.scar) { const xt = this._drain('stem', e, this.at(P, th.u)[0][1], th.u, l); this._dry = xt > 0 ? this.wither(xt).c : 0; }
             this.thornCustomized(B, P, th, S, fr, e.id, e.w || 1);
+            this._dry = 0;
           }
         }
       }
@@ -3813,7 +3858,18 @@
             const sc = this.eo(la / 650) * kL;
             if (sc <= 0) return;
             const p = wx(e.x, e.y), sgn = e.bend < 0 ? -1 : 1, curl = ((1 - this.eo(la / 900)) * 1.8 + (1 - kL) * 1.6) * sgn;
-            this.leafCustomized(B, p[0], p[1], e.a + j[2] + rw + (1 - kL) * 0.5 * sgn, e.L * S * sc * this.cur().leaf, e.bend + curl);
+            let ang = e.a + j[2] + rw + (1 - kL) * 0.5 * sgn, size = e.L * S * sc * this.cur().leaf, bend = e.bend + curl;
+            if (this._collect && sc >= 1) this._collect.leaves[e.id] = { x: p[0], y: p[1], a: ang, L: size, bend, sgn };
+            if (this._drain) { // (a leaf yellows, browns, curls and shrinks as it dies, and some let go: see the poster's falling leaves)
+              const xl = this._drain('leaf', e, p[1], 1, l);
+              if (xl > 0) {
+                if (this._gone && this._gone(e, xl)) return;
+                const w = this.wither(xl), pose = this.leafPose(ang, size, bend, sgn, w);
+                ang = pose.a; size = pose.L; bend = pose.bend; this._dry = w.c; this._curl = w.s;
+              }
+            }
+            this.leafCustomized(B, p[0], p[1], ang, size, bend);
+            this._dry = 0; this._curl = 0;
             return;
           }
           const sc = this.spr((age - e.d0) / 1000, 7, 15) * kk;
@@ -3825,7 +3881,8 @@
           const a0 = this._vine && e.stem ? (age - this.vineCross(e.stem, e.su != null ? e.su : 1)) * this._G - (e.lag || 0) : age - e.d0;
           if (a0 < 0) return;
           // (an ambient rose holds at its own point of opening, cap)
-          const a = e.bloom ? this.bloomAge(e, a0, this._now) : e.cap != null ? Math.min(a0, e.cap) : a0;
+          let a = e.bloom ? this.bloomAge(e, a0, this._now) : e.cap != null ? Math.min(a0, e.cap) : a0;
+          if (st.bloomAge) a = st.bloomAge(e, a, a0);
           e._held = e.bloom ? this.bloomFrozen(e, a0) : e.cap != null && a0 >= e.cap;
           if (wilt != null) kk = 1 - this.eo(Math.min(1, wilt / 0.45));
           if (kk <= 0.001) return;
@@ -3842,18 +3899,23 @@
             aim += Math.atan2(Math.sin(delta), Math.cos(delta)) * 0.85;
           }
           // a wilting rose shrinks a little and droops toward the ground on whichever side it leans
-          const kw = wilt != null ? 0.55 + 0.45 * kk : kk, droop = wilt != null ? (1 - kk) * 0.9 * (aim < 0 ? -1 : 1) : 0;
+          let wd = null;
+          if (this._drain) { const xr = this._drain('rose', e, p[1], 1, l); if (xr > 0) wd = this.wither(xr); } // (a dying rose bows its head over its stem)
+          const kw = wilt != null ? 0.55 + 0.45 * kk : kk, droop = wilt != null ? (1 - kk) * 0.9 * (aim < 0 ? -1 : 1) : wd ? this.witherBow(e, aim, wd) : 0;
           // the bloom's centre, wherever the rose points
           const Rp = this.roseR(e) * S * kw * sz * this.roseRelief(e), ang = aim + rw + droop, up = Rp * (e.stage === 'full' ? 0.3 : e.stage === 'bud' ? 0.35 : 0.5);
           const bx = p[0] + Math.sin(ang) * up, by = p[1] - Math.cos(ang) * up;
           const bs = e.bloom ? this.bloomState(e, a) : null;
           if (this._blooms && kk === 1 && a > 700) this._blooms[e.id] = { x: bx, y: by, R: Rp, stage: e.stage, full: bs ? bs.full : 0 };
+          if (this._collect && !wd && kk === 1 && a > 700) this._collect.roses[e.id] = { px: p[0], py: p[1], aim, bx, by, R: Rp, stage: e.stage };
           // updateFlies aims at (x + 0.05R, y - 0.55R), which assumes an upright bloom; hand it the real bloom centre.
           // Every visible live rose can receive the butterfly called by a click.
           if ((st.face || st.perchOn) && !l.dead && a > 700) this.perch.push({ id: e.id, x: bx - Rp * 0.05, y: by + Rp * 0.55, R: Rp });
           const g = wilt != null && B.ctx;
           if (g) { B.ctx.save(); B.ctx.globalAlpha *= kk; }
+          this._wd = wd;
           this.roseCustomized(B, p[0], p[1], Rp, aim + droop + j[2] + rw + (tl ? tl[0] * 0.22 : 0), e, a, tl);
+          this._wd = null;
           if (g) B.ctx.restore();
         }
       }
@@ -3948,7 +4010,7 @@
           }
         }
         sp.lastA = a;
-        const k = R / sp.R * grow, sway = this.reduced ? 0 : 0.025 * Math.sin((this._now || 0) / 1000 * 0.9 + e.ph1);
+        const k = R / sp.R * grow, sway = this.reduced ? 0 : 0.025 * Math.sin((this._swayT ?? this._now ?? 0) / 1000 * 0.9 + e.ph1); // (_swayT: a scripted stage's own sway clock)
         g.save();
         g.translate(cx, cy); g.rotate(rot + sway); g.scale(k, k);
         g.drawImage(stamp, sp.x0, sp.y0, sp.w, sp.h);
@@ -3984,7 +4046,7 @@
       // letter does. Its colour and material are the appearance's (see ICHOR); a splash keeps the effect it was made with.
       biteRose(id, now) {
         const bites = this.bites || (this.bites = {});
-        if (id != null && !bites[id]) bites[id] = { t: now, next: now + 250, n: 0, max: Math.max(1, Math.round((4 + Math.floor(Math.random() * 3)) * this.fx().amount)) };
+        if (id != null && !bites[id]) bites[id] = { t: now, next: now + 250, n: 0, max: Math.max(1, Math.round((4 + Math.floor(this.rnd() * 3)) * this.fx().amount)) };
       }
       // The bleeding effect in use (a preset's, or the visitor's own; see setBleed), and the one a splash was made with
       fx() { return this.bloodFx || this.BLEEDS[0].fx; }
@@ -4038,9 +4100,9 @@
           const rad = bl.R * (bl.stage === 'full' ? 0.62 : bl.stage === 'bud' ? 0.3 : 0.48), edge = ox => Math.sqrt(Math.max(0, rad * rad - ox * ox)) * 0.92;
           const aims = [];
           for (let k = 0; k <= 8; k++) { const ax = (k / 8 - 0.5) * 1.2 * rad; if (this.inkBelow(bl.x + ax, bl.y + edge(ax), S, L)) aims.push(ax); }
-          const ox = aims.length ? aims[Math.floor(Math.random() * aims.length)] : (Math.random() - 0.5) * 1.2 * rad;
-          drops.push({ st: 'bead', id, ox, oy: edge(ox), r: S * (0.015 + Math.random() * 0.008), t: 0, hold: 0.6 + Math.random() * 0.5, x: bl.x + ox, y: bl.y, vx: 0, vy: 0 });
-          b.n++; b.next = now + 700 + Math.random() * 900;
+          const ox = aims.length ? aims[Math.floor(this.rnd() * aims.length)] : (this.rnd() - 0.5) * 1.2 * rad;
+          drops.push({ st: 'bead', id, ox, oy: edge(ox), r: S * (0.015 + this.rnd() * 0.008), t: 0, hold: 0.6 + this.rnd() * 0.5, x: bl.x + ox, y: bl.y, vx: 0, vy: 0 });
+          b.n++; b.next = now + 700 + this.rnd() * 900;
         }
         const grav = S * 4.2;
         for (let i = drops.length - 1; i >= 0; i--) {
@@ -4058,7 +4120,7 @@
             const st = d.stain, l = st && st.l;
             if (l && !l.dead && d.vy > 0 && d.t > 0.06) {
               const lx = (d.x - l.x) / S, ly = (d.y - l.y) / S;
-              if (this.inkAt(l.ch, lx, ly)) { st.specks.push({ x: lx, y: ly, s: d.r / S, a: Math.atan2(d.vy, d.vx), e: 1.2 + Math.random() * 0.8 }); drops.splice(i, 1); continue; }
+              if (this.inkAt(l.ch, lx, ly)) { st.specks.push({ x: lx, y: ly, s: d.r / S, a: Math.atan2(d.vy, d.vx), e: 1.2 + this.rnd() * 0.8 }); drops.splice(i, 1); continue; }
             }
             if (d.t > (d.life || 0.45)) drops.splice(i, 1);
             continue;
@@ -4078,7 +4140,7 @@
             if (hit) { d.x = hx; d.y = hy; }
           }
           if (hit) {
-            const st = this.addStain(hit, d.r / S * (2.0 + Math.random() * 0.7), now);
+            const st = this.addStain(hit, d.r / S * (2.0 + this.rnd() * 0.7), now);
             this.splashSpray(d, st, S);
             drops.splice(i, 1);
           } else if (d.y > (this.H || 2000) + 30) drops.splice(i, 1);
@@ -4117,19 +4179,19 @@
           if (ch) dx = ch.dx;
           const y1 = this.inkEnd(hit.l.ch, hit.lx + dx, hit.ly);
           if (y1 - hit.ly > 0.02) {
-            const run = { dx, w, y1, len: 0, v: 0.035 + Math.random() * 0.03, wob: (Math.random() - 0.5) * 0.02 * f, bead: 0, dropped: false };
+            const run = { dx, w, y1, len: 0, v: 0.035 + this.rnd() * 0.03, wob: (this.rnd() - 0.5) * 0.02 * f, bead: 0, dropped: false };
             if (ch) run.wob = ch.wob;
             runs.push(run);
           }
         };
         const T = fx.trails;
-        if (T >= 1 || Math.random() < T) trail(0, r * 0.5 * fx.thick);
+        if (T >= 1 || this.rnd() < T) trail(0, r * 0.5 * fx.thick);
         for (let k = 1, side = 0; k < 4 && T > k; k++) {
-          if (T - k < 1 && !(Math.random() < T - k)) break;
-          side = side ? -side : Math.random() < 0.5 ? -1 : 1;
-          trail(side * r * (0.9 + Math.random() * 0.5) * (k > 2 ? 1.7 : 1), r * 0.3 * fx.thick);
+          if (T - k < 1 && !(this.rnd() < T - k)) break;
+          side = side ? -side : this.rnd() < 0.5 ? -1 : 1;
+          trail(side * r * (0.9 + this.rnd() * 0.5) * (k > 2 ? 1.7 : 1), r * 0.3 * fx.thick);
         }
-        const st = { l: hit.l, lx: hit.lx, ly: hit.ly, r: r * fx.splatSize, born: now, seed: Math.random() * 100, runs, done: !runs.length, doneT: now, fx };
+        const st = { l: hit.l, lx: hit.lx, ly: hit.ly, r: r * fx.splatSize, born: now, seed: this.rnd() * 100, runs, done: !runs.length, doneT: now, fx };
         stains.push(st);
         return st;
       }
@@ -4172,7 +4234,7 @@
       }
       splashSprayLegacy(d, st, S) {
         const fx = this.stFx(st), drops = this.drops || (this.drops = []);
-        for (let k = 0, n = Math.round(4 * fx.splat); k < n; k++) drops.push({ st: 'spray', x: d.x, y: d.y, vx: (Math.random() - 0.5) * S * 1.2, vy: -S * (0.3 + Math.random() * 0.6), r: d.r * (0.2 + Math.random() * 0.2) * fx.splatSize, t: 0 });
+        for (let k = 0, n = Math.round(4 * fx.splat); k < n; k++) drops.push({ st: 'spray', x: d.x, y: d.y, vx: (this.rnd() - 0.5) * S * 1.2, vy: -S * (0.3 + this.rnd() * 0.6), r: d.r * (0.2 + this.rnd() * 0.2) * fx.splatSize, t: 0 });
       }
       // The colour of legacy blood dry by `dry` (0 to 1), for the dried look in use: none (0), the dried colour (1), or darker
       // still (up to 2), when it also fades
@@ -4249,7 +4311,7 @@
       addStainFluid(hit, r, now) {
         const fx = this.fx(), l = hit.l, ch = l.ch, others = this.stains.filter(s => s.l === l), crowded = Math.min(1, this.wetCover(l, others) / (0.3 * fx.amount));
         r *= 1 - 0.55 * crowded;
-        const seed = Math.random() * 100, rnd = this.rng(Math.floor(seed * 7919) + 3);
+        const seed = this.rnd() * 100, rnd = this.rng(Math.floor(seed * 7919) + 3);
         const st = { l, lx: hit.lx, ly: hit.ly, r: r * fx.splatSize, born: now, seed, runs: [], specks: [], lobes: null, done: false, doneT: now, fx };
         st.lobes = this.splashLobes(ch, st, rnd);
         // satellite droplets: a few, of very different sizes, the farther the finer and the more drawn out along their flight
@@ -4496,11 +4558,11 @@
       // The splash's spray: a few droplets of very different sizes (mostly fine, now and then a large one), the fine ones
       // flung faster; those that come back down on the letter leave specks
       splashSprayFluid(d, st, S) {
-        const fx = this.stFx(st), n = Math.round((2 + Math.floor(Math.random() * 6)) * fx.splat);
+        const fx = this.stFx(st), n = Math.round((2 + Math.floor(this.rnd() * 6)) * fx.splat);
         for (let k = 0; k < n; k++) {
-          const big = Math.random() ** 3, size = d.r * (0.08 + 0.42 * big) * fx.splatSize, speed = S * (0.5 + 1.3 * (1 - big)) * (0.6 + Math.random() * 0.6);
-          const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.6;
-          (this.drops || (this.drops = [])).push({ st: 'spray', x: d.x, y: d.y, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed * 0.75, r: size, t: 0, life: 0.25 + Math.random() * 0.45, stain: st });
+          const big = this.rnd() ** 3, size = d.r * (0.08 + 0.42 * big) * fx.splatSize, speed = S * (0.5 + 1.3 * (1 - big)) * (0.6 + this.rnd() * 0.6);
+          const a = -Math.PI / 2 + (this.rnd() - 0.5) * 2.6;
+          (this.drops || (this.drops = [])).push({ st: 'spray', x: d.x, y: d.y, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed * 0.75, r: size, t: 0, life: 0.25 + this.rnd() * 0.45, stain: st });
         }
       }
       // The beads hanging off the letter's edges (drawn without the glyph mask): a pendant drop on a neck
@@ -4574,7 +4636,7 @@
           const px = g.getImageData(0, 0, nx, ny).data, ink = new Float32Array(n), A = () => new Float32Array(n);
           for (let i = 0; i < n; i++) ink[i] = px[i * 4 + 3] / 255;
           f = l._soak = { ch: l.ch, RES, SUB: Math.max(1, Math.min(3, Math.round((this.Sd || 200) * (this.dpr || 1) / RES / 1.6))), ox, oy, nx, ny, n, ink, w: A(), pm: A(), pb: A(), film: A(), ever: A(), sat: A(), dw: A(), dp: A(),
-            seed: seed != null ? seed : Math.floor(Math.random() * 1e6), mat: null, box: null, done: true, ver: 0, dep: 0 };
+            seed: seed != null ? seed : Math.floor(this.rnd() * 1e6), mat: null, box: null, done: true, ver: 0, dep: 0 };
         }
         this.soakWake(f);
         if (f.mat !== M) {
@@ -4613,7 +4675,7 @@
         f.box = box; f.done = !box && !f.beads.some(b => !b.dried); f.ver++; f.dirty = [0, 0, f.nx - 1, f.ny - 1];
         // (what its splashes still on the move have given is in the field already: only what reaches further arrives)
         const live = (this.stains || []).filter(st => st.l === l && st.mat && !st.sunk);
-        if (live.length) this.soakDeposit(f, l, live, performance.now(), true);
+        if (live.length) this.soakDeposit(f, l, live, this.clock(), true);
       }
       // The material's structure in a letter (its own, from the letter's seed): how much each cell holds (cap), how easily
       // liquid crosses to its neighbours to the right, below, below right and below left (kh, kv, kd, ka: through ink only;
@@ -4826,8 +4888,8 @@
         }
         // (calm once its front has stopped spreading and little moves: then it settles in single steps; new film stirs it)
         const grew = !f.box || bx0 < f.box[0] || by0 < f.box[1] || bx1 > f.box[2] || by1 > f.box[3];
-        if (grew || f.stir) f.grewAt = performance.now();
-        f.calm = performance.now() - (f.grewAt || 0) > 800 && f.most < 0.4;
+        if (grew || f.stir) f.grewAt = this.clock();
+        f.calm = this.clock() - (f.grewAt || 0) > 800 && f.most < 0.4;
         f.stir = false;
         f.box = bx1 >= 0 ? [bx0, by0, bx1, by1] : null;
         f.filmAny = filmAny;
@@ -4840,7 +4902,7 @@
       // it hangs, and if it's heavy enough it lets go and falls (onto a letter below, if there is one). Small beads stay put
       // and dry where they are, into dark dots. Positions are in the letter's cells (see soakField).
       beadTick(f, dt, l, S) {
-        const M = f.mat, { nx, ny, film, pb, ink } = f, beads = f.beads || (f.beads = []), take = Math.min(1, dt * 3 / M.gather), now = performance.now();
+        const M = f.mat, { nx, ny, film, pb, ink } = f, beads = f.beads || (f.beads = []), take = Math.min(1, dt * 3 / M.gather), now = this.clock();
         // the film gathers into beads
         if (f.box) {
           const [x0, y0, x1, y1] = f.box;
@@ -4940,7 +5002,7 @@
       // dried, a pale ring, and the line where it stopped. Only the part that can have changed is painted again. And the film
       // still on the surface (a pixel a cell), as a mask for the effect's own painting of it.
       soakPaint(f) {
-        const T = this.theme(), I = T.blood, F = this.fx(), look = `${T.text}|${F.aged}`, now = performance.now();
+        const T = this.theme(), I = T.blood, F = this.fx(), look = `${T.text}|${F.aged}`, now = this.clock();
         if (f.painted === f.ver && f.paintedLook === look && f.paintedBlood === I) return;
         // (liquid in paper changes slowly: painted 20 times a second while it spreads, 7 once it's only drying)
         if (f.cv && f.paintedLook === look && f.paintedBlood === I && !f.done && now - f.paintedAt < (f.calm ? 150 : 50)) return;
@@ -5192,27 +5254,32 @@
           p.y += p.vy * dt;
           p.rot += p.spin * dt; p.flip += p.fs * dt;
           if (p.t > p.life || p.y > (this.H || 2000) + 60) { F.splice(i, 1); continue; }
-          const fade = Math.min(1, p.t / 0.4, (p.life - p.t) / 1.5), fl = Math.cos(p.flip), sx = Math.max(0.12, Math.abs(fl));
-          const cr = Math.cos(p.rot + Math.sin(p.t * p.sw + p.ph) * 0.5), sr = Math.sin(p.rot + Math.sin(p.t * p.sw + p.ph) * 0.5);
-          // Broad rose petal: a short claw widening into two rounded lobes with a shallow notch between them
-          const Lp = p.s, Wp = p.s * 0.95, N = 8, left = [], right = [], top = [];
-          for (let k = 0; k <= N; k++) {
-            const u = k / N * 0.78, hw = Wp / 2 * (0.22 + 0.78 * Math.sin(Math.min(1, u / 0.6) * Math.PI / 2));
-            left.push([-hw, Lp / 2 - u * Lp]); right.push([hw, Lp / 2 - u * Lp]);
-          }
-          const yT = Lp / 2 - 0.78 * Lp;
-          for (let k = 1; k < 12; k++) {
-            const t = k / 12;
-            top.push([-Wp / 2 * Math.cos(Math.PI * t), yT - 0.22 * Lp * Math.sin(Math.PI * t) + 0.07 * Lp * Math.exp(-Math.pow((t - 0.5) / 0.09, 2))]);
-          }
-          const tr = q => { const x = q[0] * sx; return [p.x + x * cr - q[1] * sr, p.y + x * sr + q[1] * cr]; };
-          const poly = [...left, ...top, ...right.reverse()].map(tr), b0 = tr([0, Lp / 2]), b1 = tr([0, -Lp / 2]);
-          const ink = p.rose ? this.roseInk(p.rose) : this.theme().ink.primary, l = 0.55 + 0.45 * Math.abs(fl), c = ink.petal[fl > 0 ? 0 : 1];
-          const col = m => `rgba(${(c[0] * l * m) | 0},${(c[1] * l * m) | 0},${(c[2] * l * m) | 0},${fade.toFixed(3)})`;
-          B.fill(poly, { x0: b0[0], y0: b0[1], x1: b1[0], y1: b1[1], stops: [[0, col(0.45)], [0.55, col(0.95)], [1, col(1.1)]] });
-          // the curled upper rim catching the light
-          B.stroke(top.map(tr), `rgba(${ink.petalRim},${(0.4 * fade * Math.abs(fl)).toFixed(3)})`, Math.max(0.6, Lp * 0.035));
+          this.drawPetal(B, p, Math.min(1, p.t / 0.4, (p.life - p.t) / 1.5));
         }
+      }
+      // One petal (p: where and how it is, p.s its size, p.t its age, p.rose the rose it came from), faded to `fade`
+      drawPetal(B, p, fade) {
+        const fl = Math.cos(p.flip), sx = Math.max(0.12, Math.abs(fl)), dd = p.dead || 0; // (p.dead: how dry and dark it is)
+        const cr = Math.cos(p.rot + Math.sin(p.t * p.sw + p.ph) * 0.5), sr = Math.sin(p.rot + Math.sin(p.t * p.sw + p.ph) * 0.5);
+        // Broad rose petal: a short claw widening into two rounded lobes with a shallow notch between them
+        const Lp = p.s, Wp = p.s * (0.95 - 0.38 * dd), N = 8, left = [], right = [], top = []; // (a dry petal is narrower: it has curled)
+        for (let k = 0; k <= N; k++) {
+          const u = k / N * 0.78, hw = Wp / 2 * (0.22 + 0.78 * Math.sin(Math.min(1, u / 0.6) * Math.PI / 2));
+          left.push([-hw, Lp / 2 - u * Lp]); right.push([hw, Lp / 2 - u * Lp]);
+        }
+        const yT = Lp / 2 - 0.78 * Lp;
+        for (let k = 1; k < 12; k++) {
+          const t = k / 12;
+          top.push([-Wp / 2 * Math.cos(Math.PI * t), yT - 0.22 * Lp * Math.sin(Math.PI * t) + 0.07 * Lp * Math.exp(-Math.pow((t - 0.5) / 0.09, 2))]);
+        }
+        const tr = q => { const x = q[0] * sx; return [p.x + x * cr - q[1] * sr, p.y + x * sr + q[1] * cr]; };
+        const poly = [...left, ...top, ...right.reverse()].map(tr), b0 = tr([0, Lp / 2]), b1 = tr([0, -Lp / 2]);
+        const ink = p.rose ? this.roseInk(p.rose) : this.theme().ink.primary, l = 0.55 + 0.45 * Math.abs(fl);
+        const c = ink.petal[fl > 0 ? 0 : 1].map((v, i) => v + (this.DEADROSE[1][i] - v) * dd), rimRgb = dd ? ink.petalRim.split(',').map((v, i) => (+v + (this.DEADROSE[2][i] - +v) * dd) | 0).join(',') : ink.petalRim;
+        const col = m => `rgba(${(c[0] * l * m) | 0},${(c[1] * l * m) | 0},${(c[2] * l * m) | 0},${fade.toFixed(3)})`;
+        B.fill(poly, { x0: b0[0], y0: b0[1], x1: b1[0], y1: b1[1], stops: [[0, col(0.45)], [0.55, col(0.95)], [1, col(1.1)]] });
+        // the curled upper rim catching the light
+        B.stroke(top.map(tr), `rgba(${rimRgb},${(0.4 * fade * Math.abs(fl) * (1 - 0.7 * dd)).toFixed(3)})`, Math.max(0.6, Lp * 0.035));
       }
 
       // Depth of field (canvas only): a couple of big out-of-focus petals drift past in front of everything,
@@ -5321,17 +5388,41 @@
         B.ctx.save(); B.ctx.setTransform(1, 0, 0, 1, 0, 0); B.ctx.drawImage(layer.cv, 0, 0); B.ctx.restore();
       }
 
+      // Count the roses still opening (the sprite scheduler shares pose updates among them); vine mode also lets each earned
+      // bloom gather its cluster here
+      openingRoses(L, st, now, sp) {
+        let opening = 0;
+        for (const l of L) if (l.ch !== ' ' && l.els) {
+          const age = (now - l.birth) * sp / this._G;
+          for (const list of this.letterLists(l, st.vine)) for (const e0 of list) {
+            if (e0.t !== 'rose') continue;
+            const e = st.vine ? this.vineShown(e0, list) : e0;
+            if (!e || e.t !== 'rose') continue;
+            const a0 = st.vine && e.stem ? (age - this.vineCross(e.stem, e.su ?? 1)) * this._G - (e.lag || 0) : age - e.d0;
+            if (a0 < 0) continue;
+            let a = e.bloom ? this.bloomAge(e, a0, now) : e.cap != null ? Math.min(a0, e.cap) : a0;
+            if (st.bloomAge) a = st.bloomAge(e, a, a0);
+            if (st.vine && e.bloom && !e.cluster && !l.dead) this.growCluster(l, e, a, age);
+            if (this.bloomState(e, a).opening && !(e.bloom ? this.bloomFrozen(e, a0) : e.cap != null && a0 >= e.cap)) opening++;
+          }
+        }
+        return opening;
+      }
+
       renderCustomized(B, now, st) {
         const S = st.S, L = st.letters, act = L.filter(l => !l.dead), sp = st.speed || 1;
         this._now = now; this._wp = null; this._tint = 0;
+        this._drain = st.drain || null; this._gone = st.gone || null; this._collect = st.collect || null; this._dry = 0; this._curl = 0; this._wd = null; // (a scripted stage's withering: see wither)
         this._sprLimit = 4; this._sprBudget = this._sprLimit; this._plantBudget = 2; this._throttle = !this.state.busy; this._blooms = st.vine ? {} : null;
         // Carry waiting flowers into the next frame in arrival order, so late letters also get pose updates.
         this._sprPending = this._sprPending || new Set();
         this._sprTurns = new Set([...this._sprPending].slice(0, this._sprBudget));
         for (const id of this._sprTurns) this._sprPending.delete(id);
+        // (st.scripted: a stage clocked from outside, the poster: its blood, soaking and petals are stepped and drawn by the stage
+        // itself, so none of the live simulations run here; st.bloodFade fades the blood and what it has soaked into the letters)
         if (st.vine) {
-          this.petalFall = this.petalFall || [];
-          this._dt = Math.min(0.05, Math.max(0, (now - (this._pfT || now)) / 1000)); this._pfT = now; this._S = S;
+          if (!st.scripted) this.petalFall = this.petalFall || [];
+          this._dt = st.scripted ? 0 : Math.min(0.05, Math.max(0, (now - (this._pfT || now)) / 1000)); this._pfT = now; this._S = S;
           this._frameNo = (this._frameNo || 0) + 1; this._bk = 1 - Math.exp(-this._dt * 4.5); // (plants whose botanicals changed ease in or out: see vineShown)
         }
         // Vine choreography: growth runs on a slower clock (G), and leaves and roses wait for the vine tip to reach them
@@ -5358,22 +5449,7 @@
           if (l.markEls === undefined) this.genMarks(l);
           if (l.bloom && l.bloomEls === undefined) this.genBloom(l);
         }
-        // Count the roses still opening (the sprite scheduler shares pose updates among them); vine mode also lets each earned
-        // bloom gather its cluster here
-        this._openingRoses = 0;
-        for (const l of L) if (l.ch !== ' ' && l.els) {
-          const age = (now - l.birth) * sp / this._G;
-          for (const list of this.letterLists(l, st.vine)) for (const e0 of list) {
-            if (e0.t !== 'rose') continue;
-            const e = st.vine ? this.vineShown(e0, list) : e0;
-            if (!e || e.t !== 'rose') continue;
-            const a0 = st.vine && e.stem ? (age - this.vineCross(e.stem, e.su ?? 1)) * this._G - (e.lag || 0) : age - e.d0;
-            if (a0 < 0) continue;
-            const a = e.bloom ? this.bloomAge(e, a0, now) : e.cap != null ? Math.min(a0, e.cap) : a0;
-            if (st.vine && e.bloom && !e.cluster && !l.dead) this.growCluster(l, e, a, age);
-            if (this.bloomState(e, a).opening && !(e.bloom ? this.bloomFrozen(e, a0) : e.cap != null && a0 >= e.cap)) this._openingRoses++;
-          }
-        }
+        this._openingRoses = this.openingRoses(L, st, now, sp);
 
         if (st.vine) this.separateRoses(L, S);
 
@@ -5398,7 +5474,7 @@
             };
             const each = (e0, _, arr) => { const e = st.vine ? this.vineShown(e0, arr) : e0; if (e) draw(e, arr); };
             const lists = this.letterLists(l, st.vine);
-            if (roses || !(st.vine && target.ctx && kk === 1 && l.endDead == null && !amp && !(now < l._easeUntil) && this.plantSettled(l, age) && this.stampPlants(target, l, layer, lists, age, st))) {
+            if (roses || !(st.vine && target.ctx && kk === 1 && l.endDead == null && !amp && !st.warp && !st.drain && !(now < l._easeUntil) && this.plantSettled(l, age) && this.stampPlants(target, l, layer, lists, age, st))) {
               for (const list of lists) list.forEach(each);
             }
             const i = act.indexOf(l), nx = i >= 0 ? act[i + 1] : null;
@@ -5426,7 +5502,7 @@
           for (let k = 0; k < 40; k++) { const t = k / 40 * Math.PI * 2; ring.push([mx + Math.cos(t) * rad * 1.02, my + Math.sin(t) * rad * 1.02]); }
           B.fill(ring, { x0: mx, y0: my, r0: 0, x1: mx, y1: my, r1: rad, stops: [[0, look.glow[0]], [0.5, look.glow[1]], [1, look.glow[2]]] });
         }
-        if (st.vine && B.ctx) { this.dofUpdate(S, this._dt); this.dofDraw(B, S, false); }
+        if (st.vine && B.ctx && !st.scripted) { this.dofUpdate(S, this._dt); this.dofDraw(B, S, false); }
 
         // Global foliage and bloom passes keep even neighboring letters' stems below the rose heads.
         drawCustom(0, false);
@@ -5443,14 +5519,26 @@
           }
         }
 
-        if (st.vine && B.ctx) this.drawLetterStains(B.ctx, now, S);
+        if (st.vine && B.ctx) this.withFade(B.ctx, st.bloodFade, g => this.drawLetterStains(g, now, S));
 
         // Rear bloom alpha cuts holes in late foliage; foreground blooms then cover every remaining plant.
         this.drawFrontPlants(B, rearRoses, target => drawCustom(1, false, target));
         drawCustom(1, true);
-        if (st.vine && B.ctx) { this.bloodStep(now, this._dt, S, L); this.soakStep(now, this._dt, S, L); this.drawBloodFront(B.ctx, now, S); }
-        if (st.vine) this.drawFallingPetals(B, this._dt);
-        if (st.vine && B.ctx) this.dofDraw(B, S, true);
+        if (st.vine && B.ctx) {
+          if (!st.scripted) { this.bloodStep(now, this._dt, S, L); this.soakStep(now, this._dt, S, L); }
+          this.withFade(B.ctx, st.bloodFade, g => this.drawBloodFront(g, now, S));
+        }
+        if (st.vine && !st.scripted) this.drawFallingPetals(B, this._dt);
+        if (st.vine && B.ctx && !st.scripted) this.dofDraw(B, S, true);
+      }
+
+      // Draw something through a layer faded to `fade` (1 or none: straight onto the canvas, exactly as it always is; 0: not at all)
+      withFade(g, fade, draw) {
+        if (fade == null || fade >= 1) return draw(g);
+        if (fade <= 0.004) return;
+        const layer = this.frameLayer('_bloodLayer', g);
+        draw(layer.cg);
+        g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = fade; g.drawImage(layer.cv, 0, 0); g.restore();
       }
 
       drawCaret(B, now, col) {
@@ -5461,25 +5549,25 @@
         }
       }
 
-      renderPosterTreatment(B, timeVal, st) {
-        const treatment = this.state.treatment || 'customized';
-        if (treatment === 'baseline') {
-          this.render(B, timeVal, st);
-        } else {
-          const stCustom = {
-            ...st,
-            C: { red: '#C41A30', blue: '#1C4528', line: '#F07082', text: '#FFFFFF', vein: '#000000' }
-          };
-          this.renderCustomized(B, timeVal, stCustom);
-        }
-      }
-
       // ---------- Poster Mode Engine ----------
-      preset() { return this.PRESETS.find(p => p.id === this.state.preset) || this.PRESETS[0]; }
+      // The poster is a second stage running the same renderer as the type view, so it shows the real garden in the visitor's
+      // own look, material, botanicals, typeface and blood. A stage is an object that inherits everything from the app (the
+      // theme and all the settings) and owns all of its own state: its letters, stains, drops and bites, the rose spacing, its
+      // canvas size. Nothing is swapped in or out, so the type view cannot be disturbed by it.
+      //
+      // The poster's words are written into the stage the way the type view writes them (the same words grow the same garden,
+      // paused between words so a bud sprouts on each), and every motion is then a script of where it is in its loop: how far
+      // each letter has grown, how open each bloom is, the sway, the petals, the butterfly. Plants, blooms, sway, petals and the
+      // butterfly are pure functions of that position, so any moment can be drawn directly and the end of a loop is its start.
+      // Only the bleeding needs a simulation: it is stepped in fixed steps (a seeded random source, a clock of its own) from the
+      // start of the loop, and a seek just steps again, so a frame comes out the same however it was reached.
+      motion() { return this.MOTIONS.find(m => m.id === this.state.motion) || this.MOTIONS[0]; }
 
-      buildPoster() {
-        if (!this.pcv) return;
-        const s = this.state, pr = this.preset(), text = (s.text || '').slice(0, 40) || ' ';
+      // The opening text's garden is grown on the random stream this leaves behind. It always has been (the poster's own letters were
+      // grown on that stream first, and the page's opening composition follows them), so the page opens with the very same garden on
+      // every load; the letters made here are not kept
+      seedOpening() {
+        const s = this.state, text = (s.text || '').slice(0, 40) || ' ';
         this.rand = this.rng(s.seed * 7919 + 1);
         const L = []; let prev = null, uid = 1;
         for (const ch of text) {
@@ -5488,224 +5576,489 @@
           const l = { ch, id: 9000 + uid++, ws: same ? prev.ws : Math.floor(this.rand() * 1e9), wi: same ? prev.wi + 1 : 0, prev: same ? prev : null };
           this.gen(l); L.push(l); prev = l;
         }
+        L.forEach((l, i) => { const nx = L[i + 1]; if (l.ch !== ' ' && (!nx || nx.ch === ' ')) this.genEnd(l, 0); });
+      }
 
-        // Generate end flourishes for word ends
-        L.forEach((l, i) => {
-          const nx = L[i + 1];
-          if (l.ch !== ' ' && (!nx || nx.ch === ' ')) {
-            this.genEnd(l, 0);
-          }
-        });
-
-        const res = this.layoutCore(L, 1080, 1080, false);
-        L.forEach(l => {
-          l.x = l.tx;
-          l.y = l.ty;
-          l.birth = 0;
-          l.tb = 0;
-        });
-
-        if (this.posterLetters) this.releaseLetters(this.posterLetters);
-        this.posterLetters = L;
-        this.posterS = res.S;
+      buildPoster() {
+        if (!this.pcv) return;
+        const s = this.state;
+        this.seedOpening();
+        if (this.stage) { this.stage.stageRelease(); this.stage = null; }
+        if (s.mode !== 'poster' || !this.fontsReady) return; // (grown when the poster is opened, and once the typeface is ready: see init)
+        this.stage = this.makeStage((s.text || '').slice(0, 40) || ' ', s.seed);
         this.pt0 = performance.now();
       }
 
-      posterDraw(g, elapsed) {
-        const pal = this.pal();
-        const isCustom = this.state.treatment === 'customized';
+      makeStage(text, seed) {
+        const st = Object.create(this);
+        Object.assign(st, {
+          isStage: true, W: this.POSTER.size, H: this.POSTER.size, dpr: 1, Sd: 0, St: 0, cx: this.POSTER.size / 2, cy: this.POSTER.size / 2, wrapped: false,
+          letters: [], _cuts: {}, flies: [], perch: [], fa: {}, mx: null, my: null,
+          stains: [], drops: [], bites: {}, petalFall: null, dof: null, _dofSeeded: false, _dofSpr: null, _blooms: {},
+          _roseKey: null, _bentStems: new Map(), _bentEls: new Set(), _roseFrame: 0, _roseSk: 0, _glow: null, _band: null,
+          _sprPending: new Set(), _sprTurns: new Set(), _frameNo: 0, _pfT: undefined,
+          _roseLayer: null, _foliageLayer: null, _stainLayer: null, _bloodLayer: null, _soakRaster: null,
+          _openBloom: null, _pace: undefined, _keyAt: undefined, _sproutFor: undefined, _visitAt: null,
+          fill: 0.9, _salt: String(seed), _simNow: this.POSTER.t0, anchors: {}, roseEl: {}, biteId: null, sim: null,
+          theme: () => this.theme(), bots: () => this.bots(), bot0: () => this.bot0()
+        });
+        st._clock = () => st._simNow;
+        st._seed32 = Math.imul(Math.floor(seed) | 0, 2654435761) ^ 0x9E3779B9;
+        st.stageWrite(text);
+        st.stagePrepare();
+        return st;
+      }
+
+      stageRelease() { this.releaseLetters(this.letters); }
+
+      // The words, written as the type view writes them: an even hand, a pause after each word long enough for a bud to sprout
+      stageWrite(text) {
+        let t = 0;
+        for (const ch of text) {
+          t += ch === ' ' ? 1500 : 170;
+          this.add(ch, t, this.keyEvent(t));
+        }
+        this.checkSprout(t + 1500);
+        this.layout(true);
+        for (const l of this.letters) {
+          if (l.ch === ' ' || !l.els) continue;
+          l.x = l.tx; l.y = l.ty; l.cut = null; // (no tendril recoil: the garden is not being written now)
+        }
+      }
+      // A letter's birth moved to b, with its bud's record (which is told relative to it) and its tendrils' clock going with it
+      stageBirth(l, b) {
+        const d = b - l.birth;
+        if (!d) return;
+        l.birth = b; l.tb += d;
+        if (l.bloom) { l.bloom.at += d; if (l.bloom.end != null) l.bloom.end += d; }
+      }
+      // Every letter aged by fn(letter, index) real ms at time now
+      stageAges(now, fn) {
+        let i = 0;
+        for (const l of this.letters) if (l.ch !== ' ' && l.els) this.stageBirth(l, now - fn(l, i++));
+      }
+
+      // One frame of the garden through the real renderer. extra: what the motion sets (sway, bloom ages, the blood's fade)
+      stageRender(B, now, extra) {
+        this._vine = true; this._G = 1.6; this._simNow = now; this.perch = [];
+        const st = {
+          letters: this.letters, S: this.St, C: { red: '#C41A30', blue: '#1C4528', line: '#F07082', text: '#FFFFFF', vein: '#000000' },
+          boil: false, recoil: 20, speed: 1, wither: this.REC.wither, face: false, customized: true, vine: true, scripted: true, ...extra
+        };
+        this.renderCustomized(B, now, st);
+      }
+
+      // Everything a motion needs, got once the garden is written: the lazily grown parts and the rose spacing settled, the
+      // earned blooms' clusters grown as they grow in the type view, and where every open bloom is (for the petals and the
+      // butterfly), by drawing the garden once fully grown and open
+      stagePrepare() {
+        const g = this.pcv.getContext('2d'), B = this.backend(g), now = this.POSTER.t0, open = { bloomAge: () => 5900 };
+        this.stageAges(now, () => this.POSTER.age);
         g.setTransform(1, 0, 0, 1, 0, 0);
-        g.fillStyle = isCustom ? this.theme().bg : pal.bg;
-        g.fillRect(0, 0, 1080, 1080);
+        this.stageRender(B, now, open); // (the coils, marks and buds a pause sprouted are grown here, and the roses placed)
+        // the garden centred on the poster: it reaches higher above the words than below them
+        const S = this.St;
+        let top = Infinity, bottom = -Infinity;
+        for (const l of this.letters) if (l.ch !== ' ') { top = Math.min(top, l.y - S * 0.8); bottom = Math.max(bottom, l.y + S * 0.3); }
+        for (const id in this._blooms) { const r = this._blooms[id]; top = Math.min(top, r.y - r.R * 1.3); bottom = Math.max(bottom, r.y + r.R * 0.8); }
+        const dy = Math.round(this.H / 2 - (top + bottom) / 2);
+        this.bounds = { top: top + dy, bottom: bottom + dy }; // (the garden's height on the poster: the withering works down it)
+        for (const l of this.letters) { l.y += dy; l.ty += dy; }
+        for (let a = 0; a <= this.POSTER.age; a += 50) { // (the clusters an earned bloom gathers as the stillness goes on)
+          this.stageAges(now, () => a);
+          this.openingRoses(this.letters, { vine: true }, now, 1);
+        }
+        this.stageAges(now, () => this.POSTER.age);
+        this.stageRender(B, now, open);
+        this.collect = { leaves: {}, roses: {} }; // (where each leaf and rose is when whole, for the ones that fall)
+        this.stageRender(B, now, { ...open, collect: this.collect });
+        this.anchors = {}; this.roseEl = {};
+        for (const id in this._blooms) this.anchors[id] = { ...this._blooms[id] };
+        for (const l of this.letters) if (l.ch !== ' ' && l.els) for (const list of this.letterLists(l, true)) for (const e of list) if (e.t === 'rose') this.roseEl[e.id] = e;
+        // the rose the butterfly will feed on: an open bloom with a letter below it, near the middle of the garden
+        const mid = this.W / 2;
+        let best = null, bs = -Infinity;
+        for (const id in this.anchors) {
+          const r = this.anchors[id];
+          if (r.stage === 'bud') continue;
+          const score = (this.inkBelow(r.x, r.y - r.R * 0.1, S, this.letters) ? 1000 : 0) + r.R - Math.abs(r.x - mid) * 0.35 - Math.abs(r.y - (this.H / 2 - S * 0.6)) * 0.2;
+          if (score > bs) { bs = score; best = id; }
+        }
+        this.biteId = best;
+        this.stageFrames();
+        this.stageReset();
+      }
 
-        const B = this.backend(g);
-        const pr = this.preset();
-        const duration = pr.T;
-        const u = (elapsed % duration) / duration;
-        const S = this.posterS;
+      // The bleeding, back to the start of its loop
+      stageReset() {
+        this.stains.length = 0; this.drops.length = 0; this.bites = {};
+        for (const l of this.letters) {
+          l._soak = null;
+          if (l._stainCache) { this.freeBitmap(l._stainCache.cv); l._stainCache = null; }
+        }
+        this._rnd = this.rng(this._seed32);
+        this.sim = { t: 0, bit: false };
+      }
+      // The bleeding stepped to loop time t (ms), in steps of 1/60 s of its own time (it runs m.clock times as fast as the loop)
+      stageSeek(m, t) {
+        if (!this.sim || t < this.sim.t - 1e-6) this.stageReset();
+        const sim = this.sim, dt = 1000 / 60 / m.clock;
+        while (sim.t + dt <= t + 1e-6) {
+          sim.t += dt;
+          const now = this.POSTER.t0 + sim.t * m.clock;
+          this._simNow = now; this._blooms = this.anchors;
+          if (!sim.bit && this.biteId != null && sim.t >= m.bite * m.T) {
+            sim.bit = true; this.biteRose(this.biteId, now);
+            const bite = this.bites[this.biteId];
+            if (bite) bite.max = Math.round(bite.max * 1.8); // (the poster's bite is a bigger event than a visitor's, in whatever amount the effect bleeds)
+          }
+          this.bloodStep(now, 1 / 60, this.St, this.letters);
+          this.soakStep(now, 1 / 60, this.St, this.letters);
+        }
+      }
 
-        if (pr.id === 'breathe') {
-          const ph = u * Math.PI * 2;
-          const st = {
-            letters: this.posterLetters,
-            S,
-            C: pal.C,
-            boil: true,
-            recoil: 20,
-            speed: 1,
-            wither: 260,
-            face: false,
+      // The poster at loop time t (ms) in motion m, onto a drawing backend (a canvas's, or the SVG export's)
+      stageScene(B, t, m) {
+        const fr = this._fr = this.stageFrame(m), u = t / m.T, now = this.POSTER.t0 + t * m.clock, sc = this['script' + m.id[0].toUpperCase() + m.id.slice(1)](u, t, now, m);
+        // (the frame fits the garden to the poster, and a camera moves within it: the point of the framed poster that is at its
+        // middle, and how much it is magnified; canvas transforms, so everything stays sharp: the vector export wraps its own)
+        this._swayT = u * Math.max(1, Math.round(m.T / 1000 * 0.9 / (2 * Math.PI))) * 2 * Math.PI / 0.9 * 1000; // (the roses' sway goes round a whole number of times in a loop)
+        const g = B.ctx, cam = g && sc.cam;
+        if (g) {
+          g.save();
+          if (cam) { g.translate(this.W / 2, this.H / 2); g.scale(cam.z, cam.z); g.translate(-cam.x, -cam.y); }
+          g.translate(this.W / 2, this.H / 2); g.scale(fr.f, fr.f); g.translate(-fr.x, -fr.y);
+        }
+        this.stageRender(B, now, sc.st);
+        if (sc.after) sc.after(B);
+        if (g) g.restore();
+      }
+
+      // ---- The frame. The garden grows past the words (vines reach out beyond them, blooms hang above them), and the words fill most of
+      // the poster, so left as it grew it spills out of the frame. Each motion is shown through a frame that holds all of the garden
+      // the motion ever shows (at its fullest, and at the furthest the motion takes it: a bowed rose, a leaning vine), with a margin
+      // clear, and its middle at the poster's middle: { f: how much it is scaled (never magnified), x, y: the scene point at the middle }
+      stageFrames() {
+        const open = { bloomAge: () => 5900 };
+        this.stageAges(this.POSTER.t0, () => this.POSTER.age);
+        const rest = this.stageReach(open), by = {};
+        for (const m of this.MOTIONS) {
+          let box = rest;
+          for (const st of this.stageExtremes(m)) box = this.stageUnion(box, this.stageReach({ ...open, ...st }));
+          by[m.id] = this.stageFit(box, m.push);
+        }
+        this._frames = { key: this.frameKey(), by };
+      }
+      // What the garden looks like to the frame: it is fitted again when the garden's reach changes (the botanicals, the typeface)
+      frameKey() { return JSON.stringify(this.appearance && this.appearance.botanical) + '|' + this.F + '|' + this.FW; }
+      stageFrame(m) {
+        if (!this._frames || this._frames.key !== this.frameKey()) this.stageFrames();
+        return this._frames.by[m.id] || this.stageFit(null);
+      }
+      // The furthest each motion takes the garden, as renderer options to measure it in
+      stageExtremes(m) {
+        if (m.id === 'wither') return [0.5, 1].map(x => ({ drain: () => x, gone: () => false }));
+        if (m.id === 'gust') return [{ warp: (x, y, l) => this.gustWarp(x, y, l, 1, 0.2, 0) }];
+        return [];
+      }
+      // The box everything the renderer draws lies in, got from the geometry it hands a backend that draws nothing (the soft glow behind
+      // the garden is light, not garden), or null if it draws nothing
+      stageReach(extra) {
+        const box = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+        const add = (x, y, pad = 0) => {
+          if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+          box.x0 = Math.min(box.x0, x - pad); box.x1 = Math.max(box.x1, x + pad); box.y0 = Math.min(box.y0, y - pad); box.y1 = Math.max(box.y1, y + pad);
+        };
+        const M = {
+          rearRoses: draw => { draw(M); return 'reach'; },
+          behindRoses: (roses, draw) => draw(M),
+          fill: (p, col) => { if (p && !(col && typeof col !== 'string' && col.r1 != null)) for (const q of p) add(q[0], q[1]); },
+          stroke: (p, col, w) => { if (p) for (const q of p) add(q[0], q[1], w / 2); },
+          rect: (x, y, w, h) => { add(x, y); add(x + w, y + h); },
+          text: (ch, x, y, S) => { const hw = this.mw(ch) * S / 2; add(x - hw, y - S * 0.75); add(x + hw, y + S * 0.25); }
+        };
+        this.stageRender(M, this.POSTER.t0, extra);
+        return box.x0 <= box.x1 ? box : null;
+      }
+      stageUnion(a, b) {
+        if (!a || !b) return a || b;
+        return { x0: Math.min(a.x0, b.x0), y0: Math.min(a.y0, b.y0), x1: Math.max(a.x1, b.x1), y1: Math.max(a.y1, b.y1) };
+      }
+      // The frame that holds a box inside the poster with its margin clear: scaled no smaller than 0.6 (the words stay readable) and
+      // moved no further than it has to be (a garden that already fits stays where the words were set, in the middle). A motion that
+      // pushes a camera in (by push) has the box held at the closest the camera comes
+      stageFit(box, push = 1) {
+        const S = this.POSTER.size, room = S * (1 - 2 * this.POSTER.margin);
+        if (!box) return { f: 1, x: S / 2, y: S / 2 };
+        const f = Math.max(0.6, Math.min(1, room / ((box.x1 - box.x0) * push), room / ((box.y1 - box.y0) * push)));
+        const m = S * this.POSTER.margin / (f * push), half = S / 2 / (f * push), at = (lo, hi) => Math.min(Math.max(S / 2, hi - half + m), lo + half - m); // (the middle, as near the poster's as the box allows)
+        const x = at(box.x0, box.x1), y = at(box.y0, box.y1), to = (v, c) => S / 2 + (v - c) * f;
+        return { f, x, y, view: { x0: to(box.x0, x), x1: to(box.x1, x), y0: to(box.y0, y), y1: to(box.y1, y) } }; // (view: where the garden is on the framed poster)
+      }
+      // The part of the scene the poster shows (before a camera moves in), in scene coordinates; and where a scene point is on the framed poster
+      stageWindow() {
+        const fr = this._fr || { f: 1, x: this.W / 2, y: this.H / 2 }, hw = this.W / 2 / fr.f, hh = this.H / 2 / fr.f;
+        return { x0: fr.x - hw, x1: fr.x + hw, y0: fr.y - hh, y1: fr.y + hh };
+      }
+      stageToView(x, y) {
+        const fr = this._fr || { f: 1, x: this.W / 2, y: this.H / 2 };
+        return [this.W / 2 + (x - fr.x) * fr.f, this.H / 2 + (y - fr.y) * fr.f];
+      }
+      stageDraw(g, t, m) {
+        m = m || this.motion();
+        t = Math.max(0, Math.min(m.T - 1e-3, t));
+        if (m.bite != null) this.stageSeek(m, t);
+        g.setTransform(1, 0, 0, 1, 0, 0);
+        g.fillStyle = this.theme().bg;
+        g.fillRect(0, 0, this.POSTER.size, this.POSTER.size);
+        this.stageScene(this.backend(g), t, m);
+      }
+
+      // A few frames at the start of a loop drawn and thrown away, so that everything cached (the settled plants' bitmaps, the roses'
+      // sprites) is in the state it is in for the rest of the loop and the very first frame of an export matches the others
+      stageWarm(g, m) {
+        for (let i = 0; i < 12; i++) this.stageDraw(g, 0, m);
+      }
+
+      // How far a loop has got along a profile that rises over `up`, holds for `hold`, falls over `down` and rests for the rest
+      sweep(x, up, hold, down) { return x < up ? x / up : x < up + hold ? 1 : x < up + hold + down ? 1 - (x - up - hold) / down : 0; }
+
+      // ---- the motions. Each takes the loop's position u (0..1), its time t (ms) and the clock now, grows or ages the garden to
+      // suit, and returns what the renderer is to be told (st) and what to draw on top of it (after)
+      // Breathe: the garden at rest, swaying a little, one slow breath to the loop
+      scriptBreathe(u, t, now) {
+        const S = this.St, ph = u * Math.PI * 2;
+        this.stageAges(now, () => this.POSTER.age);
+        return {
+          st: {
             warp: (x, y, l) => {
-              const hh = Math.max(0, (l.y - y) / S);
-              return [
-                x + Math.sin(ph) * S * 0.045 * hh,
-                y + Math.cos(ph * 2) * S * 0.015 * hh
-              ];
+              const hh = Math.max(0, (l.y - y) / S), w = ph + l.id * 0.37;
+              return [x + (Math.sin(w) * 0.8 + Math.sin(2 * ph + l.id * 0.91) * 0.2) * S * 0.034 * hh, y + Math.cos(2 * ph + l.id * 0.53) * S * 0.008 * hh];
             },
-            rotw: e => Math.sin(ph + e.id * 0.7) * 0.09
-          };
-          this.renderPosterTreatment(B, 10000 + elapsed, st);
-        } else if (pr.id === 'grow') {
-          let k = u < 0.48 ? this.eo(u / 0.46) : 1 - this.eo((u - 0.54) / 0.46);
-          k = Math.max(0, Math.min(1, k));
-          const vAge = k * 3500;
-          const letters = this.posterLetters.map(l => ({
-            ...l,
-            birth: 10000 - vAge,
-            tb: 10000 - vAge,
-            dead: k < 0.01 ? 10000 : null
-          }));
-          const st = {
-            letters,
-            S,
-            C: pal.C,
-            boil: true,
-            recoil: 20,
-            speed: 1,
-            wither: 260,
-            face: false
-          };
-          this.renderPosterTreatment(B, 10000, st);
-        } else if (pr.id === 'typed') {
-          const n = this.posterLetters.length;
-          const typeEnd = 0.72;
-          const pauseEnd = 0.88;
-          let count = u < typeEnd ? Math.floor((u / typeEnd) * (n + 1)) : n;
-          const isWithering = u >= pauseEnd;
-          const letters = this.posterLetters.slice(0, Math.min(n, count)).map((l, i) => {
-            const appearU = (i / n) * typeEnd;
-            const letterAge = u >= appearU ? (u - appearU) * duration : 0;
-            return {
-              ...l,
-              birth: 10000 - letterAge,
-              tb: 10000 - letterAge,
-              dead: isWithering ? (10000 - (u - pauseEnd) * duration) : null
-            };
-          });
-          const st = {
-            letters,
-            S,
-            C: pal.C,
-            boil: true,
-            recoil: 20,
-            speed: 1,
-            wither: 500,
-            face: false
-          };
-          this.renderPosterTreatment(B, 10000, st);
-        } else if (pr.id === 'wind') {
-          const gustX = -200 + u * 1480;
-          const st = {
-            letters: this.posterLetters,
-            S,
-            C: pal.C,
-            boil: true,
-            recoil: 20,
-            speed: 1,
-            wither: 260,
-            face: false,
-            warp: (x, y, l) => {
-              const hh = Math.max(0, (l.y - y) / S);
-              const dist = (x - gustX) / (S * 1.5);
-              const gust = Math.exp(-dist * dist * 1.2);
-              const flutter = Math.sin(elapsed * 0.03 + l.id) * 0.12;
-              return [
-                x + (gust * 0.32 + gust * flutter) * S * hh,
-                y + (gust * 0.1 * Math.sin(elapsed * 0.025)) * S * hh
-              ];
-            },
-            rotw: e => Math.sin(elapsed * 0.02 + e.id) * 0.14
-          };
-          this.renderPosterTreatment(B, 10000 + elapsed, st);
-        } else if (pr.id === 'reach') {
-          const ang = u * Math.PI * 2;
-          const lx = 540 + Math.cos(ang) * 360;
-          const ly = 460 + Math.sin(ang * 2) * 240;
-          const oldMx = this.mx, oldMy = this.my;
-          this.mx = lx; this.my = ly;
-          const st = {
-            letters: this.posterLetters,
-            S,
-            C: pal.C,
-            boil: true,
-            recoil: 20,
-            speed: 1,
-            wither: 260,
-            face: true
-          };
-          this.renderPosterTreatment(B, 10000 + elapsed, st);
-          const glow = g.createRadialGradient(lx, ly, 0, lx, ly, 24);
-          glow.addColorStop(0, pal.C.line + 'bb');
-          glow.addColorStop(1, pal.C.line + '00');
-          g.fillStyle = glow;
-          g.beginPath();
-          g.arc(lx, ly, 24, 0, Math.PI * 2);
-          g.fill();
-          this.mx = oldMx; this.my = oldMy;
-        } else if (pr.id === 'scatter') {
-          const letters = this.posterLetters.map(l => {
-            const off = this.h(l.id * 11.37);
-            const lu = (u + off) % 1;
-            const k = lu < 0.48 ? this.eo(lu / 0.48) : 1 - this.eo((lu - 0.52) / 0.48);
-            const clampedK = Math.max(0, Math.min(1, k));
-            const vAge = clampedK * 3200;
-            return {
-              ...l,
-              birth: 10000 - vAge,
-              tb: 10000 - vAge,
-              dead: clampedK < 0.01 ? 10000 : null
-            };
-          });
-          const st = {
-            letters,
-            S,
-            C: pal.C,
-            boil: true,
-            recoil: 20,
-            speed: 1,
-            wither: 260,
-            face: false
-          };
-          this.renderPosterTreatment(B, 10000, st);
-        } else if (pr.id === 'visit') {
-          const st = {
-            letters: this.posterLetters,
-            S,
-            C: pal.C,
-            boil: true,
-            recoil: 20,
-            speed: 1,
-            wither: 260,
-            face: false,
-            perchOn: true
-          };
-          this.renderPosterTreatment(B, 10000 + elapsed, st);
-          if (this.perch.length > 0) {
-            const p = this.perch[this.perch.length - 1];
-            const sz = Math.max(14, S * 0.11);
-            let bx, by, ang = 0, open = 1;
-            if (u < 0.24) {
-              const f = u / 0.24;
-              bx = -60 + (p.x - (-60)) * this.eo(f);
-              by = 80 + (p.y - 0.55 * p.R - 80) * this.eo(f) + Math.sin(f * 12) * 18;
-              ang = 0.2 * Math.sin(f * 8);
-              open = Math.abs(Math.cos(f * 18));
-            } else if (u < 0.72) {
-              const f = (u - 0.24) / 0.48;
-              bx = p.x + p.R * 0.05;
-              by = p.y - p.R * 0.55;
-              ang = 0.04 * Math.sin(f * 5);
-              open = 0.22 + 0.65 * Math.abs(Math.cos(f * 14));
-            } else {
-              const f = (u - 0.72) / 0.28;
-              bx = (p.x + p.R * 0.05) + (1160 - (p.x + p.R * 0.05)) * (f * f);
-              by = (p.y - p.R * 0.55) - 320 * f + Math.sin(f * 14) * 16;
-              ang = 0.25 + 0.1 * Math.sin(f * 6);
-              open = Math.abs(Math.cos(f * 20));
-            }
-            this.butterfly(B, bx, by, sz, ang, open, pal.C);
+            rotw: e => Math.sin(ph + e.id * 0.7) * 0.06
+          }
+        };
+      }
+      // Creep: the vines grow over the words, a little behind one another along them, and draw back
+      scriptCreep(u, t, now) {
+        const n = this.letters.filter(l => l.ch !== ' ' && l.els).length;
+        this.stageAges(now, (l, i) => this.POSTER.age * this.sweep((((u - 0.34 * i / Math.max(1, n - 1)) % 1) + 1) % 1, 0.5, 0.12, 0.28));
+        return { st: {} };
+      }
+      // Bloom & fall: every bloom opens from a bud, holds, lets its petals go to drift down, and folds closed again
+      scriptBloom(u, t, now) {
+        const T = 12, k = Math.max(0.5, this.St / 200);
+        this.stageAges(now, () => this.POSTER.age);
+        const phase = e => (u + this.h(e.id * 3.1) * 0.3) % 1;
+        return {
+          st: { bloomAge: e => 1500 + 4400 * this.sweep(phase(e), 0.34, 0.34, 0.26) },
+          after: B => this.stagePetals(B, u, T, k)
+        };
+      }
+      // Wither: the life is drawn out of the garden. It is whole, and then the drain works down it from the blooms to the foot of the
+      // words: each rose bows its head, shrivels, curls and darkens and lets its petals go, each leaf yellows, browns, curls and some
+      // let go, and the green drains out of the vines into dead umber and ash, until only the drained structure is left. It holds,
+      // then draws back (dead) and grows again (alive), so the loop closes
+      scriptWither(u, t, now, m) {
+        this.stageAges(now, (l, i) => { l._wu = ((u - 0.012 * i) % 1 + 1) % 1; return this.POSTER.age * this.witherLife(l._wu); });
+        return {
+          st: { drain: (kind, e, y, _u, l) => this.witherX(kind, e, y, l._wu), gone: (e, x) => this.leafLetGo(e, x) },
+          after: B => this.stageDeadFall(B, u, m.T / 1000)
+        };
+      }
+      // How much of the garden there is at loop position u: all of it until 0.8, drawn back (dead) to nothing by 0.86, grown again to the end
+      witherLife(u) { return u < 0.8 ? 1 : u < 0.86 ? 1 - this.eio((u - 0.8) / 0.06) : 1 - Math.pow(1 - (u - 0.86) / 0.14, 1.6); }
+      // When a thing starts to die and how long it takes, from where it is on the poster (y): the top first, the stems a little after
+      // the blooms and leaves they carry
+      witherTiming(kind, e, y) {
+        const b = this.bounds, dy = Math.max(0, Math.min(1, (y - b.top) / (b.bottom - b.top)));
+        return { start: 0.04 + 0.3 * dy + (kind === 'stem' ? 0.05 : 0) + this.h(e.id * 7.7) * 0.03, span: kind === 'rose' ? 0.2 : kind === 'leaf' ? 0.22 : 0.3 };
+      }
+      // How far gone a thing is at loop position u (0 alive .. 1 dead): dead while the garden draws back, alive again as it grows back
+      witherX(kind, e, y, u) {
+        if (u >= 0.86) return 0;
+        if (u >= 0.8) return 1;
+        const w = this.witherTiming(kind, e, y);
+        return Math.max(0, Math.min(1, (u - w.start) / w.span));
+      }
+      // About seven leaves in ten let go once they are dry, each at its own moment; the rest cling
+      leafLetGo(e, x) { return this.h(e.id * 3.3) < 0.7 && x >= this.leafLetGoAt(e); }
+      leafLetGoAt(e) { return 0.9 + 0.08 * this.h(e.id * 8.1); }
+
+      // What falls from the dying: the petals a rose sheds (dark, dry and brittle) and the dry leaves that let go, each from where
+      // and when it let go, so any moment can be drawn on its own and the loop closes. T: the loop in seconds
+      stageDeadFall(B, u, T) {
+        const k = Math.max(0.5, this.St / 200), c = this.collect, ease = x => Math.max(0, Math.min(1, x));
+        for (const id in c.roses) {
+          const rec = c.roses[id], e = this.roseEl[id];
+          if (!e || rec.stage === 'bud') continue;
+          const tm = this.witherTiming('rose', e, rec.py), n = rec.stage === 'full' ? 8 : 5, up = Math.hypot(rec.bx - rec.px, rec.by - rec.py);
+          for (let j = 0; j < n; j++) {
+            const r = this.rng(Math.floor(e.id * 977) + j * 131), xr = 0.38 + 0.5 * (j / (n - 1)) * 0.88;
+            const s = (((u - (tm.start + tm.span * xr)) % 1) + 1) % 1 * T, life = 4.6 + r() * 1.6;
+            if (s > life) continue;
+            const w = this.wither(xr), ang = rec.aim + this.witherBow(e, rec.aim, w), head = 1 - 0.42 * w.s;
+            const sw = 0.9 + r() * 0.7, ph = r() * 6.28, amp = (10 + r() * 12) * k, term = (28 + r() * 16) * k, vx = (r() - 0.5) * 10 * k;
+            this.drawPetal(B, {
+              x: rec.px + Math.sin(ang) * up + (r() - 0.5) * rec.R * 0.5 * head + vx * s + amp * (Math.cos(ph) - Math.cos(s * sw + ph)) / sw,
+              y: rec.py - Math.cos(ang) * up + rec.R * 0.1 + term * (s - (1 - Math.exp(-1.5 * s)) / 1.5),
+              s: rec.R * (0.4 + r() * 0.14) * head, t: s, sw, ph, rot: r() * 6.28 + (r() - 0.5) * 1.4 * s, flip: r() * 6.28 + (1 + r()) * s, rose: e, dead: 0.85 + 0.15 * xr
+            }, Math.min(1, s / 0.3, (life - s) / 1.4));
           }
         }
+        for (const id in c.leaves) {
+          const rec = c.leaves[id], e = { id: +id };
+          if (this.h(e.id * 3.3) >= 0.7) continue;
+          const tm = this.witherTiming('leaf', e, rec.y), r = this.rng(Math.floor(e.id * 613) + 5);
+          const s = (((u - (tm.start + tm.span * this.leafLetGoAt(e))) % 1) + 1) % 1 * T, life = 5 + r() * 1.5;
+          if (s > life) continue;
+          const pose = this.leafPose(rec.a, rec.L, rec.bend, rec.sgn, this.wither(1)), sw = 0.8 + r() * 0.6, ph = r() * 6.28, amp = (22 + r() * 20) * k, term = (34 + r() * 18) * k, spin = (r() - 0.5) * 1.3;
+          const x = rec.x + (r() - 0.5) * 8 * k * s + amp * (Math.cos(ph) - Math.cos(s * sw + ph)) / sw, y = rec.y + term * (s - (1 - Math.exp(-1.5 * s)) / 1.5);
+          const g = B.ctx, fade = ease((life - s) / 1.4);
+          if (g) { g.save(); g.globalAlpha *= fade; }
+          this._dry = 1; this._curl = 1;
+          this.leafCustomized(B, x, y, pose.a + spin * s + Math.sin(s * sw + ph) * 0.7, pose.L, pose.bend);
+          this._dry = 0; this._curl = 0;
+          if (g) g.restore();
+        }
+      }
+
+      // Gust: a wind sweeps along the words from one side to the other, bending the vines and leaves before it and tearing the
+      // petals off every bloom it passes to blow them across the poster. It starts and ends calm, so the loop closes
+      scriptGust(u, t, now) {
+        const S = this.St, W = this.W, ease = x => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
+        const front = this.gustFront(u), strength = ease((u - 0.04) / 0.1) * (1 - ease((u - 0.7) / 0.12));
+        this.stageAges(now, () => this.POSTER.age);
+        const wind = x => { const d = (x - front) / (S * 1.6); return strength * Math.exp(-d * d * 1.1); };
+        return {
+          st: {
+            warp: (x, y, l) => this.gustWarp(x, y, l, wind(x), Math.sin(u * Math.PI * 2 * 9 + l.id * 1.3 + y * 0.02) * 0.2, Math.cos(u * Math.PI * 2 * 7 + l.id)),
+            rotw: e => Math.sin(u * Math.PI * 2 + e.id) * 0.04
+          },
+          after: B => this.stageBlownPetals(B, u, 9, Math.max(0.5, S / 200))
+        };
+      }
+      // Where the wind, blowing at strength g (0..1), carries a point of the garden: the vines lean over before it, the more the higher they
+      // stand above the words (flutter: how it gusts, bob: how it lifts)
+      gustWarp(x, y, l, g, flutter, bob) {
+        const S = this.St, hh = Math.max(0, (l.y - y) / S);
+        return [x + g * (0.34 + g * flutter) * S * hh, y - g * 0.06 * S * hh * hh + bob * g * 0.02 * S * hh];
+      }
+      // Where the gust's front is (across the poster) at loop position u: it comes in from beyond the left edge and leaves beyond the right
+      gustFront(u) { return (-0.5 + 2 * Math.max(0, Math.min(1, (u - 0.06) / 0.68))) * this.W; }
+      // Petals torn off by the gust as it passes each open bloom, blown the way it blows and settling as the wind dies
+      stageBlownPetals(B, u, T, k) {
+        for (const id in this.anchors) {
+          const rec = this.anchors[id], e = this.roseEl[id];
+          if (!e || rec.stage === 'bud') continue;
+          const passed = 0.06 + 0.68 * ((rec.x / this.W + 0.5) / 2);
+          for (let j = 0; j < (rec.stage === 'full' ? 5 : 3); j++) {
+            const r = this.rng(Math.floor(e.id * 613) + j * 97), s = (((u - passed - r() * 0.04) % 1) + 1) % 1 * T, life = 3.2 + r() * 1.2;
+            if (s > life) continue;
+            const v = (520 + r() * 420) * k, ph = r() * 6.28, sw = 1.8 + r() * 1.4, amp = (30 + r() * 30) * k;
+            const spin = (r() - 0.5) * 7, flip = r() * 6.28, fs = 3 + r() * 3, rot = r() * 6.28, size = rec.R * (0.5 + r() * 0.2);
+            this.drawPetal(B, {
+              x: rec.x + (r() - 0.5) * rec.R * 0.4 + v * (1 - Math.exp(-1.1 * s)) / 1.1,
+              y: rec.y + (60 + r() * 60) * k * s * 0.5 - 70 * k * (1 - Math.exp(-2.5 * s)) + Math.sin(s * sw + ph) * amp * 0.5,
+              s: size, t: s, sw, ph, rot: rot + spin * s, flip: flip + fs * s, rose: e
+            }, Math.min(1, s / 0.25, (life - s) / 1.0));
+          }
+        }
+      }
+
+      // Bite: the black butterfly comes to a bloom, feeds, and goes; the blood runs, soaks or beads as the letters are made to,
+      // dries, and fades away before the loop begins again
+      scriptBite(u, t, now, m) {
+        this.stageAges(now, () => this.POSTER.age);
+        return {
+          cam: this.stageCamera(u, m),
+          st: { bloodFade: u < 0.8 ? 1 : Math.max(0, 1 - (u - 0.8) / 0.15) },
+          after: B => {
+            const b = this.bfly(u, m);
+            if (!b) return;
+            this.stageHalo(B, b.x, b.y, b.s * 2.8);
+            this.butterflyNoir(B, b.x, b.y, b.s, b.ang, b.open, b.perched);
+          }
+        };
+      }
+
+      // The Bite camera: it pushes in toward the bloom as the butterfly lands, drifts down to where the blood runs, and draws back out
+      // as the blood dries away, so the loop ends where it began
+      // It is restrained (m.push: a few per cent), and the motion's frame is wide enough for it, so the garden is still all in view when
+      // the camera is closest; it moves no further than keeps it so
+      stageCamera(u, m) {
+        const a = this.anchors[this.biteId];
+        if (!a) return null;
+        const S = this.St, W = this.W, H = this.H, ease = x => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
+        const w = ease((u - 0.06) / 0.26) * (1 - ease((u - 0.8) / 0.17));
+        if (w <= 0) return { z: 1, x: W / 2, y: H / 2 };
+        const V = this._fr && this._fr.view, z = 1 + ((m || this.MOTIONS.find(x => x.bite != null)).push - 1) * w;
+        const down = ease((u - 0.3) / 0.35), [fx, fy] = this.stageToView(a.x, a.y + S * 0.62 * down);
+        const pan = (c, lo, hi, half) => hi - half > lo + half ? (lo + hi) / 2 : Math.min(Math.max(c, hi - half), lo + half); // (the centre that keeps lo..hi in view)
+        let x = W / 2 + (fx - W / 2) * w, y = H / 2 + (fy - H / 2) * w;
+        if (V) { x = pan(x, V.x0, V.x1, W / 2 / z); y = pan(y, V.y0, V.y1, H / 2 / z); }
+        return { z, x, y };
+      }
+
+      // A soft pool of the rose's own light behind the visitor, so a black butterfly reads on a dark page (a pale page needs none)
+      stageHalo(B, x, y, r) {
+        const T = this.theme();
+        if (T.light) return;
+        const c = T.ink.primary.face[2].map(v => Math.round(v)).join(',');
+        const ring = []; for (let k = 0; k < 28; k++) { const a = k / 28 * Math.PI * 2; ring.push([x + Math.cos(a) * r, y + Math.sin(a) * r]); }
+        B.fill(ring, { x0: x, y0: y, r0: 0, x1: x, y1: y, r1: r, stops: [[0, `rgba(${c},0.34)`], [0.55, `rgba(${c},0.12)`], [1, `rgba(${c},0)`]] });
+      }
+
+      // Petals let go by the open blooms, falling the way the type view's do (a petal's path is worked out from the moment it let
+      // go, so any frame can be drawn on its own) but a little faster, since a loop has seconds to show it. T: the loop in seconds
+      stagePetals(B, u, T, k) {
+        for (const id in this.anchors) {
+          const rec = this.anchors[id], e = this.roseEl[id];
+          if (!e || rec.stage === 'bud') continue;
+          const n = rec.stage === 'full' ? 4 : 2;
+          for (let j = 0; j < n; j++) {
+            const r = this.rng(Math.floor(e.id * 977) + j * 131), start = 0.36 + r() * 0.2;
+            const s = (((u - start) % 1) + 1) % 1 * T, life = 5.2 + r() * 1.4, sw = 0.9 + r() * 0.7, ph = r() * 6.28, amp = (14 + r() * 16) * k;
+            if (s > life) continue;
+            const term = (34 + r() * 18) * k, vx = (r() - 0.5) * 12 * k, x0 = rec.x + (r() - 0.5) * rec.R * 0.4, y0 = rec.y, size = rec.R * (0.55 + r() * 0.18);
+            const rot = r() * 6.28, spin = (r() - 0.5) * 1.6, flip = r() * 6.28, fs = 1.4 + r() * 1.4;
+            this.drawPetal(B, {
+              x: x0 + vx * s + amp * (Math.cos(ph) - Math.cos(s * sw + ph)) / sw, y: y0 + term * (s - (1 - Math.exp(-1.5 * s)) / 1.5),
+              s: size, t: s, sw, ph, rot: rot + spin * s, flip: flip + fs * s, rose: e
+            }, Math.min(1, s / 0.4, (life - s) / 1.5));
+          }
+        }
+      }
+
+      // The butterfly's place in the Bite loop (u: how far along): it flies in to the bloom, rests on it, bites (m.bite) and flies
+      // away to the nearer side. The same wing beat and tilt as the type view's visitor
+      bfly(u, m) {
+        const id = this.biteId, a = id != null && this.anchors[id];
+        if (!a) return null;
+        const W = this.W, S = this.St, tx = a.x, ty = a.y, left = tx < W / 2, T = m.T / 1000, t = u * T, V = this.stageWindow();
+        const IN = [0.04, 0.2], OUT = [0.36, 0.48], ease = x => this.eo(Math.max(0, Math.min(1, x)));
+        const bez = (p0, p1, p2, p3, f) => { const g = 1 - f; return [g * g * g * p0[0] + 3 * g * g * f * p1[0] + 3 * g * f * f * p2[0] + f * f * f * p3[0], g * g * g * p0[1] + 3 * g * g * f * p1[1] + 3 * g * f * f * p2[1] + f * f * f * p3[1]]; };
+        const from = [left ? V.x1 + W * 0.08 : V.x0 - W * 0.08, V.y0 - S * 0.3], pose = (f, p0, p1, p2, p3) => {
+          const e = ease(f), p = bez(p0, p1, p2, p3, e), q = bez(p0, p1, p2, p3, Math.min(1, e + 0.02)), flut = Math.sin(f * 11) * S * 0.05 * (1 - e);
+          return { x: p[0] + flut, y: p[1], ang: Math.max(-0.5, Math.min(0.5, (q[0] - p[0]) * 1.4)), open: Math.abs(Math.cos(f * 22 + 1)), perched: false };
+        };
+        const sz = S * 0.21; // (the visitor is the poster's showpiece: larger than the type view's)
+        let b = null;
+        if (u > IN[0] && u < IN[1]) b = pose((u - IN[0]) / (IN[1] - IN[0]), from, [tx + (left ? 1 : -1) * W * 0.3, ty - S * 1.4], [tx + (left ? 1 : -1) * S * 0.5, ty - S * 0.5], [tx, ty]);
+        else if (u >= IN[1] && u <= OUT[0]) {
+          const f = (u - IN[1]) / (OUT[0] - IN[1]), burst = Math.sin(f * 9) > 0.75;
+          b = { x: tx, y: ty, ang: 0, open: burst ? 0.35 + 0.65 * Math.abs(Math.cos(f * 40)) : 0.62 + 0.3 * Math.sin(f * 6), perched: true };
+        } else if (u > OUT[0] && u < OUT[1]) {
+          const to = [left ? V.x0 - W * 0.1 : V.x1 + W * 0.1, ty - S * 1.7];
+          b = pose((u - OUT[0]) / (OUT[1] - OUT[0]), [tx, ty], [tx, ty - S * 0.7], [tx + (left ? -1 : 1) * S * 0.6, ty - S * 1.4], to);
+        }
+        return b && { ...b, s: sz };
+      }
+
+      posterDraw(g, elapsed) {
+        const m = this.motion();
+        if (!this.stage) { g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = this.theme().bg; g.fillRect(0, 0, this.POSTER.size, this.POSTER.size); return; }
+        this.stage.stageDraw(g, elapsed % m.T, m);
       }
 
       // ---------- Export Tools ----------
@@ -5724,11 +6077,11 @@
         const H = isPoster ? 1080 : this.H;
         const pal = this.pal(), svgFont = this.font();
         const treatment = this.state.treatment || 'customized';
-        const st = isPoster
-          ? { letters: this.posterLetters, S: this.posterS, C: pal.C, boil: false, recoil: 20, speed: 1, wither: 260, face: false }
-          : this.mainState();
+        if (isPoster && !this.stage) return;
+        const st = isPoster ? null : this.mainState();
 
         const svgElements = [];
+        const pad = isPoster ? W : 0; // (the poster's garden reaches past the scene's edges before it is framed)
         let gradN = 0;
         const svgBackend = {
           rearRoses: draw => {
@@ -5740,7 +6093,7 @@
           },
           behindRoses: (roses, draw) => {
             const id = `roseFoliageMask${gradN++}`, filter = `roseAlpha${gradN++}`;
-            svgElements.push(`<defs><filter id="${filter}" filterUnits="userSpaceOnUse" x="0" y="0" width="${W}" height="${H}"><feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" /></filter><mask id="${id}" maskUnits="userSpaceOnUse" x="0" y="0" width="${W}" height="${H}" style="mask-type:luminance"><rect width="${W}" height="${H}" fill="#fff" /><use href="#${roses}" xlink:href="#${roses}" filter="url(#${filter})" /></mask></defs><g mask="url(#${id})">`);
+            svgElements.push(`<defs><filter id="${filter}" filterUnits="userSpaceOnUse" x="${-pad}" y="${-pad}" width="${W + 2 * pad}" height="${H + 2 * pad}"><feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" /></filter><mask id="${id}" maskUnits="userSpaceOnUse" x="${-pad}" y="${-pad}" width="${W + 2 * pad}" height="${H + 2 * pad}" style="mask-type:luminance"><rect x="${-pad}" y="${-pad}" width="${W + 2 * pad}" height="${H + 2 * pad}" fill="#fff" /><use href="#${roses}" xlink:href="#${roses}" filter="url(#${filter})" /></mask></defs><g mask="url(#${id})">`);
             draw(svgBackend);
             svgElements.push('</g>');
           },
@@ -5771,12 +6124,19 @@
           }
         };
 
-        if (treatment === 'baseline') {
+        if (isPoster) { // (the poster at its still: the blood is drawn on canvas only, so a bite shows the butterfly alone)
+          const m = this.motion();
+          svgElements.push(`<rect width="${W}" height="${H}" fill="${this.theme().bg}" />`);
+          const fr = this.stage.stageFrame(m);
+          svgElements.push(`<g transform="translate(${W / 2} ${H / 2}) scale(${fr.f}) translate(${-fr.x} ${-fr.y})">`);
+          this.stage.stageScene(svgBackend, m.T * m.still, m);
+          svgElements.push('</g>');
+        } else if (treatment === 'baseline') {
           svgElements.push(`<rect width="${W}" height="${H}" fill="${pal.bg}" />`);
           this.render(svgBackend, performance.now(), st);
         } else {
           svgElements.push(`<rect width="${W}" height="${H}" fill="${this.theme().bg}" />`);
-          const stCustom = { ...st, vine: !isPoster, C: { red: '#C41A30', blue: '#1C4528', line: '#F07082', text: '#FFFFFF', vein: '#000000' } };
+          const stCustom = { ...st, vine: true, C: { red: '#C41A30', blue: '#1C4528', line: '#F07082', text: '#FFFFFF', vein: '#000000' } };
           this.renderCustomized(svgBackend, performance.now(), stCustom);
         }
 
@@ -5798,10 +6158,10 @@ ${svgElements.join('\n')}
       }
 
       exportVideo() {
-        if (this.state.busy) return;
+        if (this.state.busy || !this.stage) return;
         const canvas = this.pcv;
         if (!canvas) return;
-        const pr = this.preset();
+        const pr = this.motion();
         const durationMs = pr.T;
         const mime = this.vmime;
 
@@ -5845,10 +6205,10 @@ ${svgElements.join('\n')}
       }
 
       async exportFrames() {
-        if (this.state.busy) return;
+        if (this.state.busy || !this.stage) return;
         const canvas = this.pcv;
         if (!canvas) return;
-        const pr = this.preset();
+        const pr = this.motion();
         const durationMs = pr.T;
         const fps = 24;
         const totalFrames = Math.round((durationMs / 1000) * fps);
@@ -5860,6 +6220,7 @@ ${svgElements.join('\n')}
         const files = [];
 
         try {
+          this.stage.stageWarm(ctx, pr);
           for (let i = 0; i < totalFrames; i++) {
             const t = (i / totalFrames) * durationMs;
             this.posterDraw(ctx, t);

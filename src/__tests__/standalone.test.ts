@@ -29,7 +29,7 @@ function constructorTable(name: string) {
   }
   return runInNewContext(`(${classSource.slice(open, end + 1)})`);
 }
-const TABLES = { ...Object.fromEntries(['LOOKS', 'INK', 'ICHOR', 'WINGS', 'DOF', 'VINES', 'GROUNDS', 'FONTS', 'BLEEDS', 'BLEED_CONTROLS', 'MATERIALS', 'BOTANICAL'].map(name => [name, constructorTable(name)])), FW: 700 };
+const TABLES = { ...Object.fromEntries(['LOOKS', 'INK', 'ICHOR', 'WINGS', 'DOF', 'VINES', 'GROUNDS', 'FONTS', 'BLEEDS', 'BLEED_CONTROLS', 'MATERIALS', 'BOTANICAL', 'MOTIONS', 'POSTER', 'DEAD', 'DEADROSE'].map(name => [name, constructorTable(name)])), FW: 700 };
 
 function app() {
   return Object.assign(Object.create(StandaloneApp.prototype), {
@@ -2931,6 +2931,568 @@ describe('Standalone TypeGardenApp botanicals', () => {
     expect(garden.roseRelief(rose)).toBe(1);
     expect(garden.roseRelief({ id: 42 })).toBe(1); // a rose nothing has eased
   });
+});
+
+// ---- the poster: a scripted stage on the real renderer
+
+describe('Standalone TypeGardenApp poster', () => {
+  // A poster stage without a canvas: the words written into it as the page writes them, the renderer replaced by one that
+  // reports where the roses are
+  const posterHarness = (text = 'in bloom', seed = 7) => {
+    const ctx = { setTransform: vi.fn(), fillRect: vi.fn() };
+    const garden: any = Object.assign(writer(), {
+      fontsReady: true, pcv: { getContext: () => ctx }, backend: (g: any) => ({ ctx: g }), inkBelow: () => true,
+      state: { look: 'crimson', mode: 'poster', motion: 'breathe', material: 'ink', seed, treatment: 'customized' },
+      renderCustomized: vi.fn(function (this: any) {
+        this._blooms = {};
+        for (const l of this.letters) if (l.els) for (const list of this.letterLists(l, true)) for (const e of list) {
+          if (e.t === 'rose') this._blooms[e.id] = { x: l.x + e.x * this.St, y: l.y + e.y * this.St, R: e.R * this.St * 0.6, stage: e.stage === 'bud' ? 'bud' : 'half', full: 1 };
+        }
+      }),
+    });
+    return { garden, ctx, stage: garden.makeStage(text, seed) };
+  };
+  const ages = (stage: any, now: number) => stage.letters.filter((l: any) => l.ch !== ' ' && l.els).map((l: any) => now - l.birth);
+  const biteOf = (stage: any) => stage.MOTIONS.find((m: any) => m.id === 'bite');
+
+  it('has Breathe as the quiet default, the new motions, and none of the inherited ones', () => {
+    const garden = app(), ids = garden.MOTIONS.map((m: any) => m.id);
+    expect(ids).toEqual(['breathe', 'creep', 'bloom', 'wither', 'gust', 'bite']);
+    expect(garden.motion().id).toBe('breathe'); // (no motion chosen: the first)
+    garden.state.motion = 'bite';
+    expect(garden.motion().id).toBe('bite');
+    for (const m of garden.MOTIONS) { expect(m.T).toBeGreaterThanOrEqual(8000); expect(m.still).toBeGreaterThan(0); expect(m.still).toBeLessThan(1); expect(m.clock).toBeGreaterThan(0); }
+    expect(garden.MOTIONS.find((m: any) => m.id === 'bite').bite).toBeGreaterThan(0);
+    expect(garden.PRESETS).toBeUndefined();
+  });
+
+  it('writes the words into a stage of its own, the way the type view writes them, and leaves the type view alone', () => {
+    const { garden, stage } = posterHarness('in bloom', 7);
+    expect(Object.getPrototypeOf(stage)).toBe(garden);
+    expect(stage.letters.map((l: any) => l.ch).join('')).toBe('in bloom');
+    expect(garden.letters).toHaveLength(0); // the type view's letters, blood and caches are untouched
+    for (const own of ['stains', 'drops', 'bites', 'perch', 'flies', '_cuts', 'fa']) expect(Object.prototype.hasOwnProperty.call(stage, own)).toBe(true);
+    expect([garden.stains, garden.drops, garden.bites, garden._roseKey, garden.St]).toEqual([undefined, undefined, undefined, undefined, undefined]);
+    expect([stage.W, stage.H, stage.dpr, garden.W]).toEqual([1080, 1080, 1, undefined]);
+    // the stage reads the visitor's appearance as it stands, and follows it when it changes
+    expect(stage.theme()).toBe(garden.theme());
+    garden.setAppearance({ bg: '#102030' });
+    expect(stage.theme().bg).toBe('#102030');
+    // a pause after each word sprouted a bud on it
+    expect(stage.letters.filter((l: any) => l.bloom).map((l: any) => l.ch).join('')).toBe('nm');
+    // the same words and seed grow the same garden, in the type view as on the poster; another seed grows another
+    const again = posterHarness('in bloom', 7).stage, other = posterHarness('in bloom', 8).stage;
+    const ids = (s: any) => s.letters.map((l: any) => [l.id, l.seed, l.els ? l.els.map((e: any) => e.id).join() : '']);
+    expect(ids(again)).toEqual(ids(stage));
+    expect(ids(other)).not.toEqual(ids(stage));
+    const typed = writer(); typed._salt = '7';
+    typeInto(typed, 'in bloom', 0, 170);
+    expect(live(typed).map((l: any) => l.id)).toEqual(stage.letters.map((l: any) => l.id));
+  });
+
+  it('grows the whole garden, finds every open bloom and chooses the rose a butterfly will feed on', () => {
+    const { stage } = posterHarness();
+    const roses = stage.letters.flatMap((l: any) => l.els ? stage.letterLists(l, true).flat().filter((e: any) => e.t === 'rose') : []);
+    expect(Object.keys(stage.anchors)).toHaveLength(roses.length);
+    expect(Object.keys(stage.roseEl)).toHaveLength(roses.length);
+    expect(stage.anchors[stage.biteId]).toBeDefined();
+    expect(stage.anchors[stage.biteId].stage).not.toBe('bud');
+    expect(stage.sim).toEqual({ t: 0, bit: false });
+  });
+
+  it('keeps a letter\'s record of its bud, and its tendrils\' clock, going with its birth', () => {
+    const { stage } = posterHarness();
+    const l = stage.letters.find((x: any) => x.bloom), at = l.bloom.at - l.birth, end = l.bloom.end == null ? null : l.bloom.end - l.birth, tb = l.tb - l.birth;
+    stage.stageBirth(l, l.birth - 5000);
+    expect([l.bloom.at - l.birth, l.bloom.end == null ? null : l.bloom.end - l.birth, l.tb - l.birth]).toEqual([at, end, tb]);
+    stage.stageAges(100000, (_l: any, i: number) => 1000 * (i + 1));
+    expect(ages(stage, 100000)).toEqual([1000, 2000, 3000, 4000, 5000, 6000, 7000]); // (the space has none)
+  });
+
+  it('closes every loop: a motion at the end of its loop is where it is at the start', () => {
+    const { stage } = posterHarness(), S = stage.St, m = Object.fromEntries(stage.MOTIONS.map((x: any) => [x.id, x]));
+    const at = (id: string, u: number) => stage['script' + id[0].toUpperCase() + id.slice(1)](u, u * m[id].T, stage.POSTER.t0 + u * m[id].T * m[id].clock, m[id]);
+    // Breathe: the sway and the roses' turn are periodic
+    const w0 = at('breathe', 0).st, w1 = at('breathe', 1).st, l = stage.letters[0];
+    for (const [x, y] of [[300, 200], [500, 100], [700, 350]]) expect(w0.warp(x, y, l).map((v: number) => +v.toFixed(6))).toEqual(w1.warp(x, y, l).map((v: number) => +v.toFixed(6)));
+    expect(+w0.rotw({ id: 3 }).toFixed(9)).toBe(+w1.rotw({ id: 3 }).toFixed(9));
+    // Creep: every letter is as grown at the end as at the start, and bare at its quietest
+    at('creep', 0); const a0 = ages(stage, stage.POSTER.t0);
+    at('creep', 1); const a1 = ages(stage, stage.POSTER.t0 + 16000);
+    expect(a1.map((v: number) => +v.toFixed(6))).toEqual(a0.map((v: number) => +v.toFixed(6)));
+    at('creep', 0.5); expect(Math.max(...ages(stage, stage.POSTER.t0 + 8000))).toBe(stage.POSTER.age);
+    // Bloom & fall: each bloom's age
+    const b0 = at('bloom', 0).st.bloomAge, b1 = at('bloom', 1).st.bloomAge, e = { id: 77 };
+    expect(+b0(e).toFixed(6)).toBe(+b1(e).toFixed(6));
+    const through = Array.from({ length: 101 }, (_, i) => at('bloom', i / 100).st.bloomAge(e)); // (a bloom opens from a bud to full and closes again)
+    expect(Math.min(...through)).toBeGreaterThanOrEqual(1500); expect(Math.max(...through)).toBeLessThanOrEqual(5900);
+    expect(Math.max(...through) - Math.min(...through)).toBeGreaterThan(3000);
+    // Gust: calm at both ends, so the wind leaves the garden as it found it
+    for (const u of [0, 0.999]) { const g = at('gust', u).st.warp; for (const [x, y] of [[100, 300], [540, 200], [900, 100]]) expect(g(x, y, l).map((v: number) => +v.toFixed(3))).toEqual([x, y]); }
+    expect(stage.gustFront(0)).toBeCloseTo(-0.5 * 1080); expect(stage.gustFront(1)).toBeCloseTo(1.5 * 1080);
+    expect(S).toBeGreaterThan(0);
+  });
+
+  it('drains the colour out of a thing toward the dead colour of its kind, and shrivels, curls and bows it as it goes', () => {
+    const garden = app();
+    expect(garden.wither(0)).toEqual({ x: 0, c: 0, s: 0, b: 0 });
+    expect(garden.wither(1)).toEqual({ x: 1, c: 1, s: 1, b: 1 });
+    let prev = garden.wither(0);
+    for (let i = 1; i <= 20; i++) { const w = garden.wither(i / 20); for (const k of ['c', 's', 'b']) expect(w[k]).toBeGreaterThanOrEqual(prev[k]); prev = w; }
+    // a colour is itself while alive, turns on its way (by the middle it is the kind's first dead stop), and ends the kind's last
+    for (const kind of Object.keys(garden.DEAD)) {
+      expect(garden.drainRgb('#2e6b34', 0, kind)).toEqual([0x2e, 0x6b, 0x34]);
+      expect(garden.drainRgb('#2e6b34', 0.5, kind)).toEqual(garden.DEAD[kind][0]);
+      expect(garden.drainRgb('#2e6b34', 1, kind)).toEqual(garden.DEAD[kind][1]);
+    }
+    expect(garden.drainRgb('rgb(46,107,52)', 0, 'leafMid')).toEqual([46, 107, 52]); // (the renderer's colours come as strings, hex or rgb)
+    // the dead end of the vine is brown or grey, never green
+    const [r, g, b] = garden.drainRgb('#2e6b34', 1, 'stem');
+    expect(g).toBeLessThanOrEqual(Math.max(r, b) + 12);
+    // the renderer's colour is untouched unless a thing says it is drying
+    expect(garden.dry('#2e6b34', 'stem')).toBe('#2e6b34');
+    garden._dry = 1; expect(garden.dry('#2e6b34', 'stem')).toMatch(/^rgb\(\d+,\d+,\d+\)$/); garden._dry = 0;
+    // a leaf shrinks, droops and curls; a rose bows to the side it leans to
+    expect(garden.leafPose(0.4, 50, 0.2, 1, garden.wither(0))).toEqual({ a: 0.4, L: 50, bend: 0.2 });
+    const dead = garden.leafPose(0.4, 50, 0.2, -1, garden.wither(1));
+    expect(dead.L).toBeCloseTo(50 * 0.42); expect(dead.bend).toBeCloseTo(0.2 - 2.4); expect(dead.a).not.toBe(0.4);
+    expect(garden.witherBow({ id: 5 }, 0.3, garden.wither(0))).toBe(0);
+    const right = garden.witherBow({ id: 5 }, 0.3, garden.wither(1)), left = garden.witherBow({ id: 5 }, -0.3, garden.wither(1));
+    expect(right).toBeGreaterThan(1.4); expect(right).toBeLessThan(1.85); expect(left).toBe(-right);
+  });
+
+  it('draws a dead petal narrower, browner and drier than a live one, and draws every degree of it', () => {
+    const garden = app(), shapes: any[] = [];
+    garden.roseInk = () => ({ petal: [[200, 20, 40], [160, 10, 30]], petalRim: '240,120,130' });
+    garden.theme = () => ({ ink: { primary: {} } });
+    const B = { fill: (poly: number[][], grad: any) => shapes.push({ poly, grad }), stroke: (pts: number[][], col: string) => shapes.push({ pts, col }) };
+    const draw = (dead: number | undefined) => { shapes.length = 0; garden.drawPetal(B, { x: 100, y: 100, s: 40, t: 1, sw: 1, ph: 0, rot: 0, flip: 0, rose: { id: 3 }, dead }, 1); return shapes.slice(); };
+    const width = (poly: number[][]) => Math.max(...poly.map(p => p[0])) - Math.min(...poly.map(p => p[0]));
+    for (const d of [undefined, 0, 0.3, 0.85, 1]) expect(draw(d)).toHaveLength(2);
+    const live = draw(undefined), gone = draw(1);
+    expect(width(gone[0].poly)).toBeLessThan(width(live[0].poly) * 0.75);
+    const rgb = (s: any) => s.grad.stops[2][1].match(/\d+/g).slice(0, 3).map(Number);
+    expect(rgb(gone[0])[0]).toBeLessThan(rgb(live[0])[0]); // (the red has gone out of it)
+    expect(rgb(gone[0])[1]).toBeGreaterThan(rgb(live[0])[1]); // (and it has gone brown)
+    expect(draw(0)[0].grad.stops).toEqual(live[0].grad.stops); // (alive is as it was)
+    expect(+gone[1].col.match(/[\d.]+\)$/)![0].slice(0, -1)).toBeLessThan(+live[1].col.match(/[\d.]+\)$/)![0].slice(0, -1)); // (the rim has lost its light)
+  });
+
+  it('takes the garden through its life: whole, drained from the top down, dead, drawn back and grown again', () => {
+    const { stage } = posterHarness(), life = (u: number) => stage.witherLife(u);
+    expect([life(0), life(0.5), life(0.79)]).toEqual([1, 1, 1]);
+    expect(life(0.86)).toBe(0); expect(life(1)).toBeCloseTo(1);
+    for (let u = 0.8; u < 0.86; u += 0.005) expect(life(u + 0.005)).toBeLessThanOrEqual(life(u) + 1e-9); // (drawn back)
+    for (let u = 0.86; u < 1; u += 0.01) expect(life(u + 0.01)).toBeGreaterThanOrEqual(life(u) - 1e-9); // (and grown again)
+    const { top, bottom } = stage.bounds, e = { id: 9 };
+    expect(bottom).toBeGreaterThan(top);
+    // alive at the start and at the end, dead through the draw-back, and between them it goes from 0 to 1
+    for (const kind of ['rose', 'leaf', 'stem']) {
+      expect([stage.witherX(kind, e, top, 0), stage.witherX(kind, e, top, 0.9), stage.witherX(kind, e, top, 0.999)]).toEqual([0, 0, 0]);
+      expect([stage.witherX(kind, e, top, 0.8), stage.witherX(kind, e, bottom, 0.83)]).toEqual([1, 1]);
+      let last = 0;
+      for (let u = 0; u < 0.8; u += 0.01) { const x = stage.witherX(kind, e, bottom, u); expect(x).toBeGreaterThanOrEqual(last); expect(x).toBeLessThanOrEqual(1); last = x; }
+      expect(last).toBe(1); // (everything is dead before the dead hold)
+    }
+    // the drain works down: the top of the garden dies before its foot, and the stems after the blooms and leaves they carry
+    for (const u of [0.15, 0.25, 0.35]) expect(stage.witherX('leaf', e, top, u)).toBeGreaterThanOrEqual(stage.witherX('leaf', e, bottom, u));
+    expect(stage.witherTiming('stem', e, top).start).toBeGreaterThan(stage.witherTiming('leaf', e, top).start);
+    expect(stage.witherX('rose', e, top, 0.04)).toBe(0); // (it starts slowly)
+    expect(stage.witherTiming('rose', e, top).start).toBeLessThan(stage.witherTiming('rose', e, bottom).start);
+  });
+
+  it('lets about seven leaves in ten go once they are dry, each at its own moment, and the rest cling', () => {
+    const { stage } = posterHarness(), ids = Array.from({ length: 300 }, (_, i) => ({ id: i + 1 }));
+    expect(ids.some(e => stage.leafLetGo(e, 0.5))).toBe(false); // (none while there is life in them)
+    const gone = ids.filter(e => stage.leafLetGo(e, 1)).length / ids.length;
+    expect(gone).toBeGreaterThan(0.6); expect(gone).toBeLessThan(0.8);
+    const at = ids.map(e => stage.leafLetGoAt(e));
+    expect(Math.min(...at)).toBeGreaterThanOrEqual(0.9); expect(Math.max(...at)).toBeLessThanOrEqual(0.98);
+    expect(new Set(at.map(v => v.toFixed(3))).size).toBeGreaterThan(50); // (each its own)
+    expect(ids.filter(e => stage.leafLetGo(e, 1)).length).toBe(ids.filter(e => stage.leafLetGo(e, 1)).length);
+  });
+
+  it('drops what the dying lets go from where and when it let go, so any moment can be drawn on its own, and so the loop closes', () => {
+    const { stage } = posterHarness(), seen: any[] = [], leaves: any[] = [], T = 26;
+    const roses = Object.keys(stage.roseEl).filter(id => stage.anchors[id].stage !== 'bud').slice(0, 3);
+    expect(roses.length).toBeGreaterThan(0);
+    stage.collect = { roses: {}, leaves: {} };
+    roses.forEach((id, i) => { stage.collect.roses[id] = { px: 200 + 150 * i, py: 300, aim: 0.3 - 0.2 * i, bx: 200 + 150 * i, by: 360, R: 40, stage: i === 1 ? 'half' : 'full' }; });
+    for (let id = 1; id <= 40; id++) stage.collect.leaves[id] = { x: 100 + 20 * id, y: 400, a: 0.5, L: 30, bend: 0.2, sgn: id % 2 ? 1 : -1 };
+    stage.drawPetal = vi.fn((_B: any, p: any, fade: number) => seen.push([+p.x.toFixed(3), +p.y.toFixed(3), +p.rot.toFixed(3), +fade.toFixed(3), +p.dead.toFixed(3), +p.s.toFixed(3)]));
+    stage.leafCustomized = vi.fn(function (this: any, _B: any, x: number, y: number) { leaves.push([+x.toFixed(2), +y.toFixed(2), this._dry, this._curl]); });
+    const at = (u: number) => { seen.length = 0; leaves.length = 0; stage.stageDeadFall({}, u, T); return [seen.slice(), leaves.slice()]; };
+    expect(at(0.5)).toEqual(at(0.5)); // (nothing is remembered)
+    expect(at(0.0)[0]).toHaveLength(0); expect(at(0.0)[1]).toHaveLength(0); // (nothing has let go yet)
+    // mid-loop the petals are in the air, dark and dry, smaller than the bloom's own, and later they are lower
+    const grid = Array.from({ length: 201 }, (_, i) => i / 200), counts = grid.map(u => at(u)[0].length), busiest = grid[counts.indexOf(Math.max(...counts))];
+    expect(Math.max(...counts)).toBeGreaterThan(0);
+    const mid = at(busiest), early = at(Math.max(0, busiest - 0.05)), later = at(busiest + 0.02);
+    for (const p of mid[0]) { expect(p[4]).toBeGreaterThanOrEqual(0.85); expect(p[4]).toBeLessThanOrEqual(1); expect(p[5]).toBeLessThan(40); expect(p[3]).toBeLessThanOrEqual(1); }
+    expect(Math.max(...mid[0].map(p => p[1]))).toBeGreaterThan(Math.min(...early[0].concat(mid[0]).map(p => p[1]))); // (they fall)
+    expect(Math.max(...counts)).toBeLessThanOrEqual(8 * 2 + 5); // (a full bloom sheds eight, a half-open one five)
+    // the leaves that let go are dry and curled while they are drawn, the rest never fall, and the drawing leaves nothing behind
+    const fallen = Array.from({ length: 101 }, (_, i) => at(i / 100)[1]).flat();
+    expect(fallen.length).toBeGreaterThan(0);
+    for (const l of fallen) expect([l[2], l[3]]).toEqual([1, 1]);
+    expect([stage._dry, stage._curl]).toEqual([0, 0]);
+    expect(new Set(fallen.map(l => l[0] + ',' + Math.round(l[1] / 1e9))).size).toBeGreaterThan(5); // (they are spread over the garden)
+    // a loop later is the same moment
+    const a = at(busiest), b = at(busiest + 1);
+    expect(b[0].map(p => [p[0], p[1], p[3]].map(v => +v.toFixed(2)))).toEqual(a[0].map(p => [p[0], p[1], p[3]].map(v => +v.toFixed(2))));
+    // none is left in the air as the loop ends
+    expect(at(0.999)[0].filter(p => p[3] > 0.01)).toHaveLength(0);
+  });
+
+  it('withers by the script: whole at both ends of the loop, and drained from the top down in between', () => {
+    const { stage } = posterHarness(), m = stage.MOTIONS.find((x: any) => x.id === 'wither');
+    expect(m.T).toBeGreaterThanOrEqual(20000); expect(m.clock).toBe(1);
+    const at = (u: number) => stage.scriptWither(u, u * m.T, stage.POSTER.t0 + u * m.T, m);
+    const l = stage.letters[0], e = { id: 4 };
+    const w0 = at(0);
+    expect(Math.max(...ages(stage, stage.POSTER.t0))).toBe(stage.POSTER.age); // (every letter fully grown)
+    const w1 = at(1);
+    for (const kind of ['rose', 'leaf', 'stem']) { l._wu = 0; expect(w0.st.drain(kind, e, 400, 0, l)).toBe(0); l._wu = 0.999; expect(w1.st.drain(kind, e, 400, 0, l)).toBe(0); }
+    expect(typeof w0.after).toBe('function');
+    // through the dead hold the garden is drawn back to nothing, and grown again to the same garden
+    at(0.86); expect(Math.min(...ages(stage, stage.POSTER.t0 + 0.86 * m.T))).toBeCloseTo(0, 5); // (the first letter is drawn back to nothing)
+    at(0); const a0 = ages(stage, stage.POSTER.t0);
+    at(1); const a1 = ages(stage, stage.POSTER.t0 + m.T);
+    expect(a1.map((v: number) => +v.toFixed(3))).toEqual(a0.map((v: number) => +v.toFixed(3)));
+    // part way through a thing is part dead; the letters die a little after one another, so it does not happen all at once
+    const mid = at(0.3); let part = 0;
+    for (const kind of ['rose', 'leaf', 'stem']) for (const ll of stage.letters.filter((x: any) => x.ch !== ' ')) { const x = mid.st.drain(kind, e, 300, 0, ll); expect(x).toBeGreaterThanOrEqual(0); expect(x).toBeLessThanOrEqual(1); if (x > 0 && x < 1) part++; }
+    expect(part).toBeGreaterThan(0);
+    expect(new Set(stage.letters.filter((x: any) => x.ch !== ' ').map((x: any) => x._wu.toFixed(4))).size).toBeGreaterThan(3);
+    expect(mid.st.gone({ id: 1 }, 0.5)).toBe(false);
+  });
+
+  it('draws petals from where each let go, so any moment can be drawn on its own, and so a loop closes', () => {
+    const { stage } = posterHarness(), seen: any[] = [];
+    stage.drawPetal = vi.fn((_B: any, p: any, fade: number) => seen.push([+p.x.toFixed(4), +p.y.toFixed(4), +p.rot.toFixed(4), +fade.toFixed(4)]));
+    const at = (u: number) => { seen.length = 0; stage.stagePetals({}, u, 12, 1); return seen.slice(); };
+    expect(at(0.5)).toEqual(at(0.5)); // (nothing is remembered)
+    expect(at(0.5).length).toBeGreaterThan(0);
+    expect(at(0.01)).toEqual(at(1.01)); // (a loop later is the same moment)
+    expect(at(0.2)).toHaveLength(0); // (nothing has let go yet)
+    // a petal falls, and fades in and out
+    const early = at(0.4), later = at(0.5);
+    expect(Math.max(...later.map(p => p[1]))).toBeGreaterThan(Math.min(...early.map(p => p[1])));
+    expect(Math.max(...at(0.5).map(p => p[3]))).toBeLessThanOrEqual(1);
+  });
+
+  it('brings the butterfly in, rests it on the bloom, and sends it off, and pushes the camera in and out so the loop closes', () => {
+    const { stage } = posterHarness(), m = biteOf(stage), a = stage.anchors[stage.biteId];
+    expect(stage.bfly(0, m)).toBeNull();
+    expect(stage.bfly(0.999, m)).toBeNull();
+    const landing = stage.bfly(0.21, m), resting = stage.bfly(0.3, m), leaving = stage.bfly(0.42, m);
+    expect([landing.perched, resting.perched, leaving.perched]).toEqual([true, true, false]);
+    expect([resting.x, resting.y]).toEqual([a.x, a.y]);
+    const coming = stage.bfly(0.06, m);
+    expect(Math.hypot(coming.x - a.x, coming.y - a.y)).toBeGreaterThan(stage.St * 0.5);
+    expect(coming.s).toBeGreaterThan(stage.St * 0.1); // (a showpiece: bigger than the type view's visitor)
+    expect(stage.stageCamera(0).z).toBe(1);
+    expect(stage.stageCamera(1).z).toBe(1);
+    expect(stage.stageCamera(0).x).toBeCloseTo(540); expect(stage.stageCamera(1).y).toBeCloseTo(540);
+    expect(stage.stageCamera(0.4).z).toBeCloseTo(m.push); // (restrained: a few per cent, and no more)
+    expect(m.push).toBeGreaterThan(1); expect(m.push).toBeLessThanOrEqual(1.2);
+    expect(stage.stageCamera(0.5).y).toBeGreaterThan(stage.stageCamera(0.3).y - 1); // (it drifts down toward the blood)
+  });
+
+  it('fits the garden to the poster: all of it inside the margin, scaled no more than it must be, moved no further than it must be', () => {
+    const { stage } = posterHarness(), S = 1080, M = S * stage.POSTER.margin;
+    const inside = (fr: any, box: any) => {
+      const x = (v: number) => S / 2 + (v - fr.x) * fr.f, y = (v: number) => S / 2 + (v - fr.y) * fr.f;
+      return [x(box.x0), S - x(box.x1), y(box.y0), S - y(box.y1)];
+    };
+    expect(stage.stageFit(null)).toEqual({ f: 1, x: 540, y: 540 }); // (nothing to fit: as it is)
+    // a garden that already fits stays where the words were set, unscaled, whatever its shape
+    const small = { x0: 200, x1: 700, y0: 300, y1: 800 }, fits = stage.stageFit(small);
+    expect([fits.f, fits.x, fits.y]).toEqual([1, 540, 540]);
+    // one that spills out is scaled until it is inside the margin, and sits against it on the side it spilled
+    const wide = { x0: -55, x1: 1085, y0: 300, y1: 800 }, fw = stage.stageFit(wide);
+    expect(fw.f).toBeCloseTo((S - 2 * M) / 1140);
+    for (const gap of inside(fw, wide)) expect(gap).toBeGreaterThanOrEqual(M - 1e-6);
+    expect(inside(fw, wide)[0]).toBeCloseTo(M); expect(inside(fw, wide)[1]).toBeCloseTo(M); // (as wide as it can be: both sides at the margin)
+    // one that spills on one side only is moved just far enough
+    const lean = { x0: 0, x1: 900, y0: 300, y1: 800 }, fl = stage.stageFit(lean);
+    expect(fl.f).toBe(1); expect(inside(fl, lean)[0]).toBeCloseTo(M); expect(inside(fl, lean)[1]).toBeGreaterThan(M);
+    // tall ones too, and it never shrinks the words beyond reading
+    const tall = { x0: 300, x1: 800, y0: -100, y1: 1200 }, ft = stage.stageFit(tall);
+    expect(ft.f).toBeCloseTo((S - 2 * M) / 1300); expect(inside(ft, tall)[2]).toBeCloseTo(M);
+    expect(stage.stageFit({ x0: 300, x1: 800, y0: -100, y1: 1700 }).f).toBe(0.6);
+    expect(stage.stageFit({ x0: -9000, x1: 9000, y0: 0, y1: 100 }).f).toBe(0.6);
+    // the garden's place on the framed poster is kept (for the camera)
+    expect(fw.view.x0).toBeCloseTo(M); expect(fw.view.x1).toBeCloseTo(S - M);
+    // a motion that pushes a camera in has the garden held inside the margin at the closest the camera comes
+    const pushed = stage.stageFit(wide, 1.15);
+    expect(pushed.f).toBeCloseTo(fw.f / 1.15);
+    const closest = { ...pushed, f: pushed.f * 1.15 };
+    for (const gap of inside(closest, wide)) expect(gap).toBeGreaterThanOrEqual(M - 1e-6);
+  });
+
+  it('finds how far the garden reaches from the geometry the renderer draws, leaving out the soft glow and the visitor', () => {
+    const { stage } = posterHarness();
+    stage.renderCustomized = vi.fn((B: any) => {
+      B.fill([[100, 200], [300, 260]], '#fff');
+      B.fill([[-500, -500], [1500, 1500]], { x0: 0, y0: 0, r0: 0, x1: 0, y1: 0, r1: 900, stops: [] }); // (the glow behind the words: light, not garden)
+      B.fill([[10, 20], [30, 40]], { x0: 0, y0: 0, x1: 1, y1: 1, stops: [] }); // (a linear gradient is a petal's)
+      B.stroke([[50, 700], [60, 720]], '#000', 10);
+      B.rect(400, 410, 20, 30, '#000');
+      B.text('m', 600, 500, 100, '#fff');
+      const rear = B.rearRoses((t: any) => t.fill([[900, 100], [905, 105]], '#f00')); // (the rear roses are drawn to a layer on a canvas)
+      B.behindRoses(rear, (t: any) => t.stroke([[20, 30], [-40, 50]], '#0f0', 6));
+    });
+    const box = stage.stageReach({});
+    expect(box.x0).toBe(-43); // (the stroke's own width: half of it past the point)
+    expect(box.x1).toBeCloseTo(905);
+    expect(box.y0).toBe(20);
+    expect(box.y1).toBe(725);
+    expect(Math.abs(box.x1 - 905)).toBeLessThan(1);
+    stage.renderCustomized = vi.fn();
+    expect(stage.stageReach({})).toBeNull();
+    const merged = stage.stageUnion({ x0: 0, y0: 5, x1: 10, y1: 15 }, { x0: -2, y0: 8, x1: 6, y1: 40 });
+    expect(merged).toEqual({ x0: -2, y0: 5, x1: 10, y1: 40 });
+    expect(stage.stageUnion(null, merged)).toBe(merged);
+  });
+
+  it('fits a frame for every motion, to the furthest each takes the garden, and fits again when the garden changes', () => {
+    const { stage } = posterHarness(), seen: any[] = [];
+    stage.renderCustomized = vi.fn(function (this: any, B: any, _now: number, st: any) {
+      seen.push(Object.keys(st).filter(k => ['drain', 'warp', 'bloomAge'].includes(k)).join());
+      const l = this.letters[0], tip = st.warp ? st.warp(1100, 100, l) : [1100, 100]; // (a vine tip at the right, and the wind leaning it)
+      B.stroke([[100, 400], tip], '#0f0', 2);
+      B.stroke([[500, 500], [500, 560]], '#0f0', 2);
+    });
+    stage.stageFrames();
+    expect(Object.keys(stage._frames.by)).toEqual(stage.MOTIONS.map((m: any) => m.id));
+    expect(seen).toEqual(['bloomAge', 'bloomAge,drain', 'bloomAge,drain', 'bloomAge,warp']); // (at its fullest, at two stages of dying, and at the furthest the wind leans it)
+    const by = stage._frames.by;
+    expect(by.gust.f).toBeLessThan(by.breathe.f); // (the wind leans the vine out of the box, so the frame holds it)
+    expect(by.wither.f).toBe(by.breathe.f);
+    expect(by.bite.f).toBeLessThan(by.breathe.f); // (it has room for the camera to come in)
+    expect(stage.stageFrame(stage.MOTIONS[0])).toBe(by.breathe);
+    // it is fitted again when what the garden is made of changes, and not otherwise
+    const first = stage._frames;
+    stage.stageFrame(stage.MOTIONS[0]); expect(stage._frames).toBe(first);
+    stage.appearance = { botanical: { roses: 2 } }; stage.stageFrame(stage.MOTIONS[0]);
+    expect(stage._frames).not.toBe(first);
+    const second = stage._frames; stage.F = '"Another",serif'; stage.stageFrame(stage.MOTIONS[0]);
+    expect(stage._frames).not.toBe(second);
+  });
+
+  it('draws every frame through the fitted frame, with the camera moving within it, and the vector poster in the same frame', () => {
+    const { stage } = posterHarness(), calls: any[] = [], g: any = {};
+    for (const k of ['save', 'restore', 'translate', 'scale']) g[k] = vi.fn((...a: number[]) => calls.push([k, ...a.map(v => +v.toFixed(3))]));
+    stage.renderCustomized = vi.fn(() => calls.push(['draw']));
+    stage._frames = { key: stage.frameKey(), by: { breathe: { f: 0.8, x: 500, y: 520 }, bite: { f: 0.7, x: 520, y: 530, view: null } } };
+    const breathe = stage.MOTIONS.find((m: any) => m.id === 'breathe'), bite = biteOf(stage);
+    stage.butterflyNoir = vi.fn(); stage.stageHalo = vi.fn();
+    stage.stageScene({ ctx: g }, 1000, breathe);
+    expect(calls).toEqual([['save'], ['translate', 540, 540], ['scale', 0.8, 0.8], ['translate', -500, -520], ['draw'], ['restore']]);
+    // the camera is applied outside the frame: the frame scales the garden, and the camera moves the framed poster
+    calls.length = 0;
+    stage.stageScene({ ctx: g }, 0.4 * bite.T, bite);
+    const order = calls.map(c => c[0] + (c[1] != null ? ':' + c[1] : ''));
+    expect(order.slice(0, 2)).toEqual(['save', 'translate:540']);
+    expect(calls[2][0]).toBe('scale'); expect(calls[2][1]).toBeCloseTo(bite.push);
+    expect(calls[4].slice(0, 3)).toEqual(['translate', 540, 540]); expect(calls[5]).toEqual(['scale', 0.7, 0.7]); expect(calls[6]).toEqual(['translate', -520, -530]);
+    expect(calls[calls.length - 1]).toEqual(['restore']);
+    // the vector poster draws no canvas transforms: it is wrapped in the same frame by the export (see the next test)
+    calls.length = 0; stage.stageScene({}, 1000, breathe);
+    expect(calls).toEqual([['draw']]);
+    // where the poster shows, and where a scene point is on it
+    stage._fr = { f: 0.8, x: 500, y: 520 };
+    expect(stage.stageWindow()).toEqual({ x0: 500 - 675, x1: 500 + 675, y0: 520 - 675, y1: 520 + 675 });
+    expect(stage.stageToView(500, 520)).toEqual([540, 540]);
+    expect(stage.stageToView(600, 520)[0]).toBeCloseTo(620);
+    stage._fr = undefined;
+    expect(stage.stageWindow()).toEqual({ x0: 0, x1: 1080, y0: 0, y1: 1080 });
+    expect(stage.stageToView(123, 456)).toEqual([123, 456]);
+  });
+
+  it('brings the butterfly in from beyond the framed poster, wherever the frame is', () => {
+    const { stage } = posterHarness(), m = biteOf(stage);
+    for (const fr of [undefined, { f: 0.8, x: 520, y: 540 }, { f: 0.65, x: 600, y: 500 }]) {
+      stage._fr = fr;
+      const V = stage.stageWindow();
+      const first = stage.bfly(0.0401, m), last = stage.bfly(0.4799, m);
+      const out = (b: any) => b.x < V.x0 || b.x > V.x1 || b.y < V.y0 || b.y > V.y1;
+      expect(out(first)).toBe(true); expect(out(last)).toBe(true); // (it appears from outside the poster and leaves it)
+    }
+  });
+
+  it('keeps all of the garden in view while the camera pushes in, and the camera where it began when the loop ends', () => {
+    const { stage } = posterHarness(), m = biteOf(stage);
+    const view = { x0: 60, x1: 1020, y0: 300, y1: 800 };
+    stage._fr = { f: 0.85, x: 540, y: 560, view };
+    for (let i = 0; i <= 100; i++) {
+      const c = stage.stageCamera(i / 100, m), hw = 540 / c.z, hh = 540 / c.z;
+      expect(c.z).toBeGreaterThanOrEqual(1); expect(c.z).toBeLessThanOrEqual(m.push + 1e-9);
+      if (hw * 2 >= view.x1 - view.x0) { expect(c.x - hw).toBeLessThanOrEqual(view.x0 + 1e-6); expect(c.x + hw).toBeGreaterThanOrEqual(view.x1 - 1e-6); }
+      expect(c.y - hh).toBeLessThanOrEqual(view.y0 + 1e-6); expect(c.y + hh).toBeGreaterThanOrEqual(view.y1 - 1e-6);
+    }
+    expect(stage.stageCamera(0, m)).toEqual({ z: 1, x: 540, y: 540 });
+    expect(stage.stageCamera(1, m)).toEqual({ z: 1, x: 540, y: 540 });
+  });
+
+  it('leans the vines the way the wind blows them, more the higher they stand, and not at all without wind', () => {
+    const { stage } = posterHarness(), l = { y: 600 }, S = stage.St;
+    expect(stage.gustWarp(300, 200, l, 0, 0.2, 1)).toEqual([300, 200]);
+    const low = stage.gustWarp(300, 580, l, 1, 0, 0), high = stage.gustWarp(300, 200, l, 1, 0, 0);
+    expect(low[0]).toBeGreaterThan(300); expect(high[0] - 300).toBeGreaterThan(low[0] - 300);
+    expect(high[0]).toBeCloseTo(300 + 0.34 * S * (400 / S)); expect(high[1]).toBeLessThan(200); // (and it lifts them a little)
+    expect(stage.gustWarp(300, 700, l, 1, 0.2, 1)[0]).toBe(300); // (nothing below the words leans)
+    expect(stage.gustWarp(300, 200, l, 1, 0.2, 0)[0]).toBeGreaterThan(high[0]); // (a gust leans them further)
+  });
+
+  it('wraps the vector poster in the same frame, with masks wide enough for the garden that reaches past the scene', () => {
+    let svg = '';
+    const anchor = { click: vi.fn(), href: '', download: '' };
+    const SVGApp = runInNewContext(classSource, {
+      performance: { now: () => 10000 }, setTimeout: vi.fn(),
+      Blob: class { constructor(parts: string[]) { svg = parts.join(''); } },
+      URL: { createObjectURL: () => 'test:svg', revokeObjectURL: vi.fn() },
+      document: { createElement: () => anchor },
+    });
+    const garden: any = Object.assign(Object.create(SVGApp.prototype), {
+      state: { mode: 'poster', treatment: 'customized', motion: 'breathe' }, ...structuredClone(TABLES),
+      pal: () => ({ bg: '#000', C: {} }), theme: () => ({ bg: '#102030' }),
+      stage: {
+        stageFrame: () => ({ f: 0.8, x: 500, y: 520 }),
+        stageScene(B: any) { const rear = B.rearRoses((t: any) => t.fill([[-40, 10], [60, 10], [40, 50]], '#C41A30')); B.behindRoses(rear, (t: any) => t.stroke([[-30, 20], [100, 20]], '#1C4528', 4)); },
+      },
+    });
+    garden.saveSVG();
+    const framed = svg.indexOf('<g transform="translate(540 540) scale(0.8) translate(-500 -520)">');
+    expect(framed).toBeGreaterThan(svg.indexOf('<rect width="1080" height="1080" fill="#102030" />')); // (the page, then the framed garden)
+    expect(svg.indexOf('</g>', svg.lastIndexOf('<path'))).toBeGreaterThan(framed);
+    expect(svg).toContain('maskUnits="userSpaceOnUse" x="-1080" y="-1080" width="3240" height="3240"'); // (the masks reach beyond the scene's edges)
+    expect(svg).toContain('<rect x="-1080" y="-1080" width="3240" height="3240" fill="#fff" />');
+  });
+
+  it('steps the bleeding in fixed steps from the start of the loop, however a moment is reached, and starts it again when asked for an earlier one', () => {
+    const run = (visit: number[][]) => {
+      const { stage } = posterHarness(), calls: any[] = [], m = biteOf(stage);
+      stage.bloodStep = vi.fn((now: number, dt: number) => calls.push(['blood', +now.toFixed(4), +dt.toFixed(5)]));
+      stage.soakStep = vi.fn((now: number, dt: number) => calls.push(['soak', +now.toFixed(4), +dt.toFixed(5)]));
+      stage.biteRose = vi.fn((id: string, now: number) => { calls.push(['bite', id, +now.toFixed(4)]); stage.bites[id] = { max: 5 }; });
+      const resets: number[] = [], reset = stage.stageReset.bind(stage);
+      stage.stageReset = () => { resets.push(calls.length); reset(); };
+      for (const [t] of visit) stage.stageSeek(m, t);
+      return { calls, resets, stage };
+    };
+    const one = run([[5000]]), many = run([[500], [1500], [3000], [4000], [5000]]);
+    expect(many.calls).toEqual(one.calls); // the same steps, whatever the visits between
+    expect(one.calls.filter(c => c[0] === 'blood')).toHaveLength(Math.floor(5000 / (1000 / 60 / 2) + 1e-6));
+    const bloods = one.calls.filter(c => c[0] === 'blood');
+    expect(bloods[1][1] - bloods[0][1]).toBeCloseTo(1000 / 60); // (steps of 1/60 s of the bleeding's own time, which runs twice as fast)
+    expect(bloods.every(c => Math.abs(c[2] - 1 / 60) < 1e-5)).toBe(true);
+    // the bite is made once, at its moment, and is a bigger event than a visitor's
+    const bites = one.calls.filter(c => c[0] === 'bite');
+    expect(bites).toHaveLength(1);
+    expect(one.stage.bites[bites[0][1]].max).toBe(9);
+    expect(run([[3600]]).calls.some(c => c[0] === 'bite')).toBe(false);
+    // asking for an earlier moment starts the bleeding again from nothing
+    const back = run([[4000], [1000]]);
+    expect(back.resets).toHaveLength(1); // (the earlier moment starts it again)
+    expect(many.resets).toHaveLength(0);
+    expect(back.calls.filter(c => c[0] === 'blood')).toHaveLength(Math.floor(4000 / (1000 / 60 / 2) + 1e-6) + Math.floor(1000 / (1000 / 60 / 2) + 1e-6));
+  });
+
+  it('seeds the bleeding\'s random numbers and clock itself, and uses Math.random and the wall clock everywhere else', () => {
+    const { garden, stage } = posterHarness();
+    expect(garden.rnd()).toBeGreaterThanOrEqual(0); // (Math.random)
+    const first = stage.rnd(); stage.stageReset();
+    expect(stage.rnd()).toBe(first); // reset, it starts again
+    stage._simNow = 123456;
+    expect(stage.clock()).toBe(123456);
+    expect(garden.clock()).toBe(10000); // (the page's clock: the harness's)
+  });
+
+  it('draws its blood through a layer faded to what the motion asks, and straight onto the canvas when it is not faded', () => {
+    const garden = app(), layer = { cv: { id: 'layer' }, cg: { id: 'layer-context' } }, drawn: any[] = [];
+    const g: any = { save: vi.fn(), restore: vi.fn(), setTransform: vi.fn(), globalAlpha: 1, drawImage: vi.fn((img: any) => drawn.push([img.id, g.globalAlpha])) };
+    garden.frameLayer = vi.fn(() => layer);
+    const targets: any[] = [];
+    garden.withFade(g, undefined, (t: any) => targets.push(t)); garden.withFade(g, 1, (t: any) => targets.push(t));
+    expect(targets).toEqual([g, g]);
+    garden.withFade(g, 0, (t: any) => targets.push(t));
+    expect(targets).toHaveLength(2); // (nothing to draw)
+    garden.withFade(g, 0.4, (t: any) => targets.push(t));
+    expect(targets[2]).toBe(layer.cg);
+    expect(drawn).toEqual([['layer', 0.4]]);
+  });
+
+  it('runs none of the live simulations in a scripted stage, and all of them in the type view', () => {
+    const { garden, backend, state } = roseLayerHarness();
+    garden.soakStep = vi.fn(); garden.bloodStep = vi.fn(); garden.dofUpdate = vi.fn(); garden.dofDraw = vi.fn(); garden.drawFallingPetals = vi.fn();
+    garden.renderCustomized(backend, 10000, state);
+    expect([garden.bloodStep, garden.soakStep, garden.drawFallingPetals, garden.dofUpdate].map((f: any) => f.mock.calls.length > 0)).toEqual([true, true, true, true]);
+    for (const f of [garden.bloodStep, garden.soakStep, garden.drawFallingPetals, garden.dofUpdate, garden.dofDraw]) f.mockClear();
+    garden.renderCustomized(backend, 10040, { ...state, scripted: true, bloodFade: 0.5 });
+    expect([garden.bloodStep, garden.soakStep, garden.drawFallingPetals, garden.dofUpdate, garden.dofDraw].map((f: any) => f.mock.calls.length)).toEqual([0, 0, 0, 0, 0]);
+    expect(garden._dt).toBe(0);
+    expect(garden.drawLetterStains).toHaveBeenCalled(); // (the blood already there is still drawn)
+    expect(garden.drawBloodFront).toHaveBeenCalled();
+  });
+
+  it('lets a script set how open every bloom is, and counts the ones it leaves opening', () => {
+    const garden = app(), seen: number[] = [];
+    garden.bloomState = vi.fn((_e: any, a: number) => { seen.push(a); return { opening: true }; });
+    garden.vineShown = (e: any) => e; garden.vineCross = () => 0;
+    const l = { ch: 'a', birth: 0, els: [{ t: 'rose', id: 1, stem: {}, su: 1, d0: 0 }] };
+    expect(garden.openingRoses([l], { vine: true, bloomAge: () => 4321 }, 5000, 1)).toBe(1);
+    expect(seen).toEqual([4321]);
+    seen.length = 0;
+    garden.openingRoses([l], { vine: true }, 5000, 1);
+    expect(seen[0]).not.toBe(4321); // (the type view's own)
+  });
+
+  it('makes the poster as the visitor is looking at it: only when it is open, again for new words, never over an export', () => {
+    const garden = app(), made: any[] = [];
+    Object.assign(garden, { pcv: {}, fontsReady: true, cache: {}, state: { mode: 'type', text: 'in bloom', seed: 3, look: 'crimson' }, makeStage: vi.fn((t: string, s: number) => { const st = { stageRelease: vi.fn(), text: t, seed: s }; made.push(st); return st; }) });
+    garden.buildPoster();
+    expect(garden.stage).toBeFalsy(); // (nothing is grown while the type view is showing)
+    garden.state.mode = 'poster'; garden.buildPoster();
+    expect(garden.stage).toBe(made[0]);
+    garden.state.text = 'wild roses'; garden.buildPoster();
+    expect(made[0].stageRelease).toHaveBeenCalled();
+    expect([garden.stage.text, garden.stage.seed]).toEqual(['wild roses', 3]);
+    garden.fontsReady = false; garden.buildPoster();
+    expect(garden.stage).toBeNull();
+    // a motion is chosen from the table only, and not in the middle of an export
+    Object.assign(garden, { infoLabel: {}, buildPresetsUI: vi.fn(), state: { ...garden.state, busy: true } });
+    garden.setMotion('creep'); expect(garden.state.motion).toBeUndefined();
+    garden.state.busy = false;
+    garden.setMotion('flutter'); expect(garden.state.motion).toBeUndefined();
+    garden.setMotion('creep');
+    expect(garden.state.motion).toBe('creep');
+    expect(garden.infoLabel.textContent).toBe('1080 × 1080 loop · Vines grow over the words · 16 s');
+    expect(garden.buildPresetsUI).toHaveBeenCalled();
+  });
+
+  it('leaves the random stream the opening text grows on exactly as it has always been, whichever view is showing', () => {
+    const stream = (mode: string) => {
+      const garden: any = Object.assign(app(), { pcv: {}, fontsReady: true, cache: {}, state: { mode, text: 'in bloom', seed: 7, look: 'crimson' }, makeStage: vi.fn(() => ({ stageRelease: vi.fn() })) });
+      garden.buildPoster();
+      return [garden.rand(), garden.rand(), garden.rand()];
+    };
+    const first = stream('type');
+    expect(stream('type')).toEqual(first); // the same on every load
+    expect(stream('poster')).toEqual(first); // and the poster being open changes nothing about it
+    const fresh = app().rng(7 * 7919 + 1);
+    expect(first[0]).not.toBe(fresh()); // (it is left after the numbers the poster's own letters were once grown on)
+  });
+
+  it('frees the poster\'s bitmaps when the look changes, as it does the type view\'s', () => {
+    const garden = app(), cv = { width: 4, height: 4 };
+    Object.assign(garden, { letters: [], stage: { letters: [{ ch: 'a', els: [], _plantCache: { 1: { cv } } }] } });
+    garden.restyle();
+    expect(garden.stage.letters[0]._plantCache).toBeNull();
+    expect(cv).toEqual({ width: 0, height: 0 });
+  });
+
 });
 
 describe('Standalone entry point parity', () => {

@@ -81,7 +81,7 @@ Open `http://localhost:5173` in your browser.
 ```bash
 npm test
 ```
-Runs 188 automated tests in Vitest covering spline interpolation, thorn and petal geometry, layout stability, and the standalone app's art-direction looks, custom appearance (colours that never regrow the garden, botanicals that only show, hide and scale what the plants already are, per-colour bitmap repaints, the panel, contrast warnings, saving in the browser), typefaces (loading, refitting with the writing record kept, re-anchored stains, your own uploaded fonts), floral composition (hero clusters, coil roses, thinning), rose heads that never overlap (least-distance moves on connected stalks, settled-layout placement, stalks restored when a crowd clears), unobstructed rose layering, readable typography, pause-driven blooming, rose clusters, sprite continuity, writing record, rose click targeting, persistent splatter across repeat visits, letter materials (blotting paper wicking inside the letters, linen, wax beads sliding and dripping, ink unchanged, the choice kept in the browser), the bleeding effects (the legacy and fluid styles, each splash keeping its own, the custom controls, keeping the choice in the browser) and how fluid blood runs (traced paths, wet tracks reused, runs that stop partway, pooling, beads that stretch and drip, spray, drying), smooth glyph masking, and bitmap cleanup.
+Runs 217 automated tests in Vitest covering spline interpolation, thorn and petal geometry, layout stability, and the standalone app's art-direction looks, custom appearance (colours that never regrow the garden, botanicals that only show, hide and scale what the plants already are, per-colour bitmap repaints, the panel, contrast warnings, saving in the browser), typefaces (loading, refitting with the writing record kept, re-anchored stains, your own uploaded fonts), floral composition (hero clusters, coil roses, thinning), rose heads that never overlap (least-distance moves on connected stalks, settled-layout placement, stalks restored when a crowd clears), unobstructed rose layering, readable typography, pause-driven blooming, rose clusters, sprite continuity, writing record, rose click targeting, persistent splatter across repeat visits, letter materials (blotting paper wicking inside the letters, linen, wax beads sliding and dripping, ink unchanged, the choice kept in the browser), the poster (its scripted stage kept apart from the type view, every motion closing its loop, the garden fitted inside the frame with a margin and the camera kept within it, the withering's colours, timing and falling petals and leaves, the bleeding stepped in fixed seeded steps so a frame comes out the same however it was reached), the bleeding effects (the legacy and fluid styles, each splash keeping its own, the custom controls, keeping the choice in the browser) and how fluid blood runs (traced paths, wet tracks reused, runs that stop partway, pooling, beads that stretch and drip, spray, drying), smooth glyph masking, and bitmap cleanup.
 
 ---
 
@@ -104,19 +104,20 @@ Runs 188 automated tests in Vitest covering spline interpolation, thorn and peta
 ## 🎨 Features & Modes
 
 * **Type Mode**: Fullscreen fluid typing experience with bottom controls: the customized view's seven looks and *Custom*, or the baseline's 10 palette swatches (*Rose noir*, *Paper*, *Midnight*, *Citrus*, *Orchid*, *Moss*, *Tomato*, *Butter*, *Blush*, *Mono*), and instant PNG/SVG vector exports.
-* **Poster Mode**: Square 1080×1080 animated stage with 7 motion presets:
-  1. **Breathe**: Slow ambient respiration and organic sway (3s loop).
-  2. **Grow & wither**: Full bloom cycle and withering return (6s loop).
-  3. **Typed**: Continuous typing, cutting, and looping (5s loop).
-  4. **Gust**: Sweeping wind wave bending stems and petals (4s loop).
-  5. **Reach**: Stems dynamically track and reach toward a moving light source (6s loop).
-  6. **Scatter**: Randomized asynchronous blooming and fading (6s loop).
-  7. **Visitor**: Butterfly alights and rests on rose perches (7s loop).
+* **Poster Mode**: A square 1080 × 1080 stage that is your own garden in motion. It runs the same renderer as the type view, so it follows your look, material, botanicals, typeface and blood or ichor (change those in the type view; the poster's *Look* section picks the look), and the words you give it grow the same garden they would if you typed them, with a bud sprouting on each word as it does after a pause. *Regrow garden* grows the same words differently. Six motions, each a loop designed to close on itself, so its last frame leads straight back to its first:
+  1. **Breathe** (8 s, the default): the garden at rest, swaying a little with one slow breath.
+  2. **Creep** (16 s): the vines grow over the words a little behind one another along them, bloom, and draw back.
+  3. **Bloom & fall** (12 s): every bloom opens from a bud, holds, lets its petals go to drift down, and folds closed again.
+  4. **Wither** (26 s): the life is drawn out of the garden. It is whole, then the drain works down it from the blooms to the foot of the words: each rose bows its head, shrivels, curls and darkens and lets its dry petals fall, each leaf yellows, browns and curls (about seven in ten let go and fall), and the green drains out of the vines into dead umber and ash until only the thorned, drained structure is left. It holds, then draws back and grows again, so the loop closes on the same lush garden. It is independent of the bite, and works on every look and material.
+  5. **Gust** (9 s): a wind sweeps along the words, bending the vines and leaves before it and tearing the petals off every bloom it passes to blow them across the poster.
+  6. **Bite** (14 s): the showpiece. A black butterfly flies to a bloom in its own red glow, feeds, and goes, while the camera gently pushes in; the blood (or ichor) runs down the letter below, soaks in, wicks, feathers or beads as the letters are made to (ink, blotting paper, linen or wax), dries, and fades away before the loop begins again.
+  The whole garden is kept inside the poster. The words fill most of the width and the vines and blooms reach past them, so each motion is shown through a frame that holds all of the garden it ever shows (at its fullest, and at the furthest the motion takes it: a bowed rose, a vine leaning in the wind) with a margin kept clear. It is scaled down only as far as it must be (never below 0.6, so the words stay readable) and moved no further than it must be, so a garden that already fits stays where the words were set; Bite's frame leaves room for its gentle push-in, so even then nothing is cut off. The vector poster is wrapped in the same frame.
+  Every frame is a function of where it is in the loop, so any moment can be drawn directly and a frame comes out the same however it was reached; only the bleeding is a simulation, stepped in fixed steps from the start of the loop with its own random numbers, and run again from the start when an earlier moment is asked for. Motions are drawn in the same plants, roses, petals and blood as the type view, and the type view is never touched by the poster.
 * **Exporting**:
   * **PNG**: High-resolution canvas snapshot.
-  * **SVG**: Clean vector graphic with letter outlines and botanical curves.
+  * **SVG**: Clean vector graphic with letter outlines and botanical curves. From the poster, the motion at its still (the blood is drawn on canvas only, so a bite shows the butterfly alone).
   * **MP4 / WebM**: Smooth 30 FPS video recording of loops.
-  * **PNG Frames**: Generates a `.zip` archive containing individual frame sequences directly in-browser.
+  * **PNG Frames**: Generates a `.zip` archive containing the loop's frames (24 per second) directly in-browser.
 
 ---
 
