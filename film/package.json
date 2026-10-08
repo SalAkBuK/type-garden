@@ -1,0 +1,11 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "film": "node tools/film.mjs",
+    "benchmark": "node tools/benchmark.mjs"
+  },
+  "dependencies": {
+    "playwright-core": "^1.64.0"
+  }
+}

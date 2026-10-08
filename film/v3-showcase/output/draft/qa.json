@@ -1,0 +1,163 @@
+{
+  "video": "draft.mp4",
+  "frames": 1140,
+  "expectedFrames": 1140,
+  "frameCountPass": true,
+  "resolution": [
+    960,
+    540
+  ],
+  "fps": "30/1",
+  "duration": 38,
+  "audio": {
+    "codec": "aac",
+    "channels": 2,
+    "sampleRate": 48000
+  },
+  "loudness": {
+    "integratedLufs": -16.1,
+    "truePeakDb": -2.3,
+    "loudnessRangeLu": 3.4
+  },
+  "typicalAdjacentFrameDiff": 4.63,
+  "seams": [
+    {
+      "boundary": "beauty",
+      "frame": 168,
+      "diff": 0.27
+    },
+    {
+      "boundary": "encounter",
+      "frame": 288,
+      "diff": 0.96
+    },
+    {
+      "boundary": "looks",
+      "frame": 510,
+      "diff": 1.6
+    },
+    {
+      "boundary": "font-cormorant",
+      "frame": 705,
+      "diff": 200.59
+    },
+    {
+      "boundary": "font-bodoni",
+      "frame": 750,
+      "diff": 13.74
+    },
+    {
+      "boundary": "font-unifraktur",
+      "frame": 795,
+      "diff": 17.49
+    },
+    {
+      "boundary": "custom",
+      "frame": 825,
+      "diff": 35.07
+    },
+    {
+      "boundary": "botanical",
+      "frame": 870,
+      "diff": 1.02
+    },
+    {
+      "boundary": "identity",
+      "frame": 990,
+      "diff": 7.16
+    }
+  ],
+  "blackAndFreeze": [
+    "black_start:0.733333 black_end:0.9 black_duration:0.166667"
+  ],
+  "materialShowcaseRemoved": true,
+  "identityResolvedBeforeHold": true,
+  "note": "Seam diffs near the typical adjacent-frame value indicate continuity; font cuts change real glyph geometry; the cobalt world recolours into the botanical build; the title carries the outgoing garden under native petals.",
+  "blackDetectorInterpretation": "The opening black-detector flag covers the thin first i/caret during the UI push. Encoded opening frames were visually inspected: typing has begun, with no empty interval before the first key. The detector classifies frames with over 98% dark pixels as black.",
+  "soundSync": [
+    {
+      "name": "bite",
+      "frame": 360,
+      "seconds": 12,
+      "peakAtMs": -20,
+      "accentDb": 5.3
+    },
+    {
+      "name": "release",
+      "frame": 405,
+      "seconds": 13.5,
+      "peakAtMs": 20,
+      "accentDb": 3
+    },
+    {
+      "name": "IMPACT",
+      "frame": 420,
+      "seconds": 14,
+      "peakAtMs": 0,
+      "accentDb": 11.7
+    },
+    {
+      "name": "first world (blood contour ends)",
+      "frame": 510,
+      "seconds": 17,
+      "peakAtMs": 0,
+      "accentDb": 9.9
+    },
+    {
+      "name": "anchored Look recolour",
+      "frame": 555,
+      "seconds": 18.5,
+      "peakAtMs": 20,
+      "accentDb": 4
+    },
+    {
+      "name": "native petal pass",
+      "frame": 630,
+      "seconds": 21,
+      "peakAtMs": 20,
+      "accentDb": 8.3
+    },
+    {
+      "name": "font / world: font-cormorant",
+      "frame": 705,
+      "seconds": 23.5,
+      "peakAtMs": 0,
+      "accentDb": 7.9
+    },
+    {
+      "name": "font / world: font-bodoni",
+      "frame": 750,
+      "seconds": 25,
+      "peakAtMs": 0,
+      "accentDb": 12.3
+    },
+    {
+      "name": "font / world: font-unifraktur",
+      "frame": 795,
+      "seconds": 26.5,
+      "peakAtMs": 20,
+      "accentDb": 14
+    },
+    {
+      "name": "font / world: custom",
+      "frame": 825,
+      "seconds": 27.5,
+      "peakAtMs": 20,
+      "accentDb": 11.3
+    },
+    {
+      "name": "cut to the title (storm)",
+      "frame": 990,
+      "seconds": 33,
+      "peakAtMs": 0,
+      "accentDb": 6.3
+    },
+    {
+      "name": "ROSE GARDEN arrived (resolve)",
+      "frame": 1040,
+      "seconds": 34.667,
+      "peakAtMs": 73,
+      "accentDb": 9.3
+    }
+  ]
+}

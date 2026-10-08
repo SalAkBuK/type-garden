@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "title": "Type Garden",
+  "body": "bloom",
+  "seed": 7,
+  "bpm": 90,
+  "beatsPerBar": 4,
+  "bars": 10,
+  "duration": {"numerator": 80, "denominator": 3, "displaySeconds": 26.7},
+  "fps": 60,
+  "filmGrain": {"strength":2,"seed":4242},
+  "squareSize": 1080,
+  "credit": "Original Type Garden by Akshat Agarwal",
+  "source": "storyboard/storyboard.png and preserved reference proof specifications",
+  "scenes": [
+    {"id":"opening", "startBeat":0, "endBeat":8, "description":"Continuous macro butterfly, Bite, impact and bloom reveal", "motion":"bite", "look":"crimson", "u":[0.24,0.62]},
+    {"id":"materials", "startBeat":8, "endBeat":12, "description":"Same splash and camera; physical ink, paper, linen, wax behavior", "motion":"bite", "look":"crimson", "u":[0.42,0.76], "hits":[{"beat":8,"material":"ink"},{"beat":9,"material":"blotting"},{"beat":10,"material":"linen"},{"beat":11,"material":"wax"}]},
+    {"id":"worlds", "startBeat":12, "endBeat":16, "description":"Locked composition, accelerating palette changes", "motion":"breathe", "u":[0.25,0.28], "hits":[{"beat":12,"look":"crimson"},{"beat":13,"look":"ivory"},{"beat":14,"look":"silver"},{"beat":14.5,"look":"blackrose"},{"beat":15,"look":"mourning"},{"beat":15.25,"look":"oldrose"},{"beat":15.5,"look":"pinkblack"},{"beat":15.75,"look":"blackrose"}]},
+    {"id":"ichor", "startBeat":16, "endBeat":20, "description":"Silver ichor, then camera widens into Wither", "motion":"bite", "look":"silver", "u":[0.45,0.75], "handoffStartBeat":19.5},
+    {"id":"wither", "startBeat":20, "endBeat":28, "description":"Drain top down; shed petals and leaves; dead thorn skeleton", "motion":"wither", "look":"silver", "u":[0.02,0.79], "deadHoldBeat":27},
+    {"id":"rebirth", "startBeat":28, "endBeat":32, "description":"Dead hold, bottom-up palette wick, old-rose regrowth", "motion":"wither", "look":"oldrose", "deadU":0.79, "wickEndBeat":29.25, "u":[0.79,0.99]},
+    {"id":"title", "startBeat":32, "endBeat":40, "description":"Crimson return, live typing, pause-earned bloom, identity hold", "look":"crimson", "text":"Type Garden", "typeStartBeat":32.25, "keyStepBeats":0.25, "spaceStepBeats":0.5, "bloomHoldBeat":36.75, "pauseClockScale":3, "fill":0.52}
+  ],
+  "events": [
+    {"id":"bite","beat":2,"kind":"sound","sound":"wet-pluck"},
+    {"id":"impact","beat":4,"kind":"sound","sound":"sub-drop"},
+    {"id":"reveal","beat":5,"kind":"camera"},
+    {"id":"dead-hold","beat":27,"kind":"hold"},
+    {"id":"wick","beat":28,"kind":"transition"},
+    {"id":"regrow","beat":29.25,"kind":"motion"},
+    {"id":"crimson-return","beat":32,"kind":"cut"},
+    {"id":"identity-hold","beat":36.75,"kind":"hold"}
+  ],
+  "audio": {"sampleRate":48000,"integratedLufs":-16,"truePeakDb":-1.5,"description":"Original synthesized drone, sub, glass, dry ticks and key clicks; no speech"}
+}

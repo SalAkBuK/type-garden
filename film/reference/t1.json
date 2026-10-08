@@ -1,0 +1,7 @@
+[
+  {"name":"t1_bloom_breathe","text":"bloom","look":"crimson","motion":"breathe","u":0.25},
+  {"name":"t1_bloom_creep","text":"bloom","look":"crimson","motion":"creep","u":0.2},
+  {"name":"t1_bloom_bite_a","text":"bloom","look":"crimson","motion":"bite","u":0.3},
+  {"name":"t1_bloom_bite_b","text":"bloom","look":"crimson","motion":"bite","u":0.62},
+  {"name":"t1_inbloom","text":"in bloom","look":"crimson","motion":"breathe","u":0.25}
+]

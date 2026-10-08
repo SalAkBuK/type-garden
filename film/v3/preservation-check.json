@@ -1,0 +1,26 @@
+{
+  "pass": true,
+  "checkedAt": "2026-10-08T06:21:32.076Z",
+  "baselineCreatedAt": "2026-10-08T06:09:49.185Z",
+  "checkedFiles": 12697,
+  "counts": {
+    "application": 20,
+    "v1": 9369,
+    "v2": 3308,
+    "hashed": 585,
+    "cacheMetadata": 12112
+  },
+  "policy": {
+    "root": "C:\\Users\\oneof\\OneDrive\\Documents\\type-garden\\type-garden",
+    "excludes": [
+      "film/v3/**",
+      "**/node_modules/**",
+      "**/.git/**",
+      "**/dist/**"
+    ],
+    "substantiveFiles": "SHA-256 and byte length",
+    "existingFilmCaches": "Byte length and modification timestamp",
+    "scope": "Application and all pre-existing Version 1 / Version 2 film files"
+  },
+  "changes": []
+}
