@@ -1,0 +1,74 @@
+[
+  {
+    "id": "01-product",
+    "frame": 20,
+    "seconds": 0.6666666666666666,
+    "file": "01-product.png"
+  },
+  {
+    "id": "02-living-words",
+    "frame": 176,
+    "seconds": 5.866666666666666,
+    "file": "02-living-words.png"
+  },
+  {
+    "id": "03-rose",
+    "frame": 272,
+    "seconds": 9.066666666666666,
+    "file": "03-rose.png"
+  },
+  {
+    "id": "04-contact",
+    "frame": 345,
+    "seconds": 11.5,
+    "file": "04-contact.png"
+  },
+  {
+    "id": "05-blood-consequence",
+    "frame": 434,
+    "seconds": 14.466666666666667,
+    "file": "05-blood-consequence.png"
+  },
+  {
+    "id": "06-first-world",
+    "frame": 535,
+    "seconds": 17.833333333333332,
+    "file": "06-first-world.png"
+  },
+  {
+    "id": "07-fifth-look",
+    "frame": 680,
+    "seconds": 22.666666666666668,
+    "file": "07-fifth-look.png"
+  },
+  {
+    "id": "08-cormorant",
+    "frame": 730,
+    "seconds": 24.333333333333332,
+    "file": "08-cormorant.png"
+  },
+  {
+    "id": "09-custom-world",
+    "frame": 845,
+    "seconds": 28.166666666666668,
+    "file": "09-custom-world.png"
+  },
+  {
+    "id": "10-recovered-phrase",
+    "frame": 979,
+    "seconds": 32.63333333333333,
+    "file": "10-recovered-phrase.png"
+  },
+  {
+    "id": "11-passing-petal",
+    "frame": 994,
+    "seconds": 33.13333333333333,
+    "file": "11-passing-petal.png"
+  },
+  {
+    "id": "12-final-identity",
+    "frame": 1130,
+    "seconds": 37.666666666666664,
+    "file": "12-final-identity.png"
+  }
+]

@@ -1,0 +1,13 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { film } from './renderer.mjs';
+const digest=f=>crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
+const originalTools=['board','kf','sheet','tv','wick'];
+const preserved=originalTools.map(n=>({file:`tools/${n}.mjs`,sha256:digest(path.join(film,'tools',`${n}.mjs`)),matchesArchivedCopy:digest(path.join(film,'tools',`${n}.mjs`))===digest(path.join(film,'reference',`${n}.mjs`))}));
+preserved.push({file:'storyboard/storyboard.png',sha256:digest(path.join(film,'storyboard','storyboard.png'))});
+const sourceImages=fs.readdirSync(path.join(film,'reference','shots')).filter(n=>n.endsWith('.png')).map(n=>({file:`reference/shots/${n}`,bytes:fs.statSync(path.join(film,'reference','shots',n)).size,sha256:digest(path.join(film,'reference','shots',n))}));
+const report={applicationHead:'60cdc764a176e3931a84fb680535868e8d76d1a4',preserved,sourceImages};
+fs.writeFileSync(path.join(film,'reference','inventory.json'),JSON.stringify(report,null,2));
+if(preserved.some(p=>p.matchesArchivedCopy===false))throw Error('Original proof tool changed');
+console.log('Preserved original tools, storyboard and',sourceImages.length,'source images');

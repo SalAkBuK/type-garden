@@ -1,0 +1,866 @@
+{
+  "version": "3-showcase-draft-4-material-free",
+  "concept": "SAME WORDS, MANY WORLDS",
+  "status": "low-resolution continuous draft; full-resolution render held for review",
+  "fps": 30,
+  "size": [
+    960,
+    540
+  ],
+  "frames": 1140,
+  "bpm": 120,
+  "text": "in bloom",
+  "seed": 7,
+  "credits": [
+    "Based on an original concept by Akshat Agarwal",
+    "Reimagined and expanded as Rose Garden"
+  ],
+  "notes": [
+    "Material showcase removed in full. 1,140 frames at 30 fps = 38.000 seconds. Review resolution only; master render remains held.",
+    "The approved opening, rose restraint, native butterfly contact and drop timing are preserved. Blood consequence and retreat receive half a second more.",
+    "Five Looks remain, with in bloom anchored. Ivory, Old rose, Silver, Cormorant and Bodoni breathe longer; the cobalt/champagne world stays wide and returns to crimson on the same plants.",
+    "The botanical escalation now grows from the existing garden rather than restarting as sparse buds. It builds for four seconds, peaks, and recovers the phrase before a native passing petal.",
+    "The enlarged lush crimson identity retains its approved portrait, fully grows and blooms before a longer hold. Attribution remains exact. No replacement feature demonstration."
+  ],
+  "defaults": {
+    "stage": {
+      "look": "crimson",
+      "font": "playfair",
+      "material": "ink",
+      "bleed": "legacy"
+    }
+  },
+  "paths": {
+    "swayRate": [
+      [
+        0,
+        1
+      ],
+      [
+        326,
+        1
+      ],
+      [
+        348,
+        0
+      ],
+      [
+        452,
+        0
+      ],
+      [
+        484,
+        1
+      ],
+      [
+        1140,
+        1
+      ]
+    ],
+    "main": [
+      {
+        "f": 168,
+        "at": "handoff"
+      },
+      {
+        "f": 196,
+        "at": "wide",
+        "spanK": 0.95
+      },
+      {
+        "f": 224,
+        "at": "letter:b",
+        "dy": -62,
+        "dx": -4,
+        "span": 150,
+        "roll": -7
+      },
+      {
+        "f": 236,
+        "at": "letter:b",
+        "dy": -66,
+        "dx": 0,
+        "span": 104,
+        "roll": -12
+      },
+      {
+        "f": 256,
+        "at": "letter:b",
+        "dy": -82,
+        "dx": 46,
+        "span": 112,
+        "roll": -9
+      },
+      {
+        "f": 272,
+        "at": "hero",
+        "spanR": 3.6,
+        "roll": -3
+      },
+      {
+        "f": 288,
+        "at": "hero",
+        "dx": 60,
+        "dy": -90,
+        "spanR": 5.5,
+        "roll": 0
+      },
+      {
+        "f": 312,
+        "at": "hero",
+        "dx": 30,
+        "dy": -40,
+        "spanR": 4,
+        "roll": 0
+      },
+      {
+        "f": 345,
+        "at": "hero",
+        "dx": -2,
+        "dy": 6,
+        "spanR": 2.8,
+        "roll": 0
+      },
+      {
+        "f": 360,
+        "at": "hero",
+        "dx": -2,
+        "dy": -2,
+        "spanR": 1.9,
+        "roll": 0
+      },
+      {
+        "f": 371,
+        "at": "bead",
+        "dy": -8,
+        "span": 58,
+        "roll": 0
+      },
+      {
+        "f": 405,
+        "at": "bead",
+        "dy": 3,
+        "span": 34,
+        "roll": 0
+      },
+      {
+        "f": 411,
+        "at": "drop",
+        "span": 66,
+        "roll": 0
+      },
+      {
+        "f": 417,
+        "at": "hit",
+        "dy": 22,
+        "span": 100,
+        "roll": 0
+      },
+      {
+        "f": 422,
+        "at": "hit",
+        "dy": 22,
+        "span": 104,
+        "roll": 0
+      },
+      {
+        "f": 434,
+        "at": "hit",
+        "dy": 24,
+        "dx": 4,
+        "span": 120,
+        "roll": 0
+      },
+      {
+        "f": 456,
+        "at": "hit",
+        "dy": 40,
+        "dx": 8,
+        "span": 128,
+        "roll": 0
+      },
+      {
+        "f": 481,
+        "at": "hit",
+        "dy": 55,
+        "dx": 12,
+        "span": 190,
+        "roll": 0
+      },
+      {
+        "f": 510,
+        "at": "phrase",
+        "spanP": 1,
+        "roll": 0
+      },
+      {
+        "f": 705,
+        "at": "phrase",
+        "spanP": 1,
+        "roll": 0
+      }
+    ],
+    "fontA": [
+      {
+        "f": 705,
+        "at": "phrase",
+        "spanP": 1
+      },
+      {
+        "f": 750,
+        "at": "phrase",
+        "spanP": 1
+      }
+    ],
+    "fontB": [
+      {
+        "f": 750,
+        "at": "phrase",
+        "spanP": 1
+      },
+      {
+        "f": 795,
+        "at": "phrase",
+        "spanP": 1
+      }
+    ],
+    "fontC": [
+      {
+        "f": 795,
+        "at": "phrase",
+        "spanP": 1
+      },
+      {
+        "f": 825,
+        "at": "phrase",
+        "spanP": 1
+      }
+    ],
+    "custom": [
+      {
+        "f": 825,
+        "at": "phrase",
+        "spanP": 1
+      },
+      {
+        "f": 870,
+        "at": "phrase",
+        "spanP": 1
+      }
+    ],
+    "botanical": [
+      {
+        "f": 870,
+        "at": "phrase",
+        "spanP": 1
+      },
+      {
+        "f": 915,
+        "at": "wide",
+        "spanK": 0.95,
+        "roll": -2
+      },
+      {
+        "f": 948,
+        "at": "wide",
+        "spanK": 0.87,
+        "roll": -3
+      },
+      {
+        "f": 979,
+        "at": "phrase",
+        "spanP": 1.05,
+        "roll": 0
+      },
+      {
+        "f": 990,
+        "at": "phrase",
+        "spanP": 1.05,
+        "roll": 0
+      }
+    ],
+    "identity": [
+      {
+        "f": 990,
+        "at": "wide",
+        "spanK": 0.9391304347826088,
+        "dy": 12
+      },
+      {
+        "f": 1040,
+        "at": "wide",
+        "spanK": 0.9043478260869566,
+        "dy": 12
+      },
+      {
+        "f": 1140,
+        "at": "wide",
+        "spanK": 0.9043478260869566,
+        "dy": 12
+      }
+    ]
+  },
+  "openCam": {
+    "kEnd": 1.08,
+    "keys": [
+      [
+        "i",
+        120
+      ],
+      [
+        "n",
+        260
+      ],
+      [
+        " ",
+        400
+      ],
+      [
+        "b",
+        560
+      ],
+      [
+        "l",
+        700
+      ],
+      [
+        "o",
+        840
+      ],
+      [
+        "o",
+        980
+      ],
+      [
+        "m",
+        1120
+      ]
+    ],
+    "native": [
+      [
+        0,
+        0
+      ],
+      [
+        21,
+        120
+      ],
+      [
+        51,
+        1120
+      ],
+      [
+        66,
+        1540
+      ],
+      [
+        90,
+        2340
+      ],
+      [
+        111,
+        3440
+      ],
+      [
+        138,
+        6640
+      ],
+      [
+        162,
+        13940
+      ],
+      [
+        172,
+        14940
+      ]
+    ],
+    "zoom": [
+      [
+        0,
+        1
+      ],
+      [
+        30,
+        1
+      ],
+      [
+        168,
+        1.08
+      ]
+    ],
+    "plate": {
+      "hold": 20,
+      "dissolve": [
+        20,
+        26
+      ],
+      "zoom": 2.4
+    },
+    "keyFrames": [
+      21,
+      25.2,
+      29.4,
+      34.2,
+      38.4,
+      42.6,
+      46.8,
+      51
+    ]
+  },
+  "botanical": {
+    "sparse": {
+      "roses": 1,
+      "roseLo": 1,
+      "roseHi": 1,
+      "buds": 0.28,
+      "half": 0.6,
+      "full": 0.12,
+      "clusters": 1,
+      "foliage": 1,
+      "leaf": 1,
+      "vine": 1,
+      "thorns": 1
+    },
+    "lush": {
+      "roses": 1.7,
+      "roseLo": 1.05,
+      "roseHi": 1.4,
+      "buds": 0.05,
+      "half": 0.05,
+      "full": 0.9,
+      "clusters": 1.6,
+      "foliage": 1.35,
+      "leaf": 1.05,
+      "vine": 1.7,
+      "thorns": 2
+    },
+    "ramp": [
+      [
+        870,
+        0
+      ],
+      [
+        885,
+        0.06
+      ],
+      [
+        907,
+        0.28
+      ],
+      [
+        930,
+        0.7
+      ],
+      [
+        946,
+        1
+      ],
+      [
+        956,
+        1
+      ],
+      [
+        978,
+        0.65
+      ],
+      [
+        990,
+        0.65
+      ]
+    ],
+    "ease": 0.22,
+    "gust": {
+      "f0": 938,
+      "f1": 990,
+      "u0": 0.04,
+      "u1": 0.6
+    },
+    "storm": {
+      "f0": 985,
+      "f1": 1011,
+      "seed": 21,
+      "n": 6,
+      "sharp": true,
+      "petalSize": 125,
+      "heroPetal": true,
+      "veil": 0,
+      "cut": 990
+    }
+  },
+  "identity": {
+    "stagger": 0.018,
+    "grow": [
+      [
+        990,
+        0.55
+      ],
+      [
+        1005,
+        0.8
+      ],
+      [
+        1033,
+        1
+      ]
+    ],
+    "bloom": [
+      [
+        990,
+        0.42
+      ],
+      [
+        1009,
+        0.75
+      ],
+      [
+        1033,
+        1
+      ]
+    ],
+    "storm": {
+      "f0": 985,
+      "f1": 1011,
+      "seed": 21,
+      "n": 6,
+      "sharp": true,
+      "petalSize": 125,
+      "heroPetal": true,
+      "veil": 0,
+      "cut": 990
+    },
+    "credit": {
+      "f0": 1052,
+      "f1": 1070,
+      "alpha": 0.74,
+      "px": 13,
+      "bottom": 29,
+      "leading": 18
+    },
+    "botanical": {
+      "roses": 1.75,
+      "roseLo": 0.66,
+      "roseHi": 0.96,
+      "buds": 0.06,
+      "half": 0.24,
+      "full": 0.7,
+      "clusters": 1.5,
+      "foliage": 1.45,
+      "leaf": 1.03,
+      "vine": 1.7,
+      "thorns": 2
+    },
+    "carryUntil": 1003,
+    "holdFrom": 1040
+  },
+  "segments": [
+    {
+      "id": "open",
+      "driver": "opening",
+      "start": 0,
+      "end": 168,
+      "blendFrom": 160
+    },
+    {
+      "id": "beauty",
+      "driver": "encounter",
+      "start": 168,
+      "end": 288,
+      "path": "main",
+      "petals": {
+        "f0": 238,
+        "f1": 288,
+        "u0": 0.56,
+        "fadeIn": 14,
+        "fadeOut": 14
+      },
+      "steps": [
+        [
+          168,
+          0
+        ],
+        [
+          288,
+          94
+        ]
+      ]
+    },
+    {
+      "id": "encounter",
+      "driver": "encounter",
+      "start": 288,
+      "end": 510,
+      "path": "main",
+      "steps": [
+        [
+          288,
+          94
+        ],
+        [
+          300,
+          130
+        ],
+        [
+          312,
+          180
+        ],
+        [
+          345,
+          336
+        ],
+        [
+          360,
+          437
+        ],
+        [
+          371,
+          452
+        ],
+        [
+          405,
+          510
+        ],
+        [
+          420,
+          529
+        ],
+        [
+          432,
+          560
+        ],
+        [
+          456,
+          760
+        ],
+        [
+          481,
+          1010
+        ],
+        [
+          510,
+          1260
+        ]
+      ],
+      "butterfly": [
+        288,
+        479
+      ],
+      "wipe": {
+        "type": "blood",
+        "f0": 469,
+        "f1": 510,
+        "to": "ivory"
+      }
+    },
+    {
+      "id": "looks",
+      "driver": "encounter",
+      "start": 510,
+      "end": 705,
+      "path": "main",
+      "steps": [
+        [
+          510,
+          1260
+        ],
+        [
+          705,
+          1590
+        ]
+      ],
+      "looks": [
+        {
+          "look": "ivory",
+          "from": 510
+        },
+        {
+          "look": "oldrose",
+          "from": 555
+        },
+        {
+          "look": "pinkblack",
+          "from": 600
+        },
+        {
+          "look": "blackrose",
+          "from": 630
+        },
+        {
+          "look": "silver",
+          "from": 660
+        }
+      ],
+      "transitions": [
+        {
+          "type": "petals",
+          "center": 555,
+          "f0": 550,
+          "f1": 562,
+          "seed": 11,
+          "n": 3,
+          "petalSize": 85,
+          "veil": 0,
+          "sharp": true
+        },
+        {
+          "type": "petals",
+          "center": 600,
+          "f0": 595,
+          "f1": 607,
+          "seed": 12,
+          "n": 3,
+          "petalSize": 85,
+          "veil": 0,
+          "sharp": true
+        },
+        {
+          "type": "petals",
+          "center": 630,
+          "f0": 625,
+          "f1": 637,
+          "seed": 13,
+          "n": 3,
+          "petalSize": 85,
+          "veil": 0,
+          "sharp": true
+        },
+        {
+          "type": "petals",
+          "center": 660,
+          "f0": 655,
+          "f1": 667,
+          "seed": 14,
+          "n": 3,
+          "petalSize": 85,
+          "veil": 0,
+          "sharp": true
+        }
+      ]
+    },
+    {
+      "id": "font-cormorant",
+      "driver": "font",
+      "start": 705,
+      "end": 750,
+      "stage": {
+        "font": "cormorant"
+      },
+      "path": "fontA"
+    },
+    {
+      "id": "font-bodoni",
+      "driver": "font",
+      "start": 750,
+      "end": 795,
+      "stage": {
+        "font": "bodoni"
+      },
+      "path": "fontB"
+    },
+    {
+      "id": "font-unifraktur",
+      "driver": "font",
+      "start": 795,
+      "end": 825,
+      "stage": {
+        "font": "unifraktur"
+      },
+      "path": "fontC"
+    },
+    {
+      "id": "custom",
+      "driver": "font",
+      "start": 825,
+      "end": 870,
+      "stage": {
+        "font": "playfair",
+        "appearance": {
+          "bg": "#101222",
+          "text": "#F7F4EA",
+          "rosePrimary": "#4F63E6",
+          "roseSecondary": "#EDC47C",
+          "secondaryRole": "focal",
+          "blood": "#EABE4B",
+          "wingMarks": "#A5B3F0"
+        }
+      },
+      "path": "custom",
+      "paletteBridge": {
+        "f0": 855,
+        "f1": 870,
+        "to": "crimson"
+      }
+    },
+    {
+      "id": "botanical",
+      "driver": "botanical",
+      "start": 870,
+      "end": 990
+    },
+    {
+      "id": "identity",
+      "driver": "identity",
+      "start": 990,
+      "end": 1140,
+      "stage": {
+        "text": "ROSE GARDEN"
+      }
+    }
+  ],
+  "cues": [
+    {
+      "name": "app opens",
+      "f": 0,
+      "kind": "air"
+    },
+    {
+      "name": "keystrokes",
+      "f": 21,
+      "kind": "keys"
+    },
+    {
+      "name": "word complete / growth swells",
+      "f": 47,
+      "kind": "swell"
+    },
+    {
+      "name": "first rose opens",
+      "f": 138,
+      "kind": "bloom"
+    },
+    {
+      "name": "living words resolve",
+      "f": 165,
+      "kind": "chord"
+    },
+    {
+      "name": "butterfly wings",
+      "f": 300,
+      "kind": "wings"
+    },
+    {
+      "name": "landing",
+      "f": 345,
+      "kind": "land"
+    },
+    {
+      "name": "bite",
+      "f": 360,
+      "kind": "bite"
+    },
+    {
+      "name": "bead forms",
+      "f": 371,
+      "kind": "bead"
+    },
+    {
+      "name": "release",
+      "f": 405,
+      "kind": "release"
+    },
+    {
+      "name": "impact",
+      "f": 420,
+      "kind": "impact"
+    }
+  ]
+}

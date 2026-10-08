@@ -1,0 +1,27 @@
+{
+  "pass": true,
+  "checkedAt": "2026-10-08T10:55:11.928Z",
+  "baselineCreatedAt": "2026-10-08T06:28:22.752Z",
+  "checkedFiles": 12761,
+  "counts": {
+    "application": 20,
+    "v1": 9369,
+    "v2": 3308,
+    "tenderViolenceV3": 64,
+    "hashed": 649,
+    "cacheMetadata": 12112
+  },
+  "policy": {
+    "root": "C:\\Users\\oneof\\OneDrive\\Documents\\type-garden\\type-garden",
+    "excludes": [
+      "film/v3-showcase/**",
+      "**/node_modules/**",
+      "**/.git/**",
+      "**/dist/**"
+    ],
+    "substantiveFiles": "SHA-256 and byte length",
+    "existingFilmCaches": "Byte length and modification timestamp",
+    "scope": "Application and all pre-existing Version 1 / Version 2 / Tender Violence Version 3 film files"
+  },
+  "changes": []
+}

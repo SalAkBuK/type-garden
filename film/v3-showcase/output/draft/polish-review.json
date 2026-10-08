@@ -1,0 +1,91 @@
+{
+  "preservationManifest": {
+    "pass": true,
+    "checkedFiles": 12761,
+    "counts": {
+      "application": 20,
+      "v1": 9369,
+      "v2": 3308,
+      "tenderViolenceV3": 64,
+      "hashed": 649,
+      "cacheMetadata": 12112
+    },
+    "changes": []
+  },
+  "approvedSources": [
+    {
+      "file": "storyboard.md",
+      "unchanged": true
+    },
+    {
+      "file": "timeline.json",
+      "unchanged": true
+    },
+    {
+      "file": "review.html",
+      "unchanged": true
+    }
+  ],
+  "openingAndBeauty": [
+    {
+      "id": "open",
+      "frames": 168,
+      "decodedFramesIdentical": true
+    },
+    {
+      "id": "beauty",
+      "frames": 120,
+      "decodedFramesIdentical": true
+    }
+  ],
+  "originalOpeningEditUnchanged": true,
+  "encounterCues": [
+    {
+      "name": "bite",
+      "frame": 360,
+      "preserved": true
+    },
+    {
+      "name": "bead",
+      "frame": 371,
+      "preserved": true
+    },
+    {
+      "name": "release",
+      "frame": 405,
+      "preserved": true
+    },
+    {
+      "name": "impact",
+      "frame": 420,
+      "preserved": true
+    }
+  ],
+  "fiveLooksPreserved": true,
+  "noMaterialSegments": true,
+  "noMaterialClipsAssembled": true,
+  "noMaterialSound": true,
+  "nativeSimulationUnmodified": true,
+  "identityPortraitSettingsPreserved": true,
+  "attributionExact": true,
+  "timelineContiguous": true,
+  "durationSeconds": 38,
+  "finalIdentityResolvedAt": 34.43333333333333,
+  "identityHoldSeconds": 3.3333333333333335,
+  "frameCountPass": true,
+  "reviewResolutionOnly": true,
+  "sound": {
+    "status": "Original synthesized sound sketch for timing review; production music and recorded foley remain unfinished.",
+    "allAccentsInsidePicture": true,
+    "cueCount": 44,
+    "loudness": {
+      "integratedLufs": -16.1,
+      "truePeakDb": -2.3,
+      "loudnessRangeLu": 3.4
+    },
+    "listeningReview": "Pending: this environment has no audio monitoring."
+  },
+  "aspectPlanning": "Plan a 16:9 master and a separately framed 1:1 social version. A 9:16 version is viable only with its own native camera pass and attribution layout; do not derive it by blind cropping.",
+  "masterRenderStarted": false,
+  "pass": true
+}

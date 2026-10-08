@@ -1,0 +1,111 @@
+{
+  "source": "3-showcase-draft-4-material-free; center-crop stills are diagnostics, not approved alternate compositions.",
+  "recommendation": "Plan a 16:9 master and a separately framed 1:1 social version. A 9:16 version is viable only with its own native camera pass and attribution layout; do not derive it by blind cropping.",
+  "centerCropPixels": {
+    "square": [
+      210,
+      0,
+      540,
+      540
+    ],
+    "vertical": [
+      328,
+      0,
+      304,
+      540
+    ]
+  },
+  "noAlternateVideosRendered": true,
+  "shots": [
+    {
+      "id": "product-ui",
+      "frame": 20,
+      "seconds": 0.6666666666666666,
+      "action": "Both social crops lose the actual controls. Reframe the real interface or fit its complete plate."
+    },
+    {
+      "id": "typed-phrase",
+      "frame": 156,
+      "seconds": 5.2,
+      "action": "The completed phrase is too wide for either center crop. Use a wider native camera."
+    },
+    {
+      "id": "living-portrait",
+      "frame": 196,
+      "seconds": 6.533333333333333,
+      "action": "Square and vertical crops lose phrase ends. Fit the full phrase with side clearance."
+    },
+    {
+      "id": "coil",
+      "frame": 236,
+      "seconds": 7.866666666666666,
+      "action": "Detail is adaptable; retain enough glyph contour to show the trellis."
+    },
+    {
+      "id": "rose",
+      "frame": 272,
+      "seconds": 9.066666666666666,
+      "action": "Recenter on the rose and attached cane; preserve the approved macro restraint."
+    },
+    {
+      "id": "visitor-arrival",
+      "frame": 305,
+      "seconds": 10.166666666666666,
+      "action": "Track butterfly and bloom together; a static vertical crop loses the approach."
+    },
+    {
+      "id": "landing",
+      "frame": 345,
+      "seconds": 11.5,
+      "action": "Recenter on the butterfly and rose. Test wing clearance throughout the motion."
+    },
+    {
+      "id": "bead",
+      "frame": 395,
+      "seconds": 13.166666666666666,
+      "action": "Center on the hanging bead; keep a fragment of the source rose."
+    },
+    {
+      "id": "fall",
+      "frame": 411,
+      "seconds": 13.7,
+      "action": "Track the real falling drop into the glyph rather than using a fixed crop."
+    },
+    {
+      "id": "looks",
+      "frame": 680,
+      "seconds": 22.666666666666668,
+      "action": "All five Looks need the same wider social camera; a center crop truncates in bloom."
+    },
+    {
+      "id": "font-refit",
+      "frame": 770,
+      "seconds": 25.666666666666668,
+      "action": "Keep phrase center and baseline fixed; fit the widest actual glyph set."
+    },
+    {
+      "id": "custom-palette",
+      "frame": 840,
+      "seconds": 28,
+      "action": "Fit the full phrase with the same world anchor. Preserve the recolour into botanical growth."
+    },
+    {
+      "id": "botanical-peak",
+      "frame": 955,
+      "seconds": 31.833333333333332,
+      "action": "Widen around the full phrase and retain enough side growth to read abundance."
+    },
+    {
+      "id": "botanical-recovery",
+      "frame": 979,
+      "seconds": 32.63333333333333,
+      "action": "Recover a readable full phrase before the passing petal; center crops cut its ends."
+    },
+    {
+      "id": "identity",
+      "frame": 1130,
+      "seconds": 37.666666666666664,
+      "action": "Square retains both words and credit with tight outer growth margins; widen modestly. Vertical truncates GARDEN and attribution: fit the complete lockup and lay out the same wording."
+    }
+  ]
+}

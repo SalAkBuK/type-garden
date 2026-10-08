@@ -1,0 +1,255 @@
+{
+  "status": "Original synthesized sound sketch for timing review; production music and recorded foley remain unfinished.",
+  "bpm": 120,
+  "fps": 30,
+  "durationSeconds": 38,
+  "target": {
+    "I": -16,
+    "TP": -2.6,
+    "LRA": 12
+  },
+  "measured": {
+    "integratedLufs": -16,
+    "truePeakDb": -2.4,
+    "loudnessRangeLu": 3.5
+  },
+  "rawPeakDb": -9.990763133400199,
+  "accents": [
+    {
+      "name": "app opens: close air",
+      "frame": 14,
+      "seconds": 0.467
+    },
+    {
+      "name": "first key",
+      "frame": 21,
+      "seconds": 0.7
+    },
+    {
+      "name": "last key",
+      "frame": 51,
+      "seconds": 1.7
+    },
+    {
+      "name": "stem friction: vines find the glyphs",
+      "frame": 52,
+      "seconds": 1.733
+    },
+    {
+      "name": "leaf unfurl ticks",
+      "frame": 86,
+      "seconds": 2.867
+    },
+    {
+      "name": "swell pulse",
+      "frame": 110,
+      "seconds": 3.667
+    },
+    {
+      "name": "first rose opens",
+      "frame": 138,
+      "seconds": 4.6
+    },
+    {
+      "name": "living words resolve: chord",
+      "frame": 165,
+      "seconds": 5.5
+    },
+    {
+      "name": "camera glides into the coil",
+      "frame": 196,
+      "seconds": 6.533
+    },
+    {
+      "name": "drifting petals",
+      "frame": 248,
+      "seconds": 8.267
+    },
+    {
+      "name": "rise to the rose",
+      "frame": 256,
+      "seconds": 8.533
+    },
+    {
+      "name": "butterfly wingbeats approach",
+      "frame": 296,
+      "seconds": 9.867
+    },
+    {
+      "name": "slow living pulse",
+      "frame": 300,
+      "seconds": 10
+    },
+    {
+      "name": "wings settle",
+      "frame": 346,
+      "seconds": 11.533
+    },
+    {
+      "name": "landing: foot touches petal",
+      "frame": 346,
+      "seconds": 11.533
+    },
+    {
+      "name": "bite: close wet contact",
+      "frame": 360,
+      "seconds": 12
+    },
+    {
+      "name": "bead gathers (quiet)",
+      "frame": 371,
+      "seconds": 12.367
+    },
+    {
+      "name": "bead release breath",
+      "frame": 403,
+      "seconds": 13.433
+    },
+    {
+      "name": "release: surface tension lets go",
+      "frame": 405,
+      "seconds": 13.5
+    },
+    {
+      "name": "fall",
+      "frame": 406,
+      "seconds": 13.533
+    },
+    {
+      "name": "IMPACT: first full rhythmic accent",
+      "frame": 420,
+      "seconds": 14
+    },
+    {
+      "name": "impact glass tail",
+      "frame": 422,
+      "seconds": 14.067
+    },
+    {
+      "name": "viscous trace on the stroke",
+      "frame": 425,
+      "seconds": 14.167
+    },
+    {
+      "name": "drips keep falling (native)",
+      "frame": 442,
+      "seconds": 14.733
+    },
+    {
+      "name": "blood wipe: reverse swell",
+      "frame": 469,
+      "seconds": 15.633
+    },
+    {
+      "name": "first world arrives",
+      "frame": 510,
+      "seconds": 17
+    },
+    {
+      "name": "look: ivory",
+      "frame": 510.5,
+      "seconds": 17.017
+    },
+    {
+      "name": "look: oldrose",
+      "frame": 555.5,
+      "seconds": 18.517
+    },
+    {
+      "name": "look: pinkblack",
+      "frame": 600.5,
+      "seconds": 20.017
+    },
+    {
+      "name": "petals pass the lens",
+      "frame": 625,
+      "seconds": 20.833
+    },
+    {
+      "name": "petal pass: soft thud",
+      "frame": 630,
+      "seconds": 21
+    },
+    {
+      "name": "look: blackrose",
+      "frame": 630.5,
+      "seconds": 21.017
+    },
+    {
+      "name": "look: silver",
+      "frame": 660.5,
+      "seconds": 22.017
+    },
+    {
+      "name": "anchored font change: Silver to Cormorant",
+      "frame": 699,
+      "seconds": 23.3
+    },
+    {
+      "name": "anchored font change: Cormorant to Bodoni",
+      "frame": 744,
+      "seconds": 24.8
+    },
+    {
+      "name": "anchored font change: Bodoni to Unifraktur",
+      "frame": 789,
+      "seconds": 26.3
+    },
+    {
+      "name": "anchored font change: Unifraktur to the custom palette",
+      "frame": 819,
+      "seconds": 27.3
+    },
+    {
+      "name": "custom world: warm chord change",
+      "frame": 832,
+      "seconds": 27.733
+    },
+    {
+      "name": "botanical riser: garden builds",
+      "frame": 870,
+      "seconds": 29
+    },
+    {
+      "name": "gust carries petals",
+      "frame": 938,
+      "seconds": 31.267
+    },
+    {
+      "name": "petal storm flutter",
+      "frame": 975,
+      "seconds": 32.5
+    },
+    {
+      "name": "cut to the title: the hush",
+      "frame": 990,
+      "seconds": 33
+    },
+    {
+      "name": "the name grows",
+      "frame": 995,
+      "seconds": 33.167
+    },
+    {
+      "name": "ROSE GARDEN fully arrived: warm major resolve",
+      "frame": 1040,
+      "seconds": 34.667
+    }
+  ],
+  "encounterCuesFromPicture": {
+    "bite": 360,
+    "bead": 371,
+    "release": 405,
+    "impact": 420,
+    "drips": [
+      442,
+      445,
+      452,
+      459,
+      465,
+      469,
+      473,
+      493
+    ]
+  }
+}
